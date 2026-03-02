@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>辽宁职校实训视频检测系统 - 项目说明</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --accent: #06b6d4;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --success: #10b981;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-light: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #475569;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    
+    /* Hero Section */
+    .hero {
+      padding: 80px 0 60px;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero .subtitle {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+    
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      flex-wrap: wrap;
+    }
+    
+    .stat {
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    
+    /* Section */
+    section {
+      padding: 60px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    section:last-child {
+      border-bottom: none;
+    }
+    
+    h2 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    h2 .icon {
+      font-size: 1.5rem;
+    }
+    
+    h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text);
+    }
+    
+    /* Cards Grid */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    
+    .card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    
+    .card-icon {
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+    
+    .card h3 {
+      margin-bottom: 8px;
+    }
+    
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+    
+    /* Risk Cards */
+    .risk-card {
+      border-left: 4px solid var(--danger);
+    }
+    
+    .risk-card.warning {
+      border-left-color: var(--warning);
+    }
+    
+    .risk-card.info {
+      border-left-color: var(--accent);
+    }
+    
+    /* Team Table */
+    .team-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+    }
+    
+    .team-table th,
+    .team-table td {
+      padding: 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .team-table th {
+      background: var(--surface);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .team-table tr:hover {
+      background: var(--surface);
+    }
+    
+    .role-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .role-pm { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+    .role-backend { background: rgba(6, 182, 212, 0.2); color: #67e8f9; }
+    .role-frontend { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .role-algo { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+    .role-data { background: rgba(236, 72, 153, 0.2); color: #f9a8d4; }
+    .role-test { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
+    
+    /* Budget */
+    .budget-bar {
+      height: 24px;
+      background: var(--surface);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      margin: 24px 0;
+    }
+    
+    .budget-segment {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: white;
+      min-width: 40px;
+    }
+    
+    .budget-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-top: 16px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.875rem;
+    }
+    
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    
+    /* Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+    }
+    
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    
+    .timeline-item {
+      position: relative;
+      padding-bottom: 32px;
+    }
+    
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -28px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: 3px solid var(--bg);
+    }
+    
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+    
+    .timeline-date {
+      font-size: 0.875rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .timeline-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .timeline-desc {
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+    }
+    
+    /* Checklist */
+    .checklist {
+      list-style: none;
+    }
+    
+    .checklist li {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .checklist li:last-child {
+      border-bottom: none;
+    }
+    
+    .check-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--surface-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.875rem;
+    }
+    
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 1.75rem; }
+      .hero-stats { gap: 24px; }
+      h2 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>辽宁职校实训视频检测系统</h1>
+      <p class="subtitle">基于 VLM 的职业学校实训视频自动检测与打分系统</p>
+      <div class="hero-stats">
+        <div class="stat">
+          <div class="stat-value">20万</div>
+          <div class="stat-label">一期预算</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">4个月</div>
+          <div class="stat-label">开发周期</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">70-75%</div>
+          <div class="stat-label">预期准确率</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value">21人月</div>
+          <div class="stat-label">人力投入</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 技术方案 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">🎯</span> 技术方案</h2>
+      <div class="cards">
+        <div class="card">
+          <div class="card-icon">📹</div>
+          <h3>视频上传与管理</h3>
+          <p>教师批量上传学生实训视频，按班级/学期/科目组织管理</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🤖</div>
+          <h3>VLM 自动检测</h3>
+          <p>基于 Gemini 2.5 Pro 的视频内容理解，操作步骤检测，规范性评估</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h3>智能评分</h3>
+          <p>量化评分输出，扣分点可视化标注，支持人工复核</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <h3>报告生成</h3>
+          <p>个人批改报告（PDF）、班级汇总统计（Excel）</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VLM 能力边界 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">🔬</span> VLM 能力边界</h2>
+      <div class="cards">
+        <div class="card">
+          <div class="card-icon">✅</div>
+          <h3>强：物体识别</h3>
+          <p>识别灭火器、工具、设备等常见物体，准确率高</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">✅</div>
+          <h3>中等：基础动作</h3>
+          <p>识别拔、握、压、拿等基础动作，需要 Prompt 优化</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">⚠️</div>
+          <h3>弱：细粒度判断</h3>
+          <p>判断握持位置精确到厘米、对准位置等细节，需要定制</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">⚠️</div>
+          <h3>中等：时序推理</h3>
+          <p>判断操作步骤顺序是否正确，需要多帧分析设计</p>
+        </div>
+      </div>
+      <p style="margin-top: 24px; padding: 16px; background: var(--surface); border-radius: 8px; color: var(--text-muted);">
+        <strong style="color: var(--warning);">⚠️ 关键数据：</strong>
+        TemporalBench 基准测试显示，GPT-4o 细粒度时序理解准确率仅 38.5%，与人类（67.9%）存在约 30% 差距。
+      </p>
+    </div>
+  </section>
+
+  <!-- 风险分析 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">🚨</span> 核心风险点</h2>
+      <div class="cards">
+        <div class="card risk-card">
+          <h3>规模与性能</h3>
+          <p>视频量级、并发需求、响应时间预期——100个 vs 10000个视频，架构完全不同</p>
+        </div>
+        <div class="card risk-card">
+          <h3>模型能力</h3>
+          <p>API vs 本地部署的选择——数据出境合规问题，开源模型能力差距</p>
+        </div>
+        <div class="card risk-card warning">
+          <h3>场景多样性</h3>
+          <p>每种实训类型需要独立的 Prompt 设计——没有一套方案通吃所有场景</p>
+        </div>
+        <div class="card risk-card warning">
+          <h3>数据质量</h3>
+          <p>视频拍摄规范直接影响识别效果——垃圾视频 = AI 失效</p>
+        </div>
+        <div class="card risk-card info">
+          <h3>评分标准</h3>
+          <p>需要老师提供可量化的书面标准——"感觉"无法转化为代码</p>
+        </div>
+        <div class="card risk-card info">
+          <h3>用户预期</h3>
+          <p>管理期望值——AI 不是 100% 准确，需要人工复核机制</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 团队配置 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">👥</span> 团队配置</h2>
+      <table class="team-table">
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>人月</th>
+            <th>核心职责</th>
+            <th>成本</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="role-badge role-pm">项目经理</span></td>
+            <td>3</td>
+            <td>需求对接、进度管理、验收标准制定、风险预警</td>
+            <td>1.35万</td>
+          </tr>
+          <tr>
+            <td><span class="role-badge role-backend">后端工程师</span></td>
+            <td>6</td>
+            <td>架构设计、视频管理、API 开发、VLM 对接、评分引擎</td>
+            <td>4.2万</td>
+          </tr>
+          <tr>
+            <td><span class="role-badge role-frontend">前端工程师</span></td>
+            <td>4</td>
+            <td>教师端、管理后台、数据可视化、视频播放器</td>
+            <td>2.8万</td>
+          </tr>
+          <tr>
+            <td><span class="role-badge role-algo">算法工程师</span></td>
+            <td>3</td>
+            <td>视频预处理、Prompt 工程、评分算法、迭代优化</td>
+            <td>2.4万</td>
+          </tr>
+          <tr>
+            <td><span class="role-badge role-data">数据工程师</span></td>
+            <td>3</td>
+            <td>数据采集、清洗、标注管理、训练集构建</td>
+            <td>2.4万</td>
+          </tr>
+          <tr>
+            <td><span class="role-badge role-test">测试工程师</span></td>
+            <td>2</td>
+            <td>测试设计、功能/性能测试、AI 准确率评估</td>
+            <td>1.4万</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 预算分配 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">💰</span> 预算分配</h2>
+      <div class="budget-bar">
+        <div class="budget-segment" style="width: 73%; background: linear-gradient(135deg, #6366f1, #4f46e5);">73%</div>
+        <div class="budget-segment" style="width: 15%; background: linear-gradient(135deg, #06b6d4, #0891b2);">15%</div>
+        <div class="budget-segment" style="width: 10%; background: linear-gradient(135deg, #10b981, #059669);">10%</div>
+        <div class="budget-segment" style="width: 2%; background: var(--surface-light);">2%</div>
+      </div>
+      <div class="budget-legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background: #6366f1;"></span>
+          <span>人力成本 14.55万（73%）</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: #06b6d4;"></span>
+          <span>算力与训练 3万（15%）</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: #10b981;"></span>
+          <span>部署与培训 2万（10%）</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background: var(--surface-light);"></span>
+          <span>预留 0.45万（2%）</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 项目里程碑 -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">📅</span> 项目里程碑</h2>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-date">M1 · 第1-2周</div>
+          <div class="timeline-title">需求确认</div>
+          <div class="timeline-desc">需求规格书签字确认</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">M2 · 第3-6周</div>
+          <div class="timeline-title">核心功能开发</div>
+          <div class="timeline-desc">能跑通一个实训场景</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">M3 · 第7-10周</div>
+          <div class="timeline-title">系统完善</div>
+          <div class="timeline-desc">全功能可用</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">M4 · 第11-14周</div>
+          <div class="timeline-title">测试优化</div>
+          <div class="timeline-desc">准确率达标</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">M5 · 第15-16周</div>
+          <div class="timeline-title">部署验收</div>
+          <div class="timeline-desc">项目交付</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 沟通 Checklist -->
+  <section>
+    <div class="container">
+      <h2><span class="icon">✅</span> 第一次沟通 Checklist</h2>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon">1</span>
+          <div>
+            <strong>确认视频量级</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">每学期多少视频？单视频多长？峰值并发？</p>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon">2</span>
+          <div>
+            <strong>确认实训类型数量</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">先做几种？每多一种 = 额外工作量</p>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon">3</span>
+          <div>
+            <strong>确认数据隐私要求</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">能否使用云 API？决定技术路线</p>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon">4</span>
+          <div>
+            <strong>确认评分标准</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">有书面文档吗？能提供示范视频吗？</p>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon">5</span>
+          <div>
+            <strong>确认验收标准</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">准确率多少算合格？什么标准算项目完成？</p>
+          </div>
+        </li>
+        <li>
+          <span class="check-icon">6</span>
+          <div>
+            <strong>确认运维责任</strong>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">校方有 IT 团队吗？谁来长期维护？</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2026 <a href="https://densematrix.ai">DenseMatrix 稠密矩阵</a> · 辽宁职校实训视频检测系统</p>
+      <p style="margin-top: 8px;">文档版本 v1.0 · 2026-03-01</p>
+    </div>
+  </footer>
+
+</body>
+</html>
