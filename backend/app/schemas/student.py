@@ -5,6 +5,43 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
 
+class MajorResponse(BaseModel):
+    id: str
+    name: str
+    code: Optional[str]
+    description: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+
+class ClassResponse(BaseModel):
+    id: str
+    name: str
+    major_id: str
+    major_name: Optional[str]
+    teacher_name: Optional[str]
+    year: int
+    student_count: Optional[int]
+    
+    class Config:
+        from_attributes = True
+
+
+class StudentResponse(BaseModel):
+    id: str
+    student_no: str
+    name: str
+    class_id: str
+    class_name: Optional[str]
+    major_id: str
+    major_name: Optional[str]
+    enrollment_year: int
+    
+    class Config:
+        from_attributes = True
+
+
 class StudentProfileResponse(BaseModel):
     id: str
     student_no: str
