@@ -188,7 +188,7 @@ doc.add_paragraph()
 doc.add_paragraph()
 doc.add_paragraph()
 
-add_para("智能实训能力评估平台", bold=True, size=28, color="1A3C6E",
+add_para("辽轨智能实训能力评估平台", bold=True, size=28, color="1A3C6E",
          align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
 add_para("一期功能规划书", bold=True, size=20, color="2C5F8A",
          align=WD_ALIGN_PARAGRAPH.CENTER, space_after=40)
@@ -260,18 +260,52 @@ add_para(
 
 doc.add_heading("3.2 核心数据流", level=2)
 
-# Data flow as a simple table-based diagram
-flow_table = doc.add_table(rows=1, cols=6)
-flow_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-labels = ["实训设备", "校方数据库", "平台数据同步", "成绩计算", "能力映射", "智能报告生成"]
-for i, label in enumerate(labels):
-    cell = flow_table.rows[0].cells[i]
-    set_cell_shading(cell, "1A3C6E" if i <= 1 else "2C5F8A")
-    set_cell_text(cell, label, bold=True, color="FFFFFF", size=9, align=WD_ALIGN_PARAGRAPH.CENTER)
+add_para(
+    "平台的数据处理流程分为以下几个环节："
+)
 
-add_para("")
-add_para("学生与教师通过平台门户查阅分析结果、下载诊断报告。",
-         size=11, color="666666", align=WD_ALIGN_PARAGRAPH.CENTER)
+add_rich_para([("一、数据来源与接入", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "学生在实训设备上完成操作后，设备自动将每个操作步骤的完成状态（通过/未通过）"
+    "记录至校方现有的 MySQL 数据库。平台通过定时任务，每日自动从该数据库中同步最新的"
+    "实训操作记录。此过程无需改变校方现有的数据采集流程与设备配置。"
+)
+
+add_rich_para([("二、单次实训成绩计算", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "平台获取到新的实训记录后，根据预设的评分规则，逐条计算每次实训的总成绩。"
+    "同时，依据教师提供的映射关系表，将每个操作步骤的完成情况对应至相关子能力，"
+    "识别出学生在本次实训中表现薄弱的具体能力环节。"
+)
+
+add_rich_para([("三、实训室环境规范检查", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "学生完成实训后，将实训室现场照片上传至平台。平台通过 AI 将该照片与实训室标准状态"
+    "照片进行对比分析，自动判断器材归位、台面整洁等环境规范情况。检查结果将纳入该次"
+    "实训的整体评价记录。该环节与成绩计算相互独立，按各自流程分别处理后合并至同一条"
+    "实训记录中。"
+)
+
+add_rich_para([("四、学生能力图谱构建", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "在单次成绩计算完成后，平台进一步汇总该学生的全部历史实训记录，综合计算其在各项"
+    "子能力上的掌握程度。系统将相关子能力归类至大类能力维度，生成可视化的能力雷达图，"
+    "并据此评估学生是否达到专业培养方案所要求的毕业标准。能力图谱随每次新的实训数据"
+    "入库而动态更新。"
+)
+
+add_rich_para([("五、智能诊断报告生成", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "基于上述成绩数据、能力分析结果与环境检查记录，平台借助 AI 为学生生成个性化的"
+    "诊断报告。报告以自然语言描述学生的能力现状，指出具体薄弱环节，并提供针对性的"
+    "提升建议。支持生成单次实训诊断报告与阶段性综合报告，均可在线查阅与下载。"
+)
+
+add_rich_para([("六、结果呈现", True, 11, "2C5F8A")], space_before=8, space_after=2)
+add_para(
+    "上述全部分析结果通过平台门户向学生和教师开放。学生可查阅个人实训成绩、"
+    "能力图谱与诊断报告；教师可查阅所辖班级全体学生的数据，进行汇总统计与导出。"
+)
 
 # ── 四、功能模块 ───────────────────────────────────────────────────────
 
@@ -337,7 +371,6 @@ add_module(
     [
         "以自然语言描述学生当前的能力状况与欠缺之处",
         "针对薄弱环节，提供针对性的提升建议",
-        "支持生成单次实训诊断报告与阶段性综合报告",
         "报告支持在线查阅与下载",
     ],
 )
@@ -424,8 +457,6 @@ add_table(
         ["3", "实训室照片获取方式", "实训结束后的实训室照片是由学生手动拍摄上传，还是通过现场设备自动采集"],
         ["4", "实训室预约功能", "一期是否需要包含学生在线预约实训室的功能"],
         ["5", "用户认证方式", "平台登录是否需要对接校园网统一认证体系，还是采用独立的账号体系"],
-        ["6", "数据库远程访问方式", "公网直连、VPN 或其他方式"],
-        ["7", "现有实训教室详情", "3 个现有实训教室分别对应的专业、设备型号及实训操作步骤"],
     ],
     col_widths=[1.5, 4.5, 10],
 )
@@ -435,7 +466,7 @@ add_table(
 doc.add_heading("八、后续展望", level=1)
 add_para("一期平台建成后，可根据实际使用效果与需求变化，在后续阶段逐步扩展以下方向：", space_after=4)
 add_bullet("新增实训教室与设备类型的接入")
-add_bullet("实训视频的智能检测与分析")
+add_bullet("实训图片和视频的智能检测与分析")
 add_bullet("更丰富的教学数据统计与分析功能")
 
 # ── Footer / Contact ──────────────────────────────────────────────────

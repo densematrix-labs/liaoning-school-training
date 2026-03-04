@@ -1,0 +1,141 @@
+{
+  "classes": [
+    {
+      "id": "class-001",
+      "name": "机电2301班",
+      "major": "铁道机车运用与维护",
+      "grade": 2023,
+      "teacher_id": "teacher-001",
+      "student_count": 35
+    },
+    {
+      "id": "class-002",
+      "name": "机电2302班",
+      "major": "铁道机车运用与维护",
+      "grade": 2023,
+      "teacher_id": "teacher-002",
+      "student_count": 36
+    },
+    {
+      "id": "class-003",
+      "name": "机电2303班",
+      "major": "铁道机车运用与维护",
+      "grade": 2023,
+      "teacher_id": "teacher-003",
+      "student_count": 34
+    },
+    {
+      "id": "class-004",
+      "name": "机电2401班",
+      "major": "铁道机车运用与维护",
+      "grade": 2024,
+      "teacher_id": "teacher-004",
+      "student_count": 35
+    }
+  ],
+  "teachers": [
+    {
+      "id": "teacher-001",
+      "name": "王建国",
+      "employee_id": "T20150012",
+      "title": "高级实训指导教师",
+      "phone": "138****1234",
+      "email": "wjg@lnrailway.edu.cn",
+      "class_ids": ["class-001"],
+      "avatar": "teacher-001.jpg"
+    },
+    {
+      "id": "teacher-002",
+      "name": "李明华",
+      "employee_id": "T20170023",
+      "title": "实训指导教师",
+      "phone": "139****2345",
+      "email": "lmh@lnrailway.edu.cn",
+      "class_ids": ["class-002"],
+      "avatar": "teacher-002.jpg"
+    },
+    {
+      "id": "teacher-003",
+      "name": "张秀芳",
+      "employee_id": "T20180034",
+      "title": "实训指导教师",
+      "phone": "137****3456",
+      "email": "zxf@lnrailway.edu.cn",
+      "class_ids": ["class-003"],
+      "avatar": "teacher-003.jpg"
+    },
+    {
+      "id": "teacher-004",
+      "name": "刘志强",
+      "employee_id": "T20200045",
+      "title": "助理实训指导教师",
+      "phone": "136****4567",
+      "email": "lzq@lnrailway.edu.cn",
+      "class_ids": ["class-004"],
+      "avatar": "teacher-004.jpg"
+    },
+    {
+      "id": "teacher-005",
+      "name": "陈晓东",
+      "employee_id": "T20100008",
+      "title": "高级实训指导教师",
+      "phone": "135****5678",
+      "email": "cxd@lnrailway.edu.cn",
+      "class_ids": [],
+      "is_admin": true,
+      "avatar": "teacher-005.jpg"
+    }
+  ],
+  "students": [
+    {"id": "stu-001", "name": "张伟", "student_id": "2023010101", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-002", "name": "李娜", "student_id": "2023010102", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-003", "name": "王磊", "student_id": "2023010103", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-004", "name": "刘洋", "student_id": "2023010104", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-005", "name": "陈静", "student_id": "2023010105", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-006", "name": "杨帆", "student_id": "2023010106", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-007", "name": "赵敏", "student_id": "2023010107", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-008", "name": "孙浩", "student_id": "2023010108", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-009", "name": "周杰", "student_id": "2023010109", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-010", "name": "吴芳", "student_id": "2023010110", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-011", "name": "郑鹏", "student_id": "2023010111", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-012", "name": "冯雪", "student_id": "2023010112", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-013", "name": "何强", "student_id": "2023010113", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-014", "name": "马丽", "student_id": "2023010114", "class_id": "class-001", "gender": "女"},
+    {"id": "stu-015", "name": "林涛", "student_id": "2023010115", "class_id": "class-001", "gender": "男"},
+    {"id": "stu-016", "name": "徐明", "student_id": "2023010201", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-017", "name": "朱颖", "student_id": "2023010202", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-018", "name": "胡军", "student_id": "2023010203", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-019", "name": "郭燕", "student_id": "2023010204", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-020", "name": "高峰", "student_id": "2023010205", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-021", "name": "罗敏", "student_id": "2023010206", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-022", "name": "梁宇", "student_id": "2023010207", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-023", "name": "宋琳", "student_id": "2023010208", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-024", "name": "唐杰", "student_id": "2023010209", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-025", "name": "韩雪", "student_id": "2023010210", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-026", "name": "贾磊", "student_id": "2023010211", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-027", "name": "邓芳", "student_id": "2023010212", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-028", "name": "曹阳", "student_id": "2023010213", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-029", "name": "彭丽", "student_id": "2023010214", "class_id": "class-002", "gender": "女"},
+    {"id": "stu-030", "name": "董强", "student_id": "2023010215", "class_id": "class-002", "gender": "男"},
+    {"id": "stu-031", "name": "蒋涛", "student_id": "2023010301", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-032", "name": "沈静", "student_id": "2023010302", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-033", "name": "韦明", "student_id": "2023010303", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-034", "name": "秦颖", "student_id": "2023010304", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-035", "name": "许峰", "student_id": "2023010305", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-036", "name": "姚敏", "student_id": "2023010306", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-037", "name": "卢宇", "student_id": "2023010307", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-038", "name": "蔡琳", "student_id": "2023010308", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-039", "name": "田杰", "student_id": "2023010309", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-040", "name": "丁雪", "student_id": "2023010310", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-041", "name": "贺磊", "student_id": "2023010311", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-042", "name": "邱芳", "student_id": "2023010312", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-043", "name": "石阳", "student_id": "2023010313", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-044", "name": "姜丽", "student_id": "2023010314", "class_id": "class-003", "gender": "女"},
+    {"id": "stu-045", "name": "侯强", "student_id": "2023010315", "class_id": "class-003", "gender": "男"},
+    {"id": "stu-046", "name": "范涛", "student_id": "2024010101", "class_id": "class-004", "gender": "男"},
+    {"id": "stu-047", "name": "方静", "student_id": "2024010102", "class_id": "class-004", "gender": "女"},
+    {"id": "stu-048", "name": "任明", "student_id": "2024010103", "class_id": "class-004", "gender": "男"},
+    {"id": "stu-049", "name": "袁颖", "student_id": "2024010104", "class_id": "class-004", "gender": "女"},
+    {"id": "stu-050", "name": "柳峰", "student_id": "2024010105", "class_id": "class-004", "gender": "男"}
+  ]
+}

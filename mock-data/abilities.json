@@ -1,0 +1,209 @@
+{
+  "major_abilities": [
+    {
+      "id": "ma-001",
+      "name": "安全操作能力",
+      "description": "掌握铁路机车操作中的安全规程，具备安全意识和应急处置能力",
+      "weight": 0.25,
+      "icon": "shield-check"
+    },
+    {
+      "id": "ma-002",
+      "name": "设备使用能力",
+      "description": "熟练操作机车各类设备和控制系统",
+      "weight": 0.25,
+      "icon": "cog"
+    },
+    {
+      "id": "ma-003",
+      "name": "故障诊断能力",
+      "description": "能够识别和诊断机车常见故障",
+      "weight": 0.20,
+      "icon": "search"
+    },
+    {
+      "id": "ma-004",
+      "name": "维护保养能力",
+      "description": "掌握机车日常维护保养技能",
+      "weight": 0.15,
+      "icon": "wrench"
+    },
+    {
+      "id": "ma-005",
+      "name": "规范执行能力",
+      "description": "严格按照操作规程执行各项任务",
+      "weight": 0.10,
+      "icon": "clipboard-list"
+    },
+    {
+      "id": "ma-006",
+      "name": "团队协作能力",
+      "description": "具备良好的沟通协调和团队配合能力",
+      "weight": 0.05,
+      "icon": "users"
+    }
+  ],
+  "sub_abilities": [
+    {
+      "id": "sa-001",
+      "major_ability_id": "ma-001",
+      "name": "安全防护穿戴",
+      "description": "正确穿戴安全帽、工作服、绝缘手套等防护装备",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-002",
+      "major_ability_id": "ma-001",
+      "name": "操作规程遵守",
+      "description": "严格按照操作手册执行各项操作步骤",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-003",
+      "major_ability_id": "ma-001",
+      "name": "应急处置",
+      "description": "遇到紧急情况能够正确处置和报告",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-004",
+      "major_ability_id": "ma-001",
+      "name": "安全隐患识别",
+      "description": "能够发现和报告工作环境中的安全隐患",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-005",
+      "major_ability_id": "ma-002",
+      "name": "机车启动操作",
+      "description": "掌握机车启动前检查和启动程序",
+      "weight": 0.20
+    },
+    {
+      "id": "sa-006",
+      "major_ability_id": "ma-002",
+      "name": "制动系统操作",
+      "description": "熟练操作各类制动设备",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-007",
+      "major_ability_id": "ma-002",
+      "name": "牵引控制",
+      "description": "掌握牵引力控制和速度调节",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-008",
+      "major_ability_id": "ma-002",
+      "name": "信号设备使用",
+      "description": "正确使用和理解各类信号设备",
+      "weight": 0.15
+    },
+    {
+      "id": "sa-009",
+      "major_ability_id": "ma-002",
+      "name": "仪表监控",
+      "description": "能够正确读取和理解各类仪表数据",
+      "weight": 0.15
+    },
+    {
+      "id": "sa-010",
+      "major_ability_id": "ma-003",
+      "name": "电气故障排查",
+      "description": "能够识别和定位电气系统故障",
+      "weight": 0.30
+    },
+    {
+      "id": "sa-011",
+      "major_ability_id": "ma-003",
+      "name": "机械故障识别",
+      "description": "能够判断机械部件的异常状况",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-012",
+      "major_ability_id": "ma-003",
+      "name": "仪表读数分析",
+      "description": "通过仪表数据判断设备运行状态",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-013",
+      "major_ability_id": "ma-003",
+      "name": "异常声音判断",
+      "description": "通过声音识别设备异常",
+      "weight": 0.20
+    },
+    {
+      "id": "sa-014",
+      "major_ability_id": "ma-004",
+      "name": "日常点检",
+      "description": "掌握日常点检项目和方法",
+      "weight": 0.30
+    },
+    {
+      "id": "sa-015",
+      "major_ability_id": "ma-004",
+      "name": "润滑保养",
+      "description": "正确进行各部位润滑作业",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-016",
+      "major_ability_id": "ma-004",
+      "name": "清洁维护",
+      "description": "保持设备和工作区域清洁",
+      "weight": 0.20
+    },
+    {
+      "id": "sa-017",
+      "major_ability_id": "ma-004",
+      "name": "零部件更换",
+      "description": "能够更换常见易损件",
+      "weight": 0.25
+    },
+    {
+      "id": "sa-018",
+      "major_ability_id": "ma-005",
+      "name": "文档记录",
+      "description": "规范填写各类操作记录和报告",
+      "weight": 0.35
+    },
+    {
+      "id": "sa-019",
+      "major_ability_id": "ma-005",
+      "name": "流程执行",
+      "description": "严格按照标准流程执行操作",
+      "weight": 0.35
+    },
+    {
+      "id": "sa-020",
+      "major_ability_id": "ma-005",
+      "name": "交接班规范",
+      "description": "规范进行交接班手续",
+      "weight": 0.30
+    },
+    {
+      "id": "sa-021",
+      "major_ability_id": "ma-006",
+      "name": "沟通协调",
+      "description": "与团队成员有效沟通",
+      "weight": 0.35
+    },
+    {
+      "id": "sa-022",
+      "major_ability_id": "ma-006",
+      "name": "任务配合",
+      "description": "配合团队完成复杂任务",
+      "weight": 0.35
+    },
+    {
+      "id": "sa-023",
+      "major_ability_id": "ma-006",
+      "name": "信息共享",
+      "description": "及时分享工作信息和发现",
+      "weight": 0.30
+    }
+  ]
+}

@@ -1,0 +1,375 @@
+{
+  "training_rooms": [
+    {
+      "id": "room-001",
+      "name": "机车模拟驾驶室",
+      "description": "配备 HXD3C 型电力机车模拟器，可进行启动、运行、制动等全流程模拟训练",
+      "location": "实训楼 A 区 101",
+      "capacity": 6,
+      "equipment": ["机车模拟器", "操作台", "信号显示屏", "监控系统"],
+      "standard_image": "room-001-standard.jpg"
+    },
+    {
+      "id": "room-002",
+      "name": "电气系统实训台",
+      "description": "配备机车电气系统模型，可进行电气检修、故障诊断训练",
+      "location": "实训楼 A 区 102",
+      "capacity": 8,
+      "equipment": ["电气实训台", "万用表", "示波器", "绝缘测试仪", "线路板"],
+      "standard_image": "room-002-standard.jpg"
+    },
+    {
+      "id": "room-003",
+      "name": "机械维护实训区",
+      "description": "配备走行部实物模型，可进行机械检修和维护保养训练",
+      "location": "实训楼 B 区 201",
+      "capacity": 10,
+      "equipment": ["走行部模型", "液压工具", "检测设备", "维护工具箱"],
+      "standard_image": "room-003-standard.jpg"
+    }
+  ],
+  "training_projects": [
+    {
+      "id": "proj-001",
+      "room_id": "room-001",
+      "name": "机车启动与制动操作",
+      "description": "学习 HXD3C 型电力机车的启动程序和制动操作",
+      "duration_minutes": 45,
+      "difficulty": "中级",
+      "steps": [
+        {
+          "id": "step-001-01",
+          "sequence": 1,
+          "name": "穿戴安全防护装备",
+          "description": "正确穿戴安全帽、工作服、安全鞋",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-001"]
+        },
+        {
+          "id": "step-001-02",
+          "sequence": 2,
+          "name": "进入司机室前检查",
+          "description": "检查车门、踏板、扶手状态",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-004", "sa-014"]
+        },
+        {
+          "id": "step-001-03",
+          "sequence": 3,
+          "name": "启动前仪表检查",
+          "description": "检查各仪表初始状态是否正常",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-009", "sa-012"]
+        },
+        {
+          "id": "step-001-04",
+          "sequence": 4,
+          "name": "接通蓄电池电源",
+          "description": "按规程接通蓄电池开关",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-005", "sa-019"]
+        },
+        {
+          "id": "step-001-05",
+          "sequence": 5,
+          "name": "升起受电弓",
+          "description": "确认接触网状态后升起受电弓",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-005", "sa-002"]
+        },
+        {
+          "id": "step-001-06",
+          "sequence": 6,
+          "name": "合上主断路器",
+          "description": "确认条件满足后合上主断路器",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-005", "sa-010"]
+        },
+        {
+          "id": "step-001-07",
+          "sequence": 7,
+          "name": "启动辅助系统",
+          "description": "依次启动冷却风机、空压机等辅助设备",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-005", "sa-019"]
+        },
+        {
+          "id": "step-001-08",
+          "sequence": 8,
+          "name": "制动系统充风",
+          "description": "等待制动系统风压达到规定值",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-006", "sa-009"]
+        },
+        {
+          "id": "step-001-09",
+          "sequence": 9,
+          "name": "松缓手制动",
+          "description": "确认停车制动松缓",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-006", "sa-002"]
+        },
+        {
+          "id": "step-001-10",
+          "sequence": 10,
+          "name": "牵引手柄操作",
+          "description": "缓慢推动牵引手柄起车",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-007", "sa-002"]
+        },
+        {
+          "id": "step-001-11",
+          "sequence": 11,
+          "name": "加速运行",
+          "description": "根据信号逐步加速至规定速度",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-007", "sa-008"]
+        },
+        {
+          "id": "step-001-12",
+          "sequence": 12,
+          "name": "常用制动操作",
+          "description": "使用常用制动减速停车",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-006", "sa-002"]
+        },
+        {
+          "id": "step-001-13",
+          "sequence": 13,
+          "name": "紧急制动演练",
+          "description": "模拟紧急情况下的紧急制动操作",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-003", "sa-006"]
+        },
+        {
+          "id": "step-001-14",
+          "sequence": 14,
+          "name": "停车后制动保压",
+          "description": "确认制动保压状态",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-006", "sa-009"]
+        },
+        {
+          "id": "step-001-15",
+          "sequence": 15,
+          "name": "填写操作记录",
+          "description": "规范填写实训操作记录表",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-018", "sa-019"]
+        },
+        {
+          "id": "step-001-16",
+          "sequence": 16,
+          "name": "整理实训现场",
+          "description": "整理工具、清洁台面、归位设备",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-016", "sa-020"]
+        }
+      ]
+    },
+    {
+      "id": "proj-002",
+      "room_id": "room-002",
+      "name": "机车电气系统检修",
+      "description": "学习机车电气系统的检测、诊断和维修技能",
+      "duration_minutes": 60,
+      "difficulty": "高级",
+      "steps": [
+        {
+          "id": "step-002-01",
+          "sequence": 1,
+          "name": "穿戴绝缘防护装备",
+          "description": "穿戴绝缘手套、绝缘鞋，确认防护状态",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-001", "sa-004"]
+        },
+        {
+          "id": "step-002-02",
+          "sequence": 2,
+          "name": "断电确认",
+          "description": "确认设备已断电，验电确认安全",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-002", "sa-004"]
+        },
+        {
+          "id": "step-002-03",
+          "sequence": 3,
+          "name": "检测仪器准备",
+          "description": "准备万用表、示波器等检测工具",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-014", "sa-016"]
+        },
+        {
+          "id": "step-002-04",
+          "sequence": 4,
+          "name": "外观检查",
+          "description": "检查线路、接头、元器件外观",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-010", "sa-011"]
+        },
+        {
+          "id": "step-002-05",
+          "sequence": 5,
+          "name": "绝缘电阻测量",
+          "description": "测量主要回路绝缘电阻",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-010", "sa-012"]
+        },
+        {
+          "id": "step-002-06",
+          "sequence": 6,
+          "name": "接触器检查",
+          "description": "检查接触器动作是否正常",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-010", "sa-013"]
+        },
+        {
+          "id": "step-002-07",
+          "sequence": 7,
+          "name": "继电器测试",
+          "description": "测试保护继电器动作值",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-010", "sa-012"]
+        },
+        {
+          "id": "step-002-08",
+          "sequence": 8,
+          "name": "传感器校验",
+          "description": "校验各类传感器信号",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-010", "sa-009"]
+        },
+        {
+          "id": "step-002-09",
+          "sequence": 9,
+          "name": "故障模拟诊断",
+          "description": "根据故障现象判断故障位置",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-010", "sa-012", "sa-013"]
+        },
+        {
+          "id": "step-002-10",
+          "sequence": 10,
+          "name": "故障排除操作",
+          "description": "按规程排除模拟故障",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-010", "sa-017"]
+        },
+        {
+          "id": "step-002-11",
+          "sequence": 11,
+          "name": "功能恢复验证",
+          "description": "修复后进行功能测试",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-010", "sa-019"]
+        },
+        {
+          "id": "step-002-12",
+          "sequence": 12,
+          "name": "记录与整理",
+          "description": "填写检修记录，整理工具和现场",
+          "score_weight": 0.05,
+          "ability_ids": ["sa-018", "sa-016"]
+        }
+      ]
+    },
+    {
+      "id": "proj-003",
+      "room_id": "room-003",
+      "name": "走行部检修与维护",
+      "description": "学习机车走行部的检查、测量和维护技能",
+      "duration_minutes": 50,
+      "difficulty": "中级",
+      "steps": [
+        {
+          "id": "step-003-01",
+          "sequence": 1,
+          "name": "安全防护准备",
+          "description": "穿戴工作服、安全帽、劳保手套",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-001"]
+        },
+        {
+          "id": "step-003-02",
+          "sequence": 2,
+          "name": "工具器具准备",
+          "description": "准备检测工具和维护用品",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-014", "sa-016"]
+        },
+        {
+          "id": "step-003-03",
+          "sequence": 3,
+          "name": "轮对外观检查",
+          "description": "检查轮缘、踏面磨耗情况",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-011", "sa-014"]
+        },
+        {
+          "id": "step-003-04",
+          "sequence": 4,
+          "name": "轮对尺寸测量",
+          "description": "测量轮径、轮缘高度等关键尺寸",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-012", "sa-014"]
+        },
+        {
+          "id": "step-003-05",
+          "sequence": 5,
+          "name": "轴箱检查",
+          "description": "检查轴箱温度、油位、密封状态",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-011", "sa-014"]
+        },
+        {
+          "id": "step-003-06",
+          "sequence": 6,
+          "name": "弹簧系统检查",
+          "description": "检查弹簧有无裂纹、变形",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-011", "sa-013"]
+        },
+        {
+          "id": "step-003-07",
+          "sequence": 7,
+          "name": "制动装置检查",
+          "description": "检查闸瓦、制动缸、管路状态",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-011", "sa-006"]
+        },
+        {
+          "id": "step-003-08",
+          "sequence": 8,
+          "name": "润滑作业",
+          "description": "按规定进行各润滑点注油作业",
+          "score_weight": 0.10,
+          "ability_ids": ["sa-015", "sa-019"]
+        },
+        {
+          "id": "step-003-09",
+          "sequence": 9,
+          "name": "紧固件检查",
+          "description": "检查关键部位螺栓紧固状态",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-011", "sa-014"]
+        },
+        {
+          "id": "step-003-10",
+          "sequence": 10,
+          "name": "问题记录与报告",
+          "description": "记录发现的问题并填写报告",
+          "score_weight": 0.08,
+          "ability_ids": ["sa-018", "sa-021"]
+        },
+        {
+          "id": "step-003-11",
+          "sequence": 11,
+          "name": "现场清理整理",
+          "description": "清理现场，归位工具",
+          "score_weight": 0.06,
+          "ability_ids": ["sa-016", "sa-020"]
+        }
+      ]
+    }
+  ]
+}
