@@ -1,0 +1,457 @@
+"""
+Generate professional DOCX for 智能实训能力评估平台 — 一期功能规划书
+"""
+
+from docx import Document
+from docx.shared import Pt, Cm, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn, nsdecls
+from docx.oxml import parse_xml
+import os
+
+doc = Document()
+
+# ── Global style defaults ──────────────────────────────────────────────
+
+style = doc.styles["Normal"]
+style.font.name = "微软雅黑"
+style.font.size = Pt(11)
+style.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+style.paragraph_format.space_after = Pt(6)
+style.paragraph_format.line_spacing = 1.35
+style.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+
+# Page margins
+for section in doc.sections:
+    section.top_margin = Cm(2.5)
+    section.bottom_margin = Cm(2.5)
+    section.left_margin = Cm(2.8)
+    section.right_margin = Cm(2.8)
+
+# Heading styles
+for level, size, color in [
+    ("Heading 1", 22, "1A3C6E"),
+    ("Heading 2", 16, "1A3C6E"),
+    ("Heading 3", 13, "2C5F8A"),
+]:
+    h = doc.styles[level]
+    h.font.name = "微软雅黑"
+    h.font.size = Pt(size)
+    h.font.color.rgb = RGBColor.from_string(color)
+    h.font.bold = True
+    h.paragraph_format.space_before = Pt(18 if level == "Heading 1" else 14)
+    h.paragraph_format.space_after = Pt(8)
+    h.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+
+
+# ── Helper functions ───────────────────────────────────────────────────
+
+ACCENT = RGBColor(0x1A, 0x3C, 0x6E)
+LIGHT_BG = "D6E4F0"
+WHITE = "FFFFFF"
+
+def add_para(text, bold=False, size=None, color=None, align=None, space_after=None):
+    p = doc.add_paragraph()
+    run = p.add_run(text)
+    run.font.name = "微软雅黑"
+    run.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+    if bold:
+        run.bold = True
+    if size:
+        run.font.size = Pt(size)
+    if color:
+        run.font.color.rgb = RGBColor.from_string(color) if isinstance(color, str) else color
+    if align:
+        p.alignment = align
+    if space_after is not None:
+        p.paragraph_format.space_after = Pt(space_after)
+    return p
+
+def add_rich_para(segments, align=None, space_after=None, space_before=None):
+    """segments: list of (text, bold, size, color) tuples"""
+    p = doc.add_paragraph()
+    for text, bold, size, color in segments:
+        run = p.add_run(text)
+        run.font.name = "微软雅黑"
+        run.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+        run.bold = bold
+        if size:
+            run.font.size = Pt(size)
+        if color:
+            run.font.color.rgb = RGBColor.from_string(color) if isinstance(color, str) else color
+    if align:
+        p.alignment = align
+    if space_after is not None:
+        p.paragraph_format.space_after = Pt(space_after)
+    if space_before is not None:
+        p.paragraph_format.space_before = Pt(space_before)
+    return p
+
+def add_bullet(text, bold_prefix=None, level=0):
+    p = doc.add_paragraph(style="List Bullet")
+    p.paragraph_format.left_indent = Cm(1.2 + level * 0.8)
+    if bold_prefix:
+        run_b = p.add_run(bold_prefix)
+        run_b.bold = True
+        run_b.font.name = "微软雅黑"
+        run_b.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+        run_b.font.size = Pt(11)
+        run = p.add_run(text)
+    else:
+        # Clear default and re-add
+        p.clear()
+        run = p.add_run(text)
+    run.font.name = "微软雅黑"
+    run.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+    run.font.size = Pt(11)
+    return p
+
+def set_cell_shading(cell, color):
+    shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{color}"/>')
+    cell._tc.get_or_add_tcPr().append(shading)
+
+def set_cell_text(cell, text, bold=False, color=None, size=10, align=WD_ALIGN_PARAGRAPH.LEFT):
+    cell.text = ""
+    p = cell.paragraphs[0]
+    p.alignment = align
+    run = p.add_run(text)
+    run.font.name = "微软雅黑"
+    run.element.rPr.rFonts.set(qn("w:eastAsia"), "微软雅黑")
+    run.font.size = Pt(size)
+    run.bold = bold
+    if color:
+        run.font.color.rgb = RGBColor.from_string(color) if isinstance(color, str) else color
+    p.paragraph_format.space_before = Pt(3)
+    p.paragraph_format.space_after = Pt(3)
+
+def add_table(headers, rows, col_widths=None):
+    table = doc.add_table(rows=1 + len(rows), cols=len(headers))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.style = "Table Grid"
+
+    # Header row
+    for i, h in enumerate(headers):
+        cell = table.rows[0].cells[i]
+        set_cell_shading(cell, "1A3C6E")
+        set_cell_text(cell, h, bold=True, color="FFFFFF", size=10, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+    # Data rows
+    for r_idx, row in enumerate(rows):
+        bg = LIGHT_BG if r_idx % 2 == 0 else WHITE
+        for c_idx, val in enumerate(row):
+            cell = table.rows[r_idx + 1].cells[c_idx]
+            set_cell_shading(cell, bg)
+            align = WD_ALIGN_PARAGRAPH.CENTER if c_idx == 0 and val.strip().isdigit() else WD_ALIGN_PARAGRAPH.LEFT
+            set_cell_text(cell, val, size=10, align=align)
+
+    # Column widths
+    if col_widths:
+        for row in table.rows:
+            for i, w in enumerate(col_widths):
+                row.cells[i].width = Cm(w)
+
+    doc.add_paragraph()  # spacing
+    return table
+
+def add_divider():
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_after = Pt(4)
+    # Thin line via bottom border
+    pPr = p._p.get_or_add_pPr()
+    pBdr = parse_xml(
+        f'<w:pBdr {nsdecls("w")}>'
+        '  <w:bottom w:val="single" w:sz="4" w:space="1" w:color="B0C4DE"/>'
+        "</w:pBdr>"
+    )
+    pPr.append(pBdr)
+
+def add_module(title, description, bullets, note=None):
+    doc.add_heading(title, level=3)
+    add_rich_para([("功能说明：", True, 11, None), (description, False, 11, None)], space_after=4)
+    add_rich_para([("核心能力：", True, 11, None)], space_after=2)
+    for b in bullets:
+        add_bullet(b)
+    if note:
+        add_rich_para([("说明：", True, 11, "666666"), (note, False, 11, "666666")], space_before=4, space_after=8)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# DOCUMENT CONTENT
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Cover / Title ──────────────────────────────────────────────────────
+
+doc.add_paragraph()  # top space
+doc.add_paragraph()
+doc.add_paragraph()
+doc.add_paragraph()
+
+add_para("智能实训能力评估平台", bold=True, size=28, color="1A3C6E",
+         align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
+add_para("一期功能规划书", bold=True, size=20, color="2C5F8A",
+         align=WD_ALIGN_PARAGRAPH.CENTER, space_after=40)
+
+add_divider()
+
+add_para("编制单位：上海凝矩科技有限公司", size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
+add_para("版本：v1.0", size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
+add_para("日期：2026 年 3 月", size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=4)
+
+# Page break
+doc.add_page_break()
+
+# ── 一、项目背景 ───────────────────────────────────────────────────────
+
+doc.add_heading("一、项目背景", level=1)
+
+add_para(
+    "职业教育以培养学生实际操作能力为核心目标。实训课程是专科院校教学体系的重要组成部分，"
+    "也是学生达到毕业标准的必要环节。"
+)
+add_para(
+    "当前，实训成绩的评定主要依赖教师人工逐一查看学生操作情况并进行打分，存在以下问题：",
+    space_after=4,
+)
+
+add_bullet("每位学生的实训均需教师逐步核查，耗时耗力", bold_prefix="工作量大：")
+add_bullet("学生无法在实训结束后及时获得评价与改进建议", bold_prefix="反馈周期长：")
+add_bullet("单次实训成绩难以反映学生在多项技能上的综合掌握程度", bold_prefix="评价维度单一：")
+add_bullet("现有实训设备已产生结构化数据，但缺乏系统性的分析手段", bold_prefix="数据未充分利用：")
+
+add_para("")
+add_para(
+    "本项目旨在构建一套智能实训能力评估平台，充分利用现有实训设备所产生的数据，"
+    "实现自动化的成绩分析、能力建模与诊断报告生成，从而减轻教师工作负担、"
+    "提升学生学习反馈的及时性与精准度。"
+)
+
+# ── 二、项目目标 ───────────────────────────────────────────────────────
+
+doc.add_heading("二、项目目标", level=1)
+
+goals = [
+    ("自动化成绩分析：", "对接现有实训设备数据库，自动读取学生实训操作结果并计算成绩"),
+    ("构建学生能力模型：", "将实训表现映射至专业能力体系，生成多维度的学生能力图谱"),
+    ("智能诊断报告：", "借助 AI 能力，为每位学生生成个性化的诊断报告与提升建议"),
+    ("实训室环境规范检查：", "通过 AI 图像识别，自动检查实训结束后实训室的环境整理情况"),
+    ("统一信息门户：", "为学生和教师提供便捷的数据查阅与报告下载入口"),
+]
+for i, (prefix, text) in enumerate(goals, 1):
+    add_rich_para(
+        [(f"{i}. ", False, 11, None), (prefix, True, 11, None), (text, False, 11, None)],
+        space_after=2,
+    )
+
+# ── 三、系统概述 ───────────────────────────────────────────────────────
+
+doc.add_heading("三、系统概述", level=1)
+
+doc.add_heading("3.1 总体思路", level=2)
+add_para(
+    "现有实训设备已具备逐步骤评判功能，学生完成实训操作后，设备自动将每个步骤的完成情况"
+    "（通过/未通过）写入学校现有的 MySQL 数据库。"
+)
+add_para(
+    "本平台以该数据库为数据源，通过定时任务自动获取最新实训记录，"
+    "经过成绩计算、能力映射、智能分析等处理后，将结果呈现在平台上，供学生和教师查阅。"
+)
+
+doc.add_heading("3.2 核心数据流", level=2)
+
+# Data flow as a simple table-based diagram
+flow_table = doc.add_table(rows=1, cols=6)
+flow_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+labels = ["实训设备", "校方数据库", "平台数据同步", "成绩计算", "能力映射", "智能报告生成"]
+for i, label in enumerate(labels):
+    cell = flow_table.rows[0].cells[i]
+    set_cell_shading(cell, "1A3C6E" if i <= 1 else "2C5F8A")
+    set_cell_text(cell, label, bold=True, color="FFFFFF", size=9, align=WD_ALIGN_PARAGRAPH.CENTER)
+
+add_para("")
+add_para("学生与教师通过平台门户查阅分析结果、下载诊断报告。",
+         size=11, color="666666", align=WD_ALIGN_PARAGRAPH.CENTER)
+
+# ── 四、功能模块 ───────────────────────────────────────────────────────
+
+doc.add_heading("四、功能模块", level=1)
+
+# 4.1
+add_module(
+    "4.1 数据同步",
+    "平台通过定时任务，自动从校方现有数据库中获取最新的学生实训操作记录，作为后续分析的数据基础。",
+    [
+        "支持定时自动同步（每日），确保数据时效性",
+        "支持对接校方现有 MySQL 数据库，无需改变现有数据采集流程",
+        "对同步的数据进行校验与去重，保证数据完整性",
+    ],
+)
+
+add_divider()
+
+# 4.2
+add_module(
+    "4.2 实训成绩分析",
+    "基于实训设备记录的逐步骤操作结果，自动计算学生单次实训的成绩，并分析各步骤的完成情况。",
+    [
+        "读取学生单次实训中每个操作步骤的完成状态",
+        "根据预设的评分规则，自动计算该次实训总成绩",
+        "标注未通过的步骤，并关联该步骤所对应的能力要求",
+        "支持查看学生某一次实训的完整成绩明细",
+    ],
+)
+
+add_divider()
+
+# 4.3
+doc.add_heading("4.3 学生能力模型与图谱", level=3)
+add_rich_para([
+    ("功能说明：", True, 11, None),
+    ("将学生在各次实训中的表现，映射至专业培养方案所定义的能力体系，汇总分析后生成可视化的学生能力图谱。", False, 11, None),
+], space_after=6)
+
+add_rich_para([("核心概念：", True, 11, None)], space_after=2)
+add_bullet(
+    "依据专业培养大纲，将学生需掌握的能力划分为若干大类能力"
+    "（如安全操作能力、设备使用能力等），每个大类下包含多个子能力",
+    bold_prefix="能力体系：",
+)
+add_bullet(
+    "每个实训步骤对应一个或多个子能力，系统依据此映射关系，将实训操作结果转化为能力维度上的评估",
+    bold_prefix="映射关系：",
+)
+
+add_rich_para([("核心能力：", True, 11, None)], space_after=2, space_before=6)
+add_bullet("汇总学生所有历史实训记录，综合计算各子能力的掌握程度")
+add_bullet("将子能力归类汇总为大类能力维度，生成能力雷达图（如五维或六维图谱）")
+add_bullet("评估学生是否达到培养方案所要求的毕业标准")
+add_bullet("直观展示学生的能力优势与薄弱环节")
+
+add_divider()
+
+# 4.4
+add_module(
+    "4.4 智能诊断报告",
+    "综合学生的实训成绩与能力图谱数据，借助 AI 生成个性化的诊断分析报告，为学生提供明确的改进方向与学习建议。",
+    [
+        "以自然语言描述学生当前的能力状况与欠缺之处",
+        "针对薄弱环节，提供针对性的提升建议",
+        "支持生成单次实训诊断报告与阶段性综合报告",
+        "报告支持在线查阅与下载",
+    ],
+)
+
+add_divider()
+
+# 4.5
+add_module(
+    "4.5 实训室环境规范检查",
+    "学生完成实训操作后，通过上传实训室现场照片，由 AI 自动检查实训室的环境整理情况，培养学生良好的实训习惯。",
+    [
+        "将学生上传的实训室照片与标准状态照片进行 AI 对比分析",
+        "自动判断实训器材与工具是否归位",
+        "自动判断实训台面是否清理整洁、是否存在遗留杂物",
+        "检查结果纳入该次实训的整体评价记录",
+    ],
+    note="实训室照片的具体获取方式（手动上传或通过设备自动采集）需根据实际条件确定。",
+)
+
+add_divider()
+
+# 4.6
+doc.add_heading("4.6 平台门户", level=3)
+add_rich_para([
+    ("功能说明：", True, 11, None),
+    ("为学生和教师提供统一的 Web 访问入口，实现数据的分角色查阅与管理。", False, 11, None),
+], space_after=8)
+
+add_rich_para([("学生端", True, 12, "1A3C6E")], space_after=2)
+add_bullet("查看个人历史实训成绩列表")
+add_bullet("查看单次实训的成绩明细与诊断报告")
+add_bullet("查看个人能力图谱与毕业达标进度")
+add_bullet("下载诊断报告")
+
+add_rich_para([("教师端", True, 12, "1A3C6E")], space_after=2, space_before=8)
+add_bullet("查看所辖班级全体学生的实训成绩")
+add_bullet("查看班级整体能力分布与统计汇总")
+add_bullet("查看单个学生的详细数据（成绩、能力图谱、诊断报告）")
+add_bullet("导出班级成绩数据与报告")
+
+# ── 五、一期服务范围 ───────────────────────────────────────────────────
+
+doc.add_heading("五、一期服务范围", level=1)
+
+add_table(
+    ["项目", "范围"],
+    [
+        ["实训场景", "现有 3 个实训教室对应的实训类型"],
+        ["覆盖学生", "约 140 人"],
+        ["软件部分", "平台前端、后端、AI 分析服务的开发与部署"],
+        ["硬件部分", "由校方负责，我方不涉及硬件采购与维护"],
+    ],
+    col_widths=[4, 12],
+)
+
+# ── 六、需要贵方提供的资料与支持 ───────────────────────────────────────
+
+doc.add_heading("六、需要贵方提供的资料与支持", level=1)
+add_para("为确保项目顺利推进，需要贵方提供以下资料与支持：", space_after=8)
+
+add_table(
+    ["序号", "资料", "说明"],
+    [
+        ["1", "数据库访问权限", "提供现有实训数据库的远程访问方式（公网访问或 VPN 等）"],
+        ["2", "专业培养大纲", "各专业的能力结构（大类能力、子能力的划分与描述）"],
+        ["3", "能力详细说明", "每项能力与子能力的具体含义与评价要点"],
+        ["4", "实训操作文档", "各实训项目的操作步骤说明（含步骤内容、涉及设备与工具等）"],
+        ["5", "映射关系表", "实训操作步骤与子能力之间的对应关系"],
+        ["6", "实训室标准照片", "各实训室在标准整理状态下的参考照片（用于环境规范检查）"],
+    ],
+    col_widths=[1.5, 4, 10.5],
+)
+
+# ── 七、待确认事项 ─────────────────────────────────────────────────────
+
+doc.add_heading("七、待确认事项", level=1)
+add_para("以下事项将影响系统的具体设计方案，需在项目启动前与贵方确认：", space_after=8)
+
+add_table(
+    ["序号", "事项", "说明"],
+    [
+        ["1", "重复实训的计分规则", "学生多次完成同一实训时，最终成绩的计算方式（如取最高分、取最近一次成绩、或其他规则）"],
+        ["2", "能力映射关系的类型", "实训步骤与子能力之间的对应关系是一对多还是多对多（即一个子能力是否可能需要多个不同实训的共同支撑）"],
+        ["3", "实训室照片获取方式", "实训结束后的实训室照片是由学生手动拍摄上传，还是通过现场设备自动采集"],
+        ["4", "实训室预约功能", "一期是否需要包含学生在线预约实训室的功能"],
+        ["5", "用户认证方式", "平台登录是否需要对接校园网统一认证体系，还是采用独立的账号体系"],
+        ["6", "数据库远程访问方式", "公网直连、VPN 或其他方式"],
+        ["7", "现有实训教室详情", "3 个现有实训教室分别对应的专业、设备型号及实训操作步骤"],
+    ],
+    col_widths=[1.5, 4.5, 10],
+)
+
+# ── 八、后续展望 ───────────────────────────────────────────────────────
+
+doc.add_heading("八、后续展望", level=1)
+add_para("一期平台建成后，可根据实际使用效果与需求变化，在后续阶段逐步扩展以下方向：", space_after=4)
+add_bullet("新增实训教室与设备类型的接入")
+add_bullet("实训视频的智能检测与分析")
+add_bullet("更丰富的教学数据统计与分析功能")
+
+# ── Footer / Contact ──────────────────────────────────────────────────
+
+doc.add_paragraph()
+add_divider()
+
+add_para("上海凝矩科技有限公司", bold=True, size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
+add_para("邮箱：admin@densematrix.ai    电话：+86 15655233272",
+         size=10, color="666666", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=2)
+add_para("本文档为一期功能规划初稿，最终范围以双方确认为准。",
+         size=9, color="999999", align=WD_ALIGN_PARAGRAPH.CENTER)
+
+# ── Save ───────────────────────────────────────────────────────────────
+
+output_dir = "/Users/zhaoweihao/densematrix/repos/liaoning-school-training"
+output_path = os.path.join(output_dir, "智能实训能力评估平台_一期功能规划书_v1.0.docx")
+doc.save(output_path)
+print(f"Done → {output_path}")
