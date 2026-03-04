@@ -1,60 +1,61 @@
+"""
+大屏展示 Schema
+"""
 from pydantic import BaseModel
-from typing import List, Dict, Optional
-from datetime import datetime
+from typing import Optional
 
 
-class RealtimeStats(BaseModel):
-    active_students: int
-    today_trainings: int
-    average_score: float
+class DashboardOverview(BaseModel):
+    today_training_count: int
+    today_training_sessions: int
     pass_rate: float
+    in_training_count: int
+    env_check_count: int
+    env_check_passed: int
+    total_students: int
+    total_trainings: int
+    current_time: str
 
 
-class ClassRanking(BaseModel):
+class RealtimeActivity(BaseModel):
+    id: str
+    student_name: str
+    student_id: str
+    class_name: str
+    project_name: str
+    status: str  # completed, in_progress
+    score: Optional[float]
+    passed: Optional[bool]
+    timestamp: Optional[str]
+
+
+class AbilityDistribution(BaseModel):
+    ability_id: str
+    name: str
+    average_score: float
+    max_score: float
+    min_score: float
+    student_count: int
+
+
+class TrainingTrend(BaseModel):
+    date: str
+    training_count: int
+    student_count: int
+    average_score: float
+
+
+class ClassComparison(BaseModel):
     class_id: str
     class_name: str
     average_score: float
-    training_count: int
-    rank: int
+    student_count: int
 
 
-class AbilityDistributionItem(BaseModel):
-    ability_id: str
-    ability_name: str
-    avg: float
-    distribution: List[int]  # [0-20%, 20-40%, 40-60%, 60-80%, 80-100%]
-
-
-class TrendDataPoint(BaseModel):
-    date: str
-    training_count: int
-    average_score: float
-    pass_rate: float
-
-
-class LabStatusItem(BaseModel):
-    lab_id: str
-    lab_name: str
-    status: str
-    current_students: int
-    capacity: int
-
-
-class DashboardResponse(BaseModel):
-    realtime: RealtimeStats
-    class_ranking: List[ClassRanking]
-    ability_distribution: List[AbilityDistributionItem]
-    trend: List[TrendDataPoint]
-    lab_status: List[LabStatusItem]
-    updated_at: datetime
-
-
-class StudentDashboardResponse(BaseModel):
-    student_id: str
-    student_name: str
-    total_trainings: int
-    average_score: float
-    recent_scores: List[Dict]
-    ability_summary: Dict[str, float]
-    graduation_progress: float
-    recent_reports: List[Dict]
+class AlertInfo(BaseModel):
+    type: str  # ability_warning, consecutive_fail, env_check_fail
+    level: str  # warning, danger
+    message: str
+    student_id: Optional[str]
+    student_name: Optional[str]
+    timestamp: str

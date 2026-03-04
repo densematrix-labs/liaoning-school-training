@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Noto Sans SC for Chinese text */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@400;500;600;700&display=swap');
+
+:root {
+  --railway-900: #0a0f1a;
+  --railway-800: #0d1525;
+  --railway-700: #111d32;
+  --accent-blue: #00d4ff;
+  --accent-glow: #00aaff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'Source Han Sans SC', system-ui, sans-serif;
+  background-color: var(--railway-900);
+  color: #e8f4ff;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--railway-800);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--railway-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-blue);
+}
+
+/* Railway industrial card style */
+@layer components {
+  .railway-card {
+    @apply bg-railway-800/80 border border-railway-600/50 rounded-lg backdrop-blur-sm;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .railway-card-glow {
+    @apply railway-card;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .railway-button {
+    @apply px-4 py-2 bg-accent-electric/20 border border-accent-blue/50 rounded text-accent-blue font-medium transition-all duration-200;
+  }
+
+  .railway-button:hover {
+    @apply bg-accent-electric/30 border-accent-blue shadow-glow-sm;
+  }
+
+  .railway-input {
+    @apply w-full px-4 py-2 bg-railway-700/50 border border-railway-500/50 rounded text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50;
+  }
+
+  .data-display {
+    @apply font-mono text-accent-blue text-2xl font-semibold;
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+  }
+
+  .section-title {
+    @apply text-lg font-medium text-text-primary flex items-center gap-2;
+  }
+
+  .section-title::before {
+    content: '';
+    @apply w-1 h-5 bg-accent-blue rounded;
+  }
+
+  .stat-card {
+    @apply railway-card p-4;
+  }
+
+  .stat-value {
+    @apply text-3xl font-bold font-mono text-accent-cyan;
+    text-shadow: 0 0 20px rgba(0, 255, 242, 0.5);
+  }
+
+  .stat-label {
+    @apply text-sm text-text-secondary mt-1;
+  }
+
+  /* Dashboard specific */
+  .dashboard-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  .tech-border {
+    position: relative;
+  }
+
+  .tech-border::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-blue), transparent);
+  }
+
+  /* Alert styles */
+  .alert-warning {
+    @apply bg-status-warning/10 border-l-4 border-status-warning text-status-warning;
+  }
+
+  .alert-danger {
+    @apply bg-status-danger/10 border-l-4 border-status-danger text-status-danger;
+  }
+
+  .alert-success {
+    @apply bg-status-success/10 border-l-4 border-status-success text-status-success;
+  }
+
+  /* Grid background pattern */
+  .grid-bg {
+    background-image: 
+      linear-gradient(rgba(0, 136, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 136, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+}
+
+/* Animation for real-time updates */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Radar chart glow effect */
+.recharts-polar-grid-angle line,
+.recharts-polar-grid-concentric path {
+  stroke: rgba(0, 212, 255, 0.2) !important;
+}
+
+.recharts-polar-angle-axis-tick-value {
+  fill: #8eb8e5 !important;
+  font-size: 12px;
+}

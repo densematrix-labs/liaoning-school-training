@@ -1,41 +1,30 @@
+"""
+报告相关 Schema
+"""
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
+from typing import List, Optional, Dict, Any
+
+
+class EnvCheckRequest(BaseModel):
+    room_id: str
+    image_base64: str
+
+
+class EnvCheckResponse(BaseModel):
+    id: str
+    passed: bool
+    overall_score: int
+    categories: Dict[str, Any]
+    issues: List[str]
+    summary: str
 
 
 class GenerateReportRequest(BaseModel):
     student_id: str
-    report_type: str = "single"  # single or periodic
-    score_id: Optional[str] = None  # For single report, specify which score
+    type: str = "single"  # single 或 periodic
+    training_record_id: Optional[str] = None
 
 
-class DiagnosticReportResponse(BaseModel):
-    id: str
-    student_id: str
-    student_name: Optional[str] = None
-    report_type: str
-    title: str
-    content: str  # Markdown
-    content_html: Optional[str] = None
-    pdf_url: Optional[str] = None
-    generated_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class ReportListResponse(BaseModel):
-    reports: List[DiagnosticReportResponse]
-    total: int
-
-
-class BatchReportRequest(BaseModel):
-    class_id: str
-    report_type: str = "periodic"
-
-
-class BatchReportResponse(BaseModel):
-    total_students: int
-    generated_count: int
-    failed_count: int
-    reports: List[DiagnosticReportResponse]
+class GenerateReportResponse(BaseModel):
+    report_id: str
+    content: str

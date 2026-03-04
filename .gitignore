@@ -10,39 +10,37 @@ dist/
 build/
 *.egg-info/
 
-# Environment
-.env
-.env.local
-.env.*.local
-
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
-coverage/
-
-# Logs
-*.log
-logs/
+# Environment
+.env
+.env.local
+.env.*.local
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 
-# Docker
-.docker/
+# Logs
+*.log
+logs/
 
-# Misc
-*.bak
+# Test
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
 *.tmp
+*.temp
+~$*

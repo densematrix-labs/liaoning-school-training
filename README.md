@@ -1,115 +1,133 @@
 # 辽轨智能实训能力评估平台
 
-> 职业院校实训智能评估与能力建模系统 Demo
+辽宁铁道职业技术学院智能实训能力评估平台 Demo。
 
-[![Deploy](https://img.shields.io/badge/Deploy-shixun.demo.densematrix.ai-blue)](https://shixun.demo.densematrix.ai)
+## 功能模块
 
-## 项目概述
+### 1. 学生端
+- 查看实训成绩和历史记录
+- 能力雷达图展示
+- AI 生成的个性化诊断报告
+- 毕业达标进度追踪
 
-为辽宁省铁路职业技术学院开发的智能实训能力评估平台 Demo。该平台利用现有实训设备数据，通过 AI 技术实现：
+### 2. 教师端
+- 班级学生数据管理
+- 成绩统计与分析
+- 能力分布可视化
+- 数据导出功能
 
-- 🎯 **自动化成绩分析** — 对接实训设备数据库，自动计算实训成绩
-- 📊 **学生能力建模** — 生成多维度能力图谱，评估毕业达标进度
-- 🤖 **智能诊断报告** — AI 生成个性化学习建议和提升方案
-- 📷 **环境规范检查** — AI 图像识别检查实训室整理情况
-- 📺 **大屏数据展示** — 展厅级别的实时数据可视化
+### 3. 大屏展示
+- 实时实训动态
+- 今日数据概览
+- 能力分布雷达图
+- 班级对比柱状图
+- 预警信息提示
+
+### 4. 管理后台
+- 能力体系配置
+- 实训室管理
+- 能力映射管理
+- 数据同步
 
 ## 技术栈
 
 ### 后端
-- **框架**: Python FastAPI
-- **数据库**: SQLite (Demo) / PostgreSQL (生产)
-- **架构**: Clean Architecture
-- **AI**: DenseMatrix LLM Proxy (Gemini)
+- Python 3.11
+- FastAPI
+- SQLAlchemy (异步)
+- SQLite (Demo) / PostgreSQL (生产)
+- JWT 认证
 
 ### 前端
-- **框架**: React + Vite + TypeScript
-- **样式**: TailwindCSS
-- **图表**: Recharts / ECharts
-- **设计**: 蓝色工业风（铁路大屏风格）
+- React 18 + TypeScript
+- Vite
+- TailwindCSS
+- Recharts
+- React Query
+- Zustand
+
+### AI 集成
+- LLM Proxy (DenseMatrix)
+- Gemini Flash (诊断报告生成)
+- Vision API (环境检查)
 
 ## 快速开始
 
+### Docker Compose (推荐)
+
+```bash
+docker compose up -d
+```
+
+访问:
+- 前端: http://localhost:3080
+- 后端 API: http://localhost:8080
+- API 文档: http://localhost:8080/docs
+
 ### 本地开发
 
+后端:
 ```bash
-# 克隆仓库
-git clone https://github.com/densematrix-labs/liaoning-school-training.git
-cd liaoning-school-training
-
-# 启动服务
-docker compose up -d
-
-# 访问
-# 前端: http://localhost:3080
-# 后端 API: http://localhost:8080
-# API 文档: http://localhost:8080/docs
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8080
 ```
 
-### 环境变量
-
+前端:
 ```bash
-# backend/.env
-DATABASE_URL=sqlite:///./app.db
-LLM_PROXY_URL=https://llm-proxy.densematrix.ai
-LLM_PROXY_KEY=sk-wskhgeyawc
+cd frontend
+npm install
+npm run dev
 ```
+
+## 演示账号
+
+| 角色 | 用户名 | 密码 |
+|------|--------|------|
+| 学生 | 2023010101 | 123456 |
+| 教师 | T20150012 | 123456 |
+| 管理员 | T20100008 | 123456 |
+
+## 配色方案
+
+蓝色工业风：
+- 主色: `#1a365d` (深蓝)
+- 辅色: `#4299e1` (科技蓝)
+- 背景: `#1a202c` (深色)
+- 强调: `#00d4ff` (高亮蓝)
+
+## 部署
+
+目标服务器: langsheng (39.109.116.180)
+域名: `shixun.demo.densematrix.ai`
+端口: frontend 3080, backend 8080
 
 ## 项目结构
 
 ```
 liaoning-school-training/
-├── backend/                 # FastAPI 后端
+├── backend/
 │   ├── app/
-│   │   ├── domain/         # 领域层（实体、接口）
-│   │   ├── use_cases/      # 应用层（业务逻辑）
-│   │   ├── adapters/       # 适配器层（实现）
-│   │   └── infrastructure/ # 基础设施层
-│   └── tests/
-├── frontend/               # React 前端
+│   │   ├── adapters/controllers/  # API 路由
+│   │   ├── models/                # 数据模型
+│   │   ├── schemas/               # Pydantic 模式
+│   │   ├── services/              # 业务逻辑
+│   │   └── main.py                # 入口
+│   ├── tests/                     # 测试
+│   └── Dockerfile
+├── frontend/
 │   ├── src/
-│   │   ├── pages/         # 页面组件
-│   │   │   ├── student/   # 学生端
-│   │   │   ├── teacher/   # 教师端
-│   │   │   ├── dashboard/ # 大屏展示
-│   │   │   └── admin/     # 管理后台
-│   │   ├── components/    # 通用组件
-│   │   └── lib/          # 工具函数
-│   └── tests/
-├── mock-data/             # Mock 数据
-├── docs/                  # 文档
-│   ├── ARCHITECTURE.md   # 架构设计
-│   └── API.md           # API 文档
-└── docker-compose.yml
+│   │   ├── components/            # 通用组件
+│   │   ├── pages/                 # 页面组件
+│   │   ├── stores/                # 状态管理
+│   │   └── lib/                   # 工具函数
+│   └── Dockerfile
+├── mock-data/                     # Mock 数据
+├── docs/                          # 文档
+├── docker-compose.yml
+└── .github/workflows/deploy.yml   # CI/CD
 ```
 
-## 功能模块
+## 许可证
 
-### 学生端
-- 查看个人实训成绩和历史记录
-- 查看能力雷达图和毕业进度
-- 下载 AI 生成的诊断报告
-
-### 教师端
-- 查看班级整体实训数据
-- 统计分析和导出功能
-- 预警信息管理
-
-### 大屏展示
-- 实时实训动态滚动
-- 能力分布雷达图
-- 班级对比柱状图
-- 预警信息展示
-
-### 管理后台
-- 能力体系配置
-- 实训步骤与能力映射
-- 用户管理
-
-## 开发团队
-
-[DenseMatrix (上海凝矩科技)](https://densematrix.ai)
-
-## License
-
-MIT
+© 2026 DenseMatrix AI
