@@ -7,7 +7,7 @@
       "location": "实训楼 A 区 101",
       "capacity": 6,
       "equipment": ["机车模拟器", "操作台", "信号显示屏", "监控系统"],
-      "standard_image": "room-001-standard.jpg"
+      "standard_image": "/images/labs/standard/room-001.jpg"
     },
     {
       "id": "room-002",
@@ -16,7 +16,7 @@
       "location": "实训楼 A 区 102",
       "capacity": 8,
       "equipment": ["电气实训台", "万用表", "示波器", "绝缘测试仪", "线路板"],
-      "standard_image": "room-002-standard.jpg"
+      "standard_image": "/images/labs/standard/room-002.jpg"
     },
     {
       "id": "room-003",
@@ -25,7 +25,7 @@
       "location": "实训楼 B 区 201",
       "capacity": 10,
       "equipment": ["走行部模型", "液压工具", "检测设备", "维护工具箱"],
-      "standard_image": "room-003-standard.jpg"
+      "standard_image": "/images/labs/standard/room-003.jpg"
     }
   ],
   "training_projects": [
