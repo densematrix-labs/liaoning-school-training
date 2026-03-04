@@ -59,3 +59,33 @@ class AlertInfo(BaseModel):
     student_id: Optional[str]
     student_name: Optional[str]
     timestamp: str
+
+
+class RealtimeStats(BaseModel):
+    activeStudents: int
+    todayTrainings: int
+    averageScore: float
+    passRate: float
+
+
+class ClassRanking(BaseModel):
+    className: str
+    averageScore: float
+    trainingCount: int
+    rank: int
+
+
+class LabStatus(BaseModel):
+    labId: str
+    labName: str
+    status: str
+    currentStudents: int
+
+
+class DashboardResponse(BaseModel):
+    realtime: RealtimeStats
+    classRanking: list
+    abilityDistribution: dict
+    labStatus: list
+    trend: list = []
+    alerts: list = []

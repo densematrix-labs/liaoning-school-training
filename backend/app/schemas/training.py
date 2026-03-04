@@ -5,11 +5,65 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
 
-class ClassResponse(BaseModel):
+class TrainingRecordResponse(BaseModel):
     id: str
-    name: str
-    year: int
+    project_id: str
+    project_name: str
+    student_id: str
+    total_score: float
+    max_score: float
+    passed: bool
+    completed_at: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+
+class ScoreResponse(BaseModel):
+    id: str
+    student_id: str
+    project_id: str
+    total_score: float
+    max_score: float
+    passed: bool
+    completed_at: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+
+class ScoreListResponse(BaseModel):
+    scores: List[ScoreResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ScoreDetailResponse(BaseModel):
+    id: str
+    student_id: str
+    student_name: str
+    project_id: str
+    project_name: str
+    total_score: float
+    max_score: float
+    passed: bool
+    completed_at: Optional[str]
+    steps: List[Dict[str, Any]]
+    failed_abilities: List[str]
+    env_check: Optional[Dict[str, Any]]
+    
+    class Config:
+        from_attributes = True
+
+
+class ClassScoreSummary(BaseModel):
+    class_id: str
+    class_name: str
     student_count: int
+    average_score: float
+    pass_rate: float
+    score_distribution: List[Dict[str, Any]]
 
 
 class ClassStudentResponse(BaseModel):

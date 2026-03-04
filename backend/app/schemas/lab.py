@@ -36,3 +36,21 @@ class LabResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EnvironmentCheckRequest(BaseModel):
+    lab_id: str
+    image_base64: str
+    score_id: Optional[str] = None
+
+
+class CategoryScore(BaseModel):
+    score: int
+    issues: List[str]
+
+
+class EnvironmentCheckResponse(BaseModel):
+    total_score: int
+    categories: dict
+    summary: str
+    passed: bool

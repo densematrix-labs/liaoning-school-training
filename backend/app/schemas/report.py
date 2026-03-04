@@ -28,3 +28,17 @@ class GenerateReportRequest(BaseModel):
 class GenerateReportResponse(BaseModel):
     report_id: str
     content: str
+
+
+class DiagnosticReportResponse(BaseModel):
+    id: str
+    student_id: str
+    report_type: str
+    title: str
+    content: Optional[str]
+    content_html: Optional[str]
+    pdf_url: Optional[str]
+    generated_at: Optional[str]
+    
+    class Config:
+        from_attributes = True

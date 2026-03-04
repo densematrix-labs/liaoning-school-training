@@ -64,3 +64,34 @@ class AbilityMappingResponse(BaseModel):
     project_id: str
     project_name: str
     step_mappings: Dict[str, Any]
+
+
+class RadarDataPoint(BaseModel):
+    ability_id: str
+    name: str
+    score: float
+    weight: float
+    threshold: float
+
+
+class RadarDataResponse(BaseModel):
+    data: List[RadarDataPoint]
+    
+
+class AbilityProfileResponse(BaseModel):
+    student_id: str
+    sub_abilities: Dict[str, float]
+    major_abilities: Dict[str, float]
+    radar_data: List[Dict[str, Any]]
+    graduation_ready: bool
+    updated_at: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+
+class ClassAbilityDistribution(BaseModel):
+    class_id: str
+    class_name: str
+    ability_distribution: Dict[str, float]
+    student_count: int
