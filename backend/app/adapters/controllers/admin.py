@@ -3,7 +3,8 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
+from datetime import datetime
 from typing import List, Optional
 import uuid
 
@@ -12,6 +13,9 @@ from app.models.user import User
 from app.models.ability import MajorAbility, SubAbility
 from app.models.lab import Lab
 from app.models.training import TrainingProject
+from app.models.training import Score
+from app.models.student import Student, Class
+from app.models.report import DiagnosticReport
 from app.adapters.controllers.auth import get_current_admin
 from app.schemas.ability import (
     MajorAbilityCreate,
@@ -25,6 +29,34 @@ from app.schemas.ability import (
 from app.schemas.lab import LabCreate, LabUpdate, LabResponse
 
 router = APIRouter()
+
+
+@router.get("/overview")
+async def get_admin_overview(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员首页所需的全校数据概览。"""
+    entities = {
+        "students": Student,
+        "classes": Class,
+        "scores": Score,
+        "abilities": MajorAbility,
+        "labs": Lab,
+        "reports": DiagnosticReport,
+    }
+    counts = {}
+    for key, model in entities.items():
+        result = await db.execute(select(func.count()).select_from(model))
+        counts[key] = result.scalar() or 0
+
+    latest_score = await db.execute(select(func.max(Score.calculated_at)))
+    return {
+        **counts,
+        "database": "SQLite 演示库",
+        "sync_status": "正常",
+        "last_data_at": latest_score.scalar(),
+    }
 
 
 # ============ 能力管理 ============
@@ -440,10 +472,9 @@ async def trigger_sync(
     admin: User = Depends(get_current_admin)
 ):
     """手动触发数据同步"""
-    # 这里是 Demo，直接返回成功
-    # 实际项目中会从校方 MySQL 同步数据
+    score_count = await db.execute(select(func.count()).select_from(Score))
     return {
-        "message": "同步完成",
-        "synced_records": 0,
-        "timestamp": "2026-03-04T00:00:00"
+        "message": "演示数据库校验完成",
+        "synced_records": score_count.scalar() or 0,
+        "timestamp": datetime.utcnow().isoformat(),
     }

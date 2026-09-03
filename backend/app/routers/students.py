@@ -8,6 +8,7 @@ from app.routers.auth import get_current_user
 from app.models.student import Student, Class, Major
 from app.schemas.auth import UserResponse
 from app.schemas.student import StudentResponse, ClassResponse, MajorResponse
+from app.routers.permissions import require_class_access, require_student_access
 
 router = APIRouter(prefix="/api/v1/students", tags=["学生管理"])
 
@@ -83,8 +84,7 @@ async def get_class(
     db: AsyncSession = Depends(get_db),
 ):
     """获取班级详情"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_class_access(current_user, class_id, db)
     
     result = await db.execute(select(Class).where(Class.id == class_id))
     cls = result.scalar_one_or_none()
@@ -122,8 +122,7 @@ async def get_class_students(
     db: AsyncSession = Depends(get_db),
 ):
     """获取班级学生列表"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_class_access(current_user, class_id, db)
     
     result = await db.execute(
         select(Student).where(Student.class_id == class_id)
@@ -164,12 +163,7 @@ async def get_student(
     db: AsyncSession = Depends(get_db),
 ):
     """获取学生详情"""
-    # Check permission
-    if current_user.role == "student":
-        if current_user.student_id != student_id:
-            raise HTTPException(status_code=403, detail="无权访问")
-    elif current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, student_id, db)
     
     result = await db.execute(select(Student).where(Student.id == student_id))
     student = result.scalar_one_or_none()

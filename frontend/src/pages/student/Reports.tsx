@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
-import { api } from '../../lib/api'
+import { api, getErrorMessage } from '../../lib/api'
 import { useAuthStore } from '../../store/auth'
 
 interface Report {
@@ -181,6 +181,9 @@ export default function StudentReports() {
       queryClient.invalidateQueries({ queryKey: ['student-reports'] })
     },
   })
+  const errorMessage = generateMutation.error
+    ? getErrorMessage(generateMutation.error, '模型服务暂时不可用，请稍后重试')
+    : ''
   
   if (isLoading) {
     return (
@@ -231,6 +234,12 @@ export default function StudentReports() {
           </button>
         </div>
       </div>
+
+      {errorMessage && (
+        <p role="alert" className="rounded-md border border-status-danger/40 bg-status-danger/10 p-3 text-sm text-status-danger">
+          {errorMessage}
+        </p>
+      )}
       
       {/* Report list */}
       <div className="grid gap-4">

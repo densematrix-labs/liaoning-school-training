@@ -23,6 +23,9 @@ class ReportService:
         report_type: str = "single",
         score_id: Optional[str] = None,
     ) -> DiagnosticReportResponse:
+        if report_type not in {"single", "periodic"}:
+            raise ValueError("报告类型仅支持 single 或 periodic")
+
         # Get student info
         student_result = await self.db.execute(
             select(Student).where(Student.id == student_id)
@@ -45,11 +48,14 @@ class ReportService:
         ability_map = {a.id: a for a in abilities}
         
         # Get scores
-        if report_type == "single" and score_id:
-            scores_result = await self.db.execute(
-                select(Score).where(Score.id == score_id)
-            )
-            scores = [scores_result.scalar_one_or_none()]
+        if report_type == "single":
+            query = select(Score).where(Score.student_id == student_id)
+            if score_id:
+                query = query.where(Score.id == score_id)
+            else:
+                query = query.order_by(Score.calculated_at.desc()).limit(1)
+            scores_result = await self.db.execute(query)
+            scores = scores_result.scalars().all()
         else:
             scores_result = await self.db.execute(
                 select(Score)
@@ -58,6 +64,9 @@ class ReportService:
                 .limit(10)
             )
             scores = scores_result.scalars().all()
+
+        if not scores:
+            raise ValueError("暂无可用于生成报告的成绩数据")
         
         # Build report data
         scores_data = []
@@ -122,6 +131,8 @@ class ReportService:
             title=title,
             content=content,
             generated_at=report.generated_at,
+            model=settings.LLM_MODEL,
+            source="llm_proxy",
         )
     
     async def _generate_report_content(
@@ -138,7 +149,7 @@ class ReportService:
 
 ## 学生信息
 - 姓名：{student_name}
-- 专业：铁道信号自动控制
+        - 专业：铁道机车运用与维护
 - 报告类型：{"单次实训诊断" if report_type == "single" else "阶段性综合诊断"}
 
 ## 实训成绩数据
@@ -169,6 +180,9 @@ class ReportService:
 
 请用鼓励性但务实的语气撰写。直接输出 Markdown 内容，不要额外说明。"""
 
+        if not settings.LLM_PROXY_KEY:
+            raise RuntimeError("LLM Proxy 未配置，无法生成真实诊断报告")
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
@@ -187,34 +201,12 @@ class ReportService:
                 result = response.json()
                 return result["choices"][0]["message"]["content"]
                 
-        except Exception as e:
-            # Fallback content
-            return f"""## 整体评价
-
-{student_name}同学在实训学习中表现积极，展现出了良好的学习态度。在多次实训中能够认真完成各项操作任务，基础技能掌握较为扎实。
-
-## 能力分析
-
-根据实训数据分析，各项能力发展相对均衡，但仍有提升空间。
-
-## 薄弱环节
-
-- 部分操作步骤的规范性有待加强
-- 文档记录的完整性需要改进
-
-## 提升建议
-
-1. 建议在实训前仔细阅读操作规程，确保每个步骤的规范执行
-2. 注意培养良好的记录习惯，及时、完整地填写各类文档
-3. 多与老师和同学交流，及时解决学习中遇到的问题
-
-## 毕业达标评估
-
-{"当前各项能力已基本达到毕业标准，继续保持。" if graduation_ready else "部分能力尚未达到毕业标准，需要继续努力提升。"}
-
----
-*报告生成时间可能受网络影响*
-"""
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 403:
+                raise RuntimeError("LLM Proxy 上游额度已用尽，请联系管理员补充额度") from exc
+            raise RuntimeError(f"LLM Proxy 返回异常状态：{exc.response.status_code}") from exc
+        except (httpx.HTTPError, KeyError, TypeError) as exc:
+            raise RuntimeError("LLM Proxy 调用失败，请稍后重试") from exc
     
     async def get_student_reports(
         self,
@@ -243,6 +235,8 @@ class ReportService:
                 title=r.title,
                 content=r.content,
                 generated_at=r.generated_at,
+                model=settings.LLM_MODEL,
+                source="llm_proxy",
             )
             for r in reports
         ]
@@ -268,4 +262,6 @@ class ReportService:
             title=report.title,
             content=report.content,
             generated_at=report.generated_at,
+            model=settings.LLM_MODEL,
+            source="llm_proxy",
         )

@@ -13,18 +13,23 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./training.db"
     
     # JWT
-    SECRET_KEY: str = "liaoning-railway-training-secret-key-2026"
+    SECRET_KEY: str = "liaoning-railway-training-demo-only-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # LLM Proxy
     LLM_PROXY_URL: str = "https://llm-proxy.densematrix.ai"
-    LLM_PROXY_KEY: str = "sk-wskhgeyawc"
+    LLM_PROXY_KEY: str = ""
     LLM_MODEL: str = "gemini-3-flash-preview"
     
     # CORS
-    CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:3100", "http://127.0.0.1:5173"]
+    CORS_ORIGINS: list = [
+        "https://shixun.demo.densematrix.ai",
+        "http://localhost:5173",
+        "http://localhost:3100",
+        "http://127.0.0.1:5173",
+    ]
     
     class Config:
         env_file = ".env"

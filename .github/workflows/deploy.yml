@@ -116,20 +116,22 @@ jobs:
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          LLM_PROXY_KEY: ${{ secrets.LLM_PROXY_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:latest
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:latest
         with:
           host: 39.109.116.180
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: LLM_PROXY_KEY,SECRET_KEY,BACKEND_IMAGE,FRONTEND_IMAGE
           script: |
-            cd /opt/shixun
+            cd /opt/demos/shixun
             
-            # Pull latest images
-            docker pull ${{ env.BACKEND_IMAGE }}:latest
-            docker pull ${{ env.FRONTEND_IMAGE }}:latest
-            
-            # Update docker-compose with new images
-            docker compose down
-            docker compose up -d
+            git pull --ff-only origin main
+            docker compose pull
+            docker compose up -d --no-build
             
             # Cleanup old images
             docker image prune -f

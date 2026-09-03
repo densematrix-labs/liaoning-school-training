@@ -1,8 +1,54 @@
-"""
-大屏展示 Schema
-"""
+"""大屏数据 Schema。"""
+
+from datetime import datetime
+
 from pydantic import BaseModel
-from typing import Optional
+
+
+class RealtimeStats(BaseModel):
+    active_students: int
+    today_trainings: int
+    average_score: float
+    pass_rate: float
+
+
+class ClassRanking(BaseModel):
+    class_id: str
+    class_name: str
+    average_score: float
+    training_count: int
+    rank: int
+
+
+class AbilityDistributionItem(BaseModel):
+    ability_id: str
+    ability_name: str
+    avg: float
+    distribution: list[int]
+
+
+class TrendDataPoint(BaseModel):
+    date: str
+    training_count: int
+    average_score: float
+    pass_rate: float
+
+
+class LabStatusItem(BaseModel):
+    lab_id: str
+    lab_name: str
+    status: str
+    current_students: int
+    capacity: int
+
+
+class DashboardResponse(BaseModel):
+    realtime: RealtimeStats
+    class_ranking: list[ClassRanking]
+    ability_distribution: list[AbilityDistributionItem]
+    trend: list[TrendDataPoint]
+    lab_status: list[LabStatusItem]
+    updated_at: datetime
 
 
 class DashboardOverview(BaseModel):
@@ -23,10 +69,10 @@ class RealtimeActivity(BaseModel):
     student_id: str
     class_name: str
     project_name: str
-    status: str  # completed, in_progress
-    score: Optional[float]
-    passed: Optional[bool]
-    timestamp: Optional[str]
+    status: str
+    score: float | None = None
+    passed: bool | None = None
+    timestamp: str | None = None
 
 
 class AbilityDistribution(BaseModel):
@@ -53,39 +99,9 @@ class ClassComparison(BaseModel):
 
 
 class AlertInfo(BaseModel):
-    type: str  # ability_warning, consecutive_fail, env_check_fail
-    level: str  # warning, danger
+    type: str
+    level: str
     message: str
-    student_id: Optional[str]
-    student_name: Optional[str]
+    student_id: str | None = None
+    student_name: str | None = None
     timestamp: str
-
-
-class RealtimeStats(BaseModel):
-    activeStudents: int
-    todayTrainings: int
-    averageScore: float
-    passRate: float
-
-
-class ClassRanking(BaseModel):
-    className: str
-    averageScore: float
-    trainingCount: int
-    rank: int
-
-
-class LabStatus(BaseModel):
-    labId: str
-    labName: str
-    status: str
-    currentStudents: int
-
-
-class DashboardResponse(BaseModel):
-    realtime: RealtimeStats
-    classRanking: list
-    abilityDistribution: dict
-    labStatus: list
-    trend: list = []
-    alerts: list = []

@@ -1,8 +1,63 @@
-"""
-实训相关 Schema
-"""
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+"""成绩与实训相关 Schema。"""
+
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+class ScoreResponse(BaseModel):
+    id: str
+    student_id: str
+    student_name: Optional[str] = None
+    project_id: str
+    project_name: Optional[str] = None
+    total_score: float
+    max_score: float
+    percentage: float
+    calculated_at: Optional[datetime] = None
+
+
+class ScoreListResponse(BaseModel):
+    scores: list[ScoreResponse]
+    total: int
+    page: int
+    page_size: int
+    average_score: Optional[float] = None
+
+
+class StepScoreDetail(BaseModel):
+    step_id: str
+    step_name: str
+    passed: bool
+    score: float
+    max_score: float
+    deduction: Optional[float] = None
+    reason: Optional[str] = None
+    related_abilities: list[str] = Field(default_factory=list)
+
+
+class ScoreDetailResponse(BaseModel):
+    id: str
+    student_id: str
+    student_name: Optional[str] = None
+    project_id: str
+    project_name: Optional[str] = None
+    total_score: float
+    max_score: float
+    percentage: float
+    calculated_at: Optional[datetime] = None
+    details: list[StepScoreDetail] = Field(default_factory=list)
+    failed_abilities: list[str] = Field(default_factory=list)
+
+
+class ClassScoreSummary(BaseModel):
+    class_id: str
+    class_name: str
+    student_count: int
+    average_score: float
+    pass_rate: float
+    training_count: int
 
 
 class TrainingRecordResponse(BaseModel):
@@ -13,57 +68,7 @@ class TrainingRecordResponse(BaseModel):
     total_score: float
     max_score: float
     passed: bool
-    completed_at: Optional[str]
-    
-    class Config:
-        from_attributes = True
-
-
-class ScoreResponse(BaseModel):
-    id: str
-    student_id: str
-    project_id: str
-    total_score: float
-    max_score: float
-    passed: bool
-    completed_at: Optional[str]
-    
-    class Config:
-        from_attributes = True
-
-
-class ScoreListResponse(BaseModel):
-    scores: List[ScoreResponse]
-    total: int
-    page: int
-    page_size: int
-
-
-class ScoreDetailResponse(BaseModel):
-    id: str
-    student_id: str
-    student_name: str
-    project_id: str
-    project_name: str
-    total_score: float
-    max_score: float
-    passed: bool
-    completed_at: Optional[str]
-    steps: List[Dict[str, Any]]
-    failed_abilities: List[str]
-    env_check: Optional[Dict[str, Any]]
-    
-    class Config:
-        from_attributes = True
-
-
-class ClassScoreSummary(BaseModel):
-    class_id: str
-    class_name: str
-    student_count: int
-    average_score: float
-    pass_rate: float
-    score_distribution: List[Dict[str, Any]]
+    completed_at: Optional[datetime] = None
 
 
 class ClassStudentResponse(BaseModel):
@@ -82,8 +87,8 @@ class ClassStatisticsResponse(BaseModel):
     total_trainings: int
     average_score: float
     pass_rate: float
-    ability_distribution: List[Dict[str, Any]]
-    score_distribution: List[Dict[str, Any]]
+    ability_distribution: list[dict[str, Any]]
+    score_distribution: list[dict[str, Any]]
 
 
 class StudentDetailResponse(BaseModel):
@@ -95,23 +100,23 @@ class StudentDetailResponse(BaseModel):
     total_trainings: int
     average_score: float
     graduation_ready: bool
-    ability_map: Dict[str, Any]
-    training_history: List[Dict[str, Any]]
+    ability_map: dict[str, Any]
+    training_history: list[dict[str, Any]]
 
 
 class TrainingProjectResponse(BaseModel):
     id: str
     name: str
-    lab_name: Optional[str]
-    duration: Optional[int]
-    difficulty: Optional[str]
+    lab_name: Optional[str] = None
+    duration: Optional[int] = None
+    difficulty: Optional[str] = None
     step_count: int
 
 
 class TrainingRoomResponse(BaseModel):
     id: str
     name: str
-    location: Optional[str]
-    capacity: Optional[int]
+    location: Optional[str] = None
+    capacity: Optional[int] = None
     status: str
     current_students: int

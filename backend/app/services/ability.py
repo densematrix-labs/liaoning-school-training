@@ -39,6 +39,7 @@ class AbilityService:
                 weight=ma.weight,
                 graduation_threshold=ma.graduation_threshold,
                 icon=ma.icon,
+                display_order=ma.display_order,
                 sub_abilities=[
                     SubAbilityResponse(
                         id=s.id,
@@ -93,8 +94,10 @@ class AbilityService:
             radar_data.append(RadarDataPoint(
                 ability_id=ma.id,
                 ability_name=ma.name,
+                name=ma.name,
                 score=round(score, 1),
                 full_score=100.0,
+                weight=ma.weight,
                 threshold=ma.graduation_threshold * 100,
             ))
             
@@ -112,6 +115,16 @@ class AbilityService:
             if score < ma.graduation_threshold:
                 suggestions.append(f"建议加强「{ma.name}」的训练，当前达成率 {round(score * 100, 1)}%，目标 {round(ma.graduation_threshold * 100)}%")
         
+        total_score = (
+            round(sum(major_ability_scores.values()) / len(major_ability_scores) * 100, 1)
+            if major_ability_scores else 0
+        )
+        weak_abilities = [
+            {"ability_id": item.ability_id, "name": item.ability_name, "score": item.score}
+            for item in radar_data
+            if item.score < item.threshold
+        ]
+
         return AbilityProfileResponse(
             id=profile.id,
             student_id=student_id,
@@ -124,6 +137,8 @@ class AbilityService:
             strongest_ability=strongest,
             weakest_ability=weakest,
             improvement_suggestions=suggestions[:3] if suggestions else None,
+            total_score=total_score,
+            weak_abilities=weak_abilities,
         )
     
     async def _calculate_profile(self, student_id: str) -> Optional[AbilityProfile]:

@@ -7,6 +7,7 @@ from app.routers.auth import get_current_user
 from app.services.report import ReportService
 from app.schemas.auth import UserResponse
 from app.schemas.report import DiagnosticReportResponse, GenerateReportRequest
+from app.routers.permissions import require_student_access
 
 router = APIRouter(prefix="/api/v1/reports", tags=["诊断报告"])
 
@@ -18,12 +19,7 @@ async def generate_report(
     db: AsyncSession = Depends(get_db),
 ):
     """生成诊断报告"""
-    # Check permission
-    if current_user.role == "student":
-        if request.student_id != current_user.student_id:
-            raise HTTPException(status_code=403, detail="无权访问")
-    elif current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, request.student_id, db)
     
     service = ReportService(db)
     
@@ -35,6 +31,8 @@ async def generate_report(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 @router.get("/", response_model=List[DiagnosticReportResponse])
@@ -59,8 +57,7 @@ async def get_student_reports(
     db: AsyncSession = Depends(get_db),
 ):
     """获取指定学生的诊断报告列表（教师/管理员）"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, student_id, db)
     
     service = ReportService(db)
     return await service.get_student_reports(student_id, limit)
@@ -79,9 +76,6 @@ async def get_report(
     if not result:
         raise HTTPException(status_code=404, detail="报告不存在")
     
-    # Check permission
-    if current_user.role == "student":
-        if result.student_id != current_user.student_id:
-            raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, result.student_id, db)
     
     return result

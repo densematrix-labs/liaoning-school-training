@@ -8,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from app.database import get_db
-from app.models.student import Student
+from app.models.student import Student, Class, Major
 from app.models.training import TrainingRecord, Score, TrainingProject
 from app.models.ability import AbilityProfile, MajorAbility, SubAbility
 from app.models.report import DiagnosticReport
@@ -44,13 +44,18 @@ async def get_student_profile(
         select(func.avg(Score.total_score)).where(Score.student_id == student.id)
     )
     average_score = avg_score.scalar() or 0
+
+    class_result = await db.execute(select(Class).where(Class.id == student.class_id))
+    class_obj = class_result.scalar_one_or_none()
+    major_result = await db.execute(select(Major).where(Major.id == student.major_id))
+    major_obj = major_result.scalar_one_or_none()
     
     return StudentProfileResponse(
         id=student.id,
         student_no=student.student_no,
         name=student.name,
-        class_name=student.class_.name if student.class_ else "",
-        major_name=student.major.name if student.major else "",
+        class_name=class_obj.name if class_obj else "",
+        major_name=major_obj.name if major_obj else "",
         enrollment_year=student.enrollment_year,
         total_trainings=total_trainings,
         average_score=round(average_score, 1)

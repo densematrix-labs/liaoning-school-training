@@ -61,6 +61,13 @@ async def client(test_db):
 
 
 @pytest_asyncio.fixture
+async def db_session(test_db):
+    """Provide a database session for tests that seed endpoint data."""
+    async with test_db() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
 async def auth_headers(client, test_db):
     """Get authenticated headers for tests"""
     from passlib.context import CryptContext

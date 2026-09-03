@@ -2,19 +2,23 @@ version: '3.8'
 
 services:
   backend:
+    image: ${BACKEND_IMAGE:-shixun-backend}
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: shixun-backend
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-30211}:8080"
     volumes:
       - ./mock-data:/app/mock-data:ro
       - sqlite-data:/app/data
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/training.db
       - LLM_PROXY_URL=https://llm-proxy.densematrix.ai
-      - LLM_PROXY_KEY=sk-wskhgeyawc
+      - LLM_PROXY_KEY=${LLM_PROXY_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gemini-3-flash-preview}
+      - SECRET_KEY=${SECRET_KEY:-liaoning-railway-training-demo-only-change-in-production}
+      - MOCK_DATA_DIR=/app/mock-data
       - DEBUG=false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -27,12 +31,13 @@ services:
       - shixun-net
 
   frontend:
+    image: ${FRONTEND_IMAGE:-shixun-frontend}
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: shixun-frontend
     ports:
-      - "3080:80"
+      - "${FRONTEND_PORT:-30210}:80"
     depends_on:
       backend:
         condition: service_healthy

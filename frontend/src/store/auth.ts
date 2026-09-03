@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { api } from '../lib/api'
+import { api, getErrorMessage } from '../lib/api'
 
 interface User {
   id: string
@@ -61,7 +61,7 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           set({
             isLoading: false,
-            error: error.response?.data?.detail || '登录失败',
+            error: getErrorMessage(error, '登录失败'),
           })
           throw error
         }

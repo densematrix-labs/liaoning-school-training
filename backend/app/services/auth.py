@@ -11,7 +11,7 @@ from app.models.user import User, UserRole
 from app.models.student import Student, Class
 from app.schemas.auth import Token, TokenData, UserResponse
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
 
 class AuthService:

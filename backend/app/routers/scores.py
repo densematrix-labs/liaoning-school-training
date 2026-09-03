@@ -8,6 +8,7 @@ from app.routers.auth import get_current_user
 from app.services.score import ScoreService
 from app.schemas.auth import UserResponse
 from app.schemas.training import ScoreListResponse, ScoreDetailResponse, ClassScoreSummary
+from app.routers.permissions import require_class_access, require_student_access
 
 router = APIRouter(prefix="/api/v1/scores", tags=["成绩管理"])
 
@@ -46,8 +47,7 @@ async def get_student_scores(
     db: AsyncSession = Depends(get_db),
 ):
     """获取指定学生的成绩列表（教师/管理员）"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, student_id, db)
     
     service = ScoreService(db)
     return await service.get_student_scores(
@@ -66,8 +66,7 @@ async def get_class_scores(
     db: AsyncSession = Depends(get_db),
 ):
     """获取班级成绩列表"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_class_access(current_user, class_id, db)
     
     service = ScoreService(db)
     return await service.get_class_scores(
@@ -84,8 +83,7 @@ async def get_class_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """获取班级成绩汇总"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_class_access(current_user, class_id, db)
     
     service = ScoreService(db)
     return await service.get_class_summary(class_id)
@@ -105,8 +103,6 @@ async def get_score_detail(
         raise HTTPException(status_code=404, detail="成绩不存在")
     
     # Check permission
-    if current_user.role == "student":
-        if result.student_id != current_user.student_id:
-            raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, result.student_id, db)
     
     return result

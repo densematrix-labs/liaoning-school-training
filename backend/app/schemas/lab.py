@@ -26,11 +26,11 @@ class LabUpdate(BaseModel):
 class LabResponse(BaseModel):
     id: str
     name: str
-    building: Optional[str]
-    floor: Optional[int]
-    capacity: Optional[int]
-    equipment: List[str]
-    reference_image_url: Optional[str]
+    building: Optional[str] = None
+    floor: Optional[int] = None
+    capacity: Optional[int] = None
+    equipment: List[str] = []
+    reference_image_url: Optional[str] = None
     status: str
     current_students: int
 
@@ -46,11 +46,17 @@ class EnvironmentCheckRequest(BaseModel):
 
 class CategoryScore(BaseModel):
     score: int
+    max_score: int
     issues: List[str]
 
 
 class EnvironmentCheckResponse(BaseModel):
+    id: str
+    student_id: str
+    lab_id: str
+    lab_name: Optional[str] = None
     total_score: int
-    categories: dict
+    max_score: int = 100
+    details: dict
     summary: str
-    passed: bool
+    checked_at: Optional[str] = None

@@ -8,8 +8,8 @@ from typing import List, Optional, Dict, Any
 class MajorResponse(BaseModel):
     id: str
     name: str
-    code: Optional[str]
-    description: Optional[str]
+    code: Optional[str] = None
+    description: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -19,10 +19,11 @@ class ClassResponse(BaseModel):
     id: str
     name: str
     major_id: str
-    major_name: Optional[str]
-    teacher_name: Optional[str]
+    major_name: Optional[str] = None
+    teacher_id: Optional[str] = None
+    teacher_name: Optional[str] = None
     year: int
-    student_count: Optional[int]
+    student_count: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -33,9 +34,9 @@ class StudentResponse(BaseModel):
     student_no: str
     name: str
     class_id: str
-    class_name: Optional[str]
+    class_name: Optional[str] = None
     major_id: str
-    major_name: Optional[str]
+    major_name: Optional[str] = None
     enrollment_year: int
     
     class Config:

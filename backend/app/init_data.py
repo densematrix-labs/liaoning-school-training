@@ -1,5 +1,6 @@
 """Initialize database with mock data from JSON files"""
 import json
+import os
 import uuid
 import random
 from datetime import datetime, timedelta
@@ -15,7 +16,8 @@ from app.models.training import TrainingProject, TrainingRecord, Score
 from app.services.auth import AuthService
 
 
-MOCK_DATA_DIR = Path(__file__).parent.parent.parent / "mock-data"
+_repo_mock_dir = Path(__file__).resolve().parents[2] / "mock-data"
+MOCK_DATA_DIR = Path(os.getenv("MOCK_DATA_DIR", str(_repo_mock_dir)))
 
 
 def load_json(filename):
@@ -35,7 +37,8 @@ async def init_mock_data():
         if result.scalar_one_or_none():
             return  # Already has data
         
-        print("Initializing mock data from JSON files...")
+        random.seed(20260902)
+        print(f"Initializing demo data from {MOCK_DATA_DIR}...")
         
         # Load all mock data
         abilities_data = load_json("abilities.json")
@@ -175,7 +178,6 @@ async def init_mock_data():
                 duration=proj_data.get("duration_minutes", 60),
                 max_score=100,
                 steps=steps,
-                difficulty=proj_data.get("difficulty", "中级"),
             )
             db.add(project)
             project_id_map[proj_data["id"]] = project

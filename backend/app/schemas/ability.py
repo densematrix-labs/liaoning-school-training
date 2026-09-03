@@ -1,8 +1,9 @@
-"""
-能力相关 Schema
-"""
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+"""能力体系相关 Schema。"""
+
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
 
 
 class SubAbilityCreate(BaseModel):
@@ -21,11 +22,8 @@ class SubAbilityResponse(BaseModel):
     id: str
     major_ability_id: str
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     weight: float
-
-    class Config:
-        from_attributes = True
 
 
 class MajorAbilityCreate(BaseModel):
@@ -34,7 +32,7 @@ class MajorAbilityCreate(BaseModel):
     weight: float = 0.25
     graduation_threshold: float = 0.6
     icon: Optional[str] = None
-    display_order: Optional[float] = 0
+    display_order: float = 0
 
 
 class MajorAbilityUpdate(BaseModel):
@@ -49,49 +47,53 @@ class MajorAbilityUpdate(BaseModel):
 class MajorAbilityResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     weight: float
     graduation_threshold: float
-    icon: Optional[str]
-    display_order: float
-    sub_abilities: List[SubAbilityResponse]
-
-    class Config:
-        from_attributes = True
+    icon: Optional[str] = None
+    display_order: float = 0
+    sub_abilities: list[SubAbilityResponse] = Field(default_factory=list)
 
 
 class AbilityMappingResponse(BaseModel):
     project_id: str
     project_name: str
-    step_mappings: Dict[str, Any]
+    step_mappings: dict[str, Any]
 
 
 class RadarDataPoint(BaseModel):
     ability_id: str
-    name: str
+    ability_name: str
+    name: Optional[str] = None
     score: float
-    weight: float
+    full_score: float = 100
+    weight: float = 0
     threshold: float
 
 
 class RadarDataResponse(BaseModel):
-    data: List[RadarDataPoint]
-    
+    data: list[RadarDataPoint]
+
 
 class AbilityProfileResponse(BaseModel):
+    id: Optional[str] = None
     student_id: str
-    sub_abilities: Dict[str, float]
-    major_abilities: Dict[str, float]
-    radar_data: List[Dict[str, Any]]
+    student_name: Optional[str] = None
+    sub_abilities: dict[str, float]
+    major_abilities: dict[str, float]
+    radar_data: list[RadarDataPoint]
     graduation_ready: bool
-    updated_at: Optional[str]
-    
-    class Config:
-        from_attributes = True
+    updated_at: Optional[datetime] = None
+    strongest_ability: Optional[str] = None
+    weakest_ability: Optional[str] = None
+    improvement_suggestions: Optional[list[str]] = None
+    total_score: float = 0
+    weak_abilities: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ClassAbilityDistribution(BaseModel):
     class_id: str
     class_name: str
-    ability_distribution: Dict[str, float]
-    student_count: int
+    abilities: dict[str, Any] = Field(default_factory=dict)
+    graduation_ready_count: int = 0
+    total_students: int = 0

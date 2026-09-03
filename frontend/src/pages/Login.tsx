@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../store/auth'
 import { motion } from 'framer-motion'
+import { getErrorMessage } from '../lib/api'
 
 export default function Login() {
   const { t } = useTranslation()
@@ -23,7 +24,7 @@ export default function Login() {
       await login(username, password)
       navigate('/')
     } catch (err: any) {
-      setError(err.response?.data?.detail || t('login.error'))
+      setError(getErrorMessage(err, t('login.error')))
     } finally {
       setLoading(false)
     }
