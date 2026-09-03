@@ -23,7 +23,7 @@ class DiagnosticReportResponse(BaseModel):
     pdf_url: Optional[str] = None
     generated_at: Optional[datetime] = None
     model: Optional[str] = None
-    source: str = "llm_proxy"
+    source: str = "bailian"
 
     class Config:
         from_attributes = True

@@ -39,6 +39,7 @@ class LabResponse(BaseModel):
 
 
 class EnvironmentCheckRequest(BaseModel):
+    student_id: str
     lab_id: str
     image_base64: str
     score_id: Optional[str] = None

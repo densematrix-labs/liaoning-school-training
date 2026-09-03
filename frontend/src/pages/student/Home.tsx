@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { api } from '../../lib/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Link, useNavigate } from 'react-router-dom'
+import { api, getErrorMessage } from '../../lib/api'
 import { useAuthStore } from '../../store/auth'
 
 export default function StudentHome() {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
   const { data: scores } = useQuery({
     queryKey: ['student-home-scores'],
     queryFn: async () => (await api.get('/api/v1/scores/', { params: { page_size: 4 } })).data,
@@ -14,6 +15,13 @@ export default function StudentHome() {
     queryFn: async () => (await api.get('/api/v1/abilities/profile')).data,
   })
   const latest = scores?.scores?.[0]
+  const generateReport = useMutation({
+    mutationFn: async () => (await api.post('/api/v1/reports/generate', {
+      student_id: user?.student_id,
+      report_type: 'single',
+    })).data,
+    onSuccess: () => navigate('/reports'),
+  })
 
   return (
     <div className="space-y-7">
@@ -23,8 +31,21 @@ export default function StudentHome() {
           <h2>{user?.name}，查看你的实训进展</h2>
           <p>{user?.class_name} · {user?.major_name}</p>
         </div>
-        <Link to="/reports" className="btn-primary">生成诊断报告</Link>
+        <button
+          type="button"
+          onClick={() => generateReport.mutate()}
+          disabled={!user?.student_id || generateReport.isPending}
+          className="btn-primary"
+        >
+          {generateReport.isPending ? '正在生成…' : '生成诊断报告'}
+        </button>
       </section>
+
+      {generateReport.error && (
+        <p role="alert" className="rounded-md border border-status-danger/40 bg-status-danger/10 p-3 text-sm text-status-danger">
+          {getErrorMessage(generateReport.error, '模型服务暂时不可用，请稍后重试')}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="已完成实训" value={scores?.total ?? '—'} unit="次" />

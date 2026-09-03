@@ -73,9 +73,9 @@ class EnvironmentCheckService:
         reference_image_url: Optional[str],
         lab_name: str,
     ) -> dict:
-        """Call LLM Proxy VLM for image comparison"""
+        """Call the configured multimodal provider for image comparison."""
         
-        prompt = f"""你是一个实训室环境检查专家。请分析学生上传的实训室照片，检查以下几个方面：
+        prompt = f"""你是一个实训室环境检查专家。请分析教师上传的实训室照片，检查以下几个方面：
 
 ## 检查实训室：{lab_name}
 
@@ -144,19 +144,27 @@ class EnvironmentCheckService:
             })
             messages[0]["content"].insert(3, {
                 "type": "text",
-                "text": "以下是学生上传的当前状态照片："
+                "text": "以下是教师上传的当前状态照片："
             })
-        
+
+        if reference_image_url and reference_image_url.startswith("/"):
+            messages[0]["content"][2]["image_url"]["url"] = (
+                f"{settings.PUBLIC_BASE_URL.rstrip('/')}{reference_image_url}"
+            )
+
+        if not settings.LLM_API_KEY:
+            raise RuntimeError(f"{settings.LLM_PROVIDER} 未配置，无法执行真实环境检查")
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
-                    f"{settings.LLM_PROXY_URL}/v1/chat/completions",
+                    f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
                     headers={
-                        "Authorization": f"Bearer {settings.LLM_PROXY_KEY}",
+                        "Authorization": f"Bearer {settings.LLM_API_KEY}",
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": settings.LLM_MODEL,
+                        "model": settings.VLM_MODEL,
                         "messages": messages,
                         "temperature": 0.3,
                     }
@@ -174,18 +182,8 @@ class EnvironmentCheckService:
                 
                 return json.loads(content.strip())
                 
-        except Exception as e:
-            # Return default result on error
-            return {
-                "total_score": 75,
-                "categories": {
-                    "equipment_placement": {"score": 22, "max_score": 30, "issues": ["部分工具未完全归位"]},
-                    "surface_cleanliness": {"score": 25, "max_score": 30, "issues": ["台面基本整洁"]},
-                    "safety_compliance": {"score": 15, "max_score": 20, "issues": ["安全规范基本符合"]},
-                    "environmental_hygiene": {"score": 13, "max_score": 20, "issues": ["环境卫生良好"]},
-                },
-                "summary": f"实训室整体状态良好，建议注意器材归位。(API调用失败: {str(e)[:50]})"
-            }
+        except (httpx.HTTPError, KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"{settings.LLM_PROVIDER} 环境检查调用失败") from exc
     
     async def get_student_history(
         self,

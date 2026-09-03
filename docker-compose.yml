@@ -14,9 +14,13 @@ services:
       - sqlite-data:/app/data
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/training.db
+      - LLM_PROVIDER=${LLM_PROVIDER:-bailian}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      - LLM_API_KEY=${DASHSCOPE_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-qwen-plus}
+      - VLM_MODEL=${VLM_MODEL:-qwen-vl-plus}
       - LLM_PROXY_URL=https://llm-proxy.densematrix.ai
       - LLM_PROXY_KEY=${LLM_PROXY_KEY}
-      - LLM_MODEL=${LLM_MODEL:-gemini-3-flash-preview}
       - SECRET_KEY=${SECRET_KEY:-liaoning-railway-training-demo-only-change-in-production}
       - MOCK_DATA_DIR=/app/mock-data
       - DEBUG=false

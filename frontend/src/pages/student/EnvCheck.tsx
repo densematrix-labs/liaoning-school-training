@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, getErrorMessage } from '../../lib/api'
 
 interface Lab {
   id: string
@@ -11,6 +11,18 @@ interface Lab {
   floor: number
   capacity: number
   status: string
+}
+
+interface ClassInfo {
+  id: string
+  name: string
+  student_count: number
+}
+
+interface StudentInfo {
+  id: string
+  student_no: string
+  name: string
 }
 
 interface CheckResult {
@@ -86,9 +98,11 @@ function CategoryScore({
   )
 }
 
-export default function StudentEnvCheck() {
+export default function EnvironmentCheckPage() {
   const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedClass, setSelectedClass] = useState<string>('')
+  const [selectedStudent, setSelectedStudent] = useState<string>('')
   const [selectedLab, setSelectedLab] = useState<string>('')
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [result, setResult] = useState<CheckResult | null>(null)
@@ -101,11 +115,23 @@ export default function StudentEnvCheck() {
       return res.data
     },
   })
+
+  const { data: classes = [] } = useQuery<ClassInfo[]>({
+    queryKey: ['environment-classes'],
+    queryFn: async () => (await api.get('/api/v1/students/classes')).data,
+  })
+
+  const { data: students = [], isFetching: studentsLoading } = useQuery<StudentInfo[]>({
+    queryKey: ['environment-students', selectedClass],
+    queryFn: async () => (await api.get(`/api/v1/students/classes/${selectedClass}/students`)).data,
+    enabled: Boolean(selectedClass),
+  })
   
   // Check mutation
   const checkMutation = useMutation({
     mutationFn: async (imageBase64: string) => {
       const res = await api.post('/api/v1/environment/check', {
+        student_id: selectedStudent,
         lab_id: selectedLab,
         image_base64: imageBase64,
       })
@@ -129,7 +155,7 @@ export default function StudentEnvCheck() {
   }
   
   const handleCheck = () => {
-    if (!previewImage || !selectedLab) return
+    if (!previewImage || !selectedLab || !selectedStudent) return
     
     // Extract base64 data (remove data:image/xxx;base64, prefix)
     const base64Data = previewImage.split(',')[1]
@@ -152,7 +178,7 @@ export default function StudentEnvCheck() {
           {t('env_check.title')}
         </h1>
         <p className="text-text-muted mt-1">
-          上传实训室照片，AI 将自动检测环境规范情况
+          由教师选择关联学生与实训室，上传照片并复核环境规范情况
         </p>
       </div>
       
@@ -164,6 +190,32 @@ export default function StudentEnvCheck() {
             animate={{ opacity: 1, x: 0 }}
             className="glass-panel p-6 space-y-6"
           >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">班级</label>
+                <select
+                  value={selectedClass}
+                  onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudent('') }}
+                  className="input-field"
+                >
+                  <option value="">请选择负责班级</option>
+                  {classes.map(item => <option key={item.id} value={item.id}>{item.name}（{item.student_count}人）</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">关联学生</label>
+                <select
+                  value={selectedStudent}
+                  onChange={(e) => setSelectedStudent(e.target.value)}
+                  className="input-field"
+                  disabled={!selectedClass || studentsLoading}
+                >
+                  <option value="">{studentsLoading ? '加载中…' : '请选择学生'}</option>
+                  {students.map(item => <option key={item.id} value={item.id}>{item.name}（{item.student_no}）</option>)}
+                </select>
+              </div>
+            </div>
+
             {/* Lab selection */}
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -228,7 +280,7 @@ export default function StudentEnvCheck() {
             <div className="flex gap-3">
               <button
                 onClick={handleCheck}
-                disabled={!selectedLab || !previewImage || checkMutation.isPending}
+                disabled={!selectedStudent || !selectedLab || !previewImage || checkMutation.isPending}
                 className="btn-primary flex-1 flex items-center justify-center gap-2"
               >
                 {checkMutation.isPending ? (
@@ -253,6 +305,12 @@ export default function StudentEnvCheck() {
                 </button>
               )}
             </div>
+
+            {checkMutation.error && (
+              <p role="alert" className="rounded-md border border-status-danger/40 bg-status-danger/10 p-3 text-sm text-status-danger">
+                {getErrorMessage(checkMutation.error, '环境检查服务暂时不可用，请稍后重试')}
+              </p>
+            )}
           </motion.div>
           
           {/* Right - Instructions */}
@@ -269,8 +327,8 @@ export default function StudentEnvCheck() {
               <div className="flex gap-3">
                 <div className="w-8 h-8 rounded-lg bg-railway-700 flex items-center justify-center text-accent-cyan font-bold">1</div>
                 <div>
-                  <p className="font-semibold text-text-primary">选择实训室</p>
-                  <p className="text-sm text-text-muted">选择你完成实训的实训室</p>
+                  <p className="font-semibold text-text-primary">选择学生和实训室</p>
+                  <p className="text-sm text-text-muted">将检查结果关联至对应实训记录</p>
                 </div>
               </div>
               

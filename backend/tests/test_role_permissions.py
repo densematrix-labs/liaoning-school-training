@@ -61,3 +61,18 @@ async def test_admin_can_access_every_class(client, test_db, role_records):
     response = await client.get("/api/v1/students/classes/class-b/students", headers=headers)
 
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_student_cannot_run_environment_check(client, student_headers):
+    response = await client.post(
+        "/api/v1/environment/check",
+        headers=student_headers,
+        json={
+            "student_id": "test-student",
+            "lab_id": "test-lab",
+            "image_base64": "not-used",
+        },
+    )
+
+    assert response.status_code == 403

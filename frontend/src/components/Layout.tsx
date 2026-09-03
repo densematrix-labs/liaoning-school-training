@@ -71,7 +71,12 @@ export default function Layout() {
       </aside>
 
       <main className="px-4 pb-10 pt-36 sm:px-6 lg:ml-64 lg:px-8 lg:pt-28">
-        <div className="mx-auto max-w-7xl"><Outlet /></div>
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-5 border-l-2 border-status-warning bg-status-warning/5 px-4 py-2 text-xs text-text-muted">
+            演示环境：实训项目名称、成绩及其计算出的能力结果均为模拟数据，非校方确认数据。
+          </div>
+          <Outlet />
+        </div>
       </main>
     </div>
   )

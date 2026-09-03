@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.user import User, UserRole
 from app.models.student import Major, Class, Student
-from app.models.ability import MajorAbility, SubAbility, AbilityProfile
+from app.models.ability import MajorAbility, SubAbility
 from app.models.lab import Lab, LabStatus
 from app.models.training import TrainingProject, TrainingRecord, Score
 from app.services.auth import AuthService
@@ -295,28 +295,15 @@ async def init_mock_data():
                 total_records += 1
             
             await db.flush()
-            
-            # Create ability profile for this student
-            major_ability_scores = {}
-            for ma_id in ability_id_map.values():
-                major_ability_scores[ma_id] = round(random.uniform(0.55, 0.95), 2)
-            
-            sub_ability_scores = {}
-            for sa_id in sub_ability_id_map.values():
-                sub_ability_scores[sa_id] = round(random.uniform(0.45, 0.95), 2)
-            
-            graduation_ready = all(v >= 0.6 for v in major_ability_scores.values())
-            
-            profile = AbilityProfile(
-                id=str(uuid.uuid4()),
-                student_id=student.id,
-                major_abilities=major_ability_scores,
-                sub_abilities=sub_ability_scores,
-                graduation_ready=graduation_ready,
-            )
-            db.add(profile)
         
         await db.commit()
+
+        # Derive every ability value from the generated step-score evidence.
+        # Diagnostic reports consume this result; they never assign scores.
+        from app.services.ability import AbilityService
+        ability_service = AbilityService(db)
+        for student in students:
+            await ability_service.recalculate_profile(student.id)
         
         print(f"✓ Created {total_records} training records")
         print("\n" + "="*50)

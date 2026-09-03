@@ -18,10 +18,17 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # LLM Proxy
+    # Text-generation provider (OpenAI-compatible)
+    LLM_PROVIDER: str = "bailian"
+    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = "qwen-plus"
+    VLM_MODEL: str = "qwen-vl-plus"
+    PUBLIC_BASE_URL: str = "https://shixun.demo.densematrix.ai"
+
+    # Legacy proxy settings retained for the training controller adapter.
     LLM_PROXY_URL: str = "https://llm-proxy.densematrix.ai"
     LLM_PROXY_KEY: str = ""
-    LLM_MODEL: str = "gemini-3-flash-preview"
     
     # CORS
     CORS_ORIGINS: list = [

@@ -9,7 +9,8 @@ from app.config import settings
 from app.models.report import DiagnosticReport, ReportType
 from app.models.student import Student
 from app.models.training import Score, TrainingProject
-from app.models.ability import AbilityProfile, MajorAbility
+from app.models.ability import MajorAbility
+from app.services.ability import AbilityService
 from app.schemas.report import DiagnosticReportResponse
 
 
@@ -34,11 +35,9 @@ class ReportService:
         if not student:
             raise ValueError("学生不存在")
         
-        # Get ability profile
-        profile_result = await self.db.execute(
-            select(AbilityProfile).where(AbilityProfile.student_id == student_id)
-        )
-        profile = profile_result.scalar_one_or_none()
+        # Rebuild from score details before every report so the narrative and
+        # the displayed graph share one traceable source of truth.
+        profile = await AbilityService(self.db).recalculate_profile(student_id)
         
         # Get major abilities
         abilities_result = await self.db.execute(
@@ -132,7 +131,7 @@ class ReportService:
             content=content,
             generated_at=report.generated_at,
             model=settings.LLM_MODEL,
-            source="llm_proxy",
+            source=settings.LLM_PROVIDER,
         )
     
     async def _generate_report_content(
@@ -180,15 +179,15 @@ class ReportService:
 
 请用鼓励性但务实的语气撰写。直接输出 Markdown 内容，不要额外说明。"""
 
-        if not settings.LLM_PROXY_KEY:
-            raise RuntimeError("LLM Proxy 未配置，无法生成真实诊断报告")
+        if not settings.LLM_API_KEY:
+            raise RuntimeError(f"{settings.LLM_PROVIDER} 未配置，无法生成真实诊断报告")
 
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
-                    f"{settings.LLM_PROXY_URL}/v1/chat/completions",
+                    f"{settings.LLM_BASE_URL.rstrip('/')}/chat/completions",
                     headers={
-                        "Authorization": f"Bearer {settings.LLM_PROXY_KEY}",
+                        "Authorization": f"Bearer {settings.LLM_API_KEY}",
                         "Content-Type": "application/json",
                     },
                     json={
@@ -202,11 +201,11 @@ class ReportService:
                 return result["choices"][0]["message"]["content"]
                 
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 403:
-                raise RuntimeError("LLM Proxy 上游额度已用尽，请联系管理员补充额度") from exc
-            raise RuntimeError(f"LLM Proxy 返回异常状态：{exc.response.status_code}") from exc
+            raise RuntimeError(
+                f"{settings.LLM_PROVIDER} 返回异常状态：{exc.response.status_code}"
+            ) from exc
         except (httpx.HTTPError, KeyError, TypeError) as exc:
-            raise RuntimeError("LLM Proxy 调用失败，请稍后重试") from exc
+            raise RuntimeError(f"{settings.LLM_PROVIDER} 调用失败，请稍后重试") from exc
     
     async def get_student_reports(
         self,
@@ -236,7 +235,7 @@ class ReportService:
                 content=r.content,
                 generated_at=r.generated_at,
                 model=settings.LLM_MODEL,
-                source="llm_proxy",
+                source=settings.LLM_PROVIDER,
             )
             for r in reports
         ]
@@ -263,5 +262,5 @@ class ReportService:
             content=report.content,
             generated_at=report.generated_at,
             model=settings.LLM_MODEL,
-            source="llm_proxy",
+            source=settings.LLM_PROVIDER,
         )

@@ -13,7 +13,9 @@ describe('role access matrix', () => {
   it('keeps student, teacher and admin menus separated', () => {
     expect(roleMenus.student.map((item) => item.label)).toContain('我的成绩')
     expect(roleMenus.student.map((item) => item.label)).not.toContain('系统总览')
+    expect(roleMenus.student.map((item) => item.label)).not.toContain('环境检查')
     expect(roleMenus.teacher.map((item) => item.label)).toContain('我的班级')
+    expect(roleMenus.teacher.map((item) => item.label)).toContain('环境检查')
     expect(roleMenus.teacher.map((item) => item.label)).not.toContain('基础配置')
     expect(roleMenus.admin.map((item) => item.label)).toContain('基础配置')
   })

@@ -62,15 +62,9 @@ class AbilityService:
         if not student:
             return None
         
-        # Get or calculate profile
-        profile_result = await self.db.execute(
-            select(AbilityProfile).where(AbilityProfile.student_id == student_id)
-        )
-        profile = profile_result.scalar_one_or_none()
-        
-        if not profile:
-            # Calculate profile from scores
-            profile = await self._calculate_profile(student_id)
+        # Always rebuild from traceable score details so stale or seeded values
+        # can never become the source of truth for the ability graph.
+        profile = await self.recalculate_profile(student_id)
         
         if not profile:
             return None
@@ -115,10 +109,16 @@ class AbilityService:
             if score < ma.graduation_threshold:
                 suggestions.append(f"建议加强「{ma.name}」的训练，当前达成率 {round(score * 100, 1)}%，目标 {round(ma.graduation_threshold * 100)}%")
         
-        total_score = (
-            round(sum(major_ability_scores.values()) / len(major_ability_scores) * 100, 1)
-            if major_ability_scores else 0
-        )
+        weighted_scores = [
+            (major_ability_scores.get(ma.id, 0), ma.weight)
+            for ma in major_abilities
+            if ma.weight > 0
+        ]
+        total_weight = sum(weight for _, weight in weighted_scores)
+        total_score = round(
+            sum(score * weight for score, weight in weighted_scores) / total_weight * 100,
+            1,
+        ) if total_weight else 0
         weak_abilities = [
             {"ability_id": item.ability_id, "name": item.ability_name, "score": item.score}
             for item in radar_data
@@ -141,7 +141,7 @@ class AbilityService:
             weak_abilities=weak_abilities,
         )
     
-    async def _calculate_profile(self, student_id: str) -> Optional[AbilityProfile]:
+    async def recalculate_profile(self, student_id: str) -> Optional[AbilityProfile]:
         """Calculate ability profile from all scores"""
         scores_result = await self.db.execute(
             select(Score).where(Score.student_id == student_id)
@@ -237,6 +237,11 @@ class AbilityService:
             select(Student).where(Student.class_id == class_id)
         )
         students = students_result.scalars().all()
+
+        # Class statistics must use the same score-derived calculation as the
+        # individual graph rather than any persisted demo seed values.
+        for student in students:
+            await self.recalculate_profile(student.id)
         
         # Get profiles
         student_ids = [s.id for s in students]

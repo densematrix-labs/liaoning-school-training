@@ -118,6 +118,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           LLM_PROXY_KEY: ${{ secrets.LLM_PROXY_KEY }}
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
@@ -127,7 +128,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 30m
           script_stop: true
-          envs: LLM_PROXY_KEY,SECRET_KEY,BACKEND_IMAGE,FRONTEND_IMAGE
+          envs: LLM_PROXY_KEY,DASHSCOPE_API_KEY,SECRET_KEY,BACKEND_IMAGE,FRONTEND_IMAGE
           script: |
             cd /opt/demos/shixun
             
