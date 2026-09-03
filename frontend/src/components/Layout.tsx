@@ -38,10 +38,10 @@ export default function Layout() {
             <NavLink to="/dashboard" className="hidden text-xs font-semibold text-accent-blue hover:text-accent-cyan sm:block">大屏展示</NavLink>
             <div className="border-l border-railway-500/60 pl-3 text-right">
               <div className="flex items-center justify-end gap-2">
-                <span className="text-sm font-semibold text-text-primary">{user.name}</span>
-                <span className={clsx('role-badge', role.accent)}>{role.label}</span>
+                <span className="hidden text-sm font-semibold text-text-primary sm:inline">{user.name}</span>
+                <span className={clsx('role-badge whitespace-nowrap', role.accent)}>{role.label}</span>
               </div>
-              <p className="text-[11px] text-text-muted">{user.class_name || role.scope}</p>
+              <p className="hidden text-[11px] text-text-muted sm:block">{user.class_name || role.scope}</p>
             </div>
             <button onClick={handleLogout} className="railway-button !px-3 !py-1.5 text-xs">退出</button>
           </div>
