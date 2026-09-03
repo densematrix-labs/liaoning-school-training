@@ -119,12 +119,13 @@ jobs:
         env:
           LLM_PROXY_KEY: ${{ secrets.LLM_PROXY_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
-          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:latest
-          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:latest
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
         with:
           host: 39.109.116.180
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 30m
           envs: LLM_PROXY_KEY,SECRET_KEY,BACKEND_IMAGE,FRONTEND_IMAGE
           script: |
             cd /opt/demos/shixun
