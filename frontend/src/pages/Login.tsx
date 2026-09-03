@@ -24,7 +24,7 @@ export default function Login() {
       await login(username, password)
       navigate('/')
     } catch (err: any) {
-      setError(getErrorMessage(err, t('login.error')))
+      setError(getErrorMessage(err, t('login_error')))
     } finally {
       setLoading(false)
     }
@@ -65,7 +65,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
-                {t('login.username')}
+                {t('username')}
               </label>
               <input
                 type="text"
@@ -79,7 +79,7 @@ export default function Login() {
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
-                {t('login.password')}
+                {t('password')}
               </label>
               <input
                 type="password"
@@ -115,7 +115,7 @@ export default function Login() {
                   登录中...
                 </span>
               ) : (
-                t('login.submit')
+                t('login')
               )}
             </button>
           </form>
