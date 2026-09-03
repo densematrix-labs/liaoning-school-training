@@ -33,7 +33,7 @@ async def init_mock_data():
     """Initialize database with mock data if empty"""
     async with AsyncSessionLocal() as db:
         # Check if data exists
-        result = await db.execute(select(User))
+        result = await db.execute(select(User.id).limit(1))
         if result.scalar_one_or_none():
             return  # Already has data
         
