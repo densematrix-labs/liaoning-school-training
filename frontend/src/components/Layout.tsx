@@ -66,7 +66,7 @@ export default function Layout() {
         </nav>
         <div className="absolute bottom-5 left-5 right-5 border-l-2 border-status-success/70 pl-3">
           <p className="text-xs text-status-success">数据服务在线</p>
-          <p className="text-[10px] text-text-muted">SQLite · LLM Proxy</p>
+          <p className="text-[10px] text-text-muted">SQLite · 百炼 Qwen</p>
         </div>
       </aside>
 

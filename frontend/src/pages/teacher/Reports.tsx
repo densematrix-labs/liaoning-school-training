@@ -124,7 +124,7 @@ export default function TeacherReports() {
                 <div className="mb-5 border-b border-railway-600/50 pb-4">
                   <p className="eyebrow">{activeReport.report_type === 'single' ? 'SINGLE SESSION' : 'PERIODIC REVIEW'}</p>
                   <h3 className="section-heading">{activeReport.title}</h3>
-                  <p className="mt-1 text-xs text-text-muted">模型：{activeReport.model || 'DenseMatrix LLM Proxy'}</p>
+                  <p className="mt-1 text-xs text-text-muted">模型：{activeReport.model || '百炼 Qwen'}</p>
                 </div>
                 <article className="prose prose-invert prose-cyan max-w-none text-text-secondary"><ReactMarkdown>{activeReport.content}</ReactMarkdown></article>
               </>
