@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm install
+# Install the lockfile exactly and avoid non-build registry calls.
+RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy source code
 COPY . .
