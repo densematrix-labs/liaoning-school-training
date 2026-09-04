@@ -35,6 +35,9 @@ class StepScoreDetail(BaseModel):
     deduction: Optional[float] = None
     reason: Optional[str] = None
     related_abilities: list[str] = Field(default_factory=list)
+    related_ability_names: list[str] = Field(default_factory=list)
+    source_status: Optional[str] = None
+    applied_rule: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScoreDetailResponse(BaseModel):
@@ -49,6 +52,12 @@ class ScoreDetailResponse(BaseModel):
     calculated_at: Optional[datetime] = None
     details: list[StepScoreDetail] = Field(default_factory=list)
     failed_abilities: list[str] = Field(default_factory=list)
+    class_name: Optional[str] = None
+    record_id: Optional[str] = None
+    source_record_id: Optional[str] = None
+    source_completed_at: Optional[datetime] = None
+    steps_total: float = 0
+    reconciliation_ok: bool = False
 
 
 class ClassScoreSummary(BaseModel):

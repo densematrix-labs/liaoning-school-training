@@ -1,420 +1,95 @@
-import { useState, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import { motion } from 'framer-motion'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, getErrorMessage } from '../../lib/api'
 
-interface Lab {
-  id: string
-  name: string
-  building: string
-  floor: number
-  capacity: number
-  status: string
-}
-
-interface ClassInfo {
-  id: string
-  name: string
-  student_count: number
-}
-
-interface StudentInfo {
-  id: string
-  student_no: string
-  name: string
-}
-
-interface CheckResult {
-  id: string
-  lab_id: string
-  lab_name: string
-  total_score: number
-  max_score: number
-  details: {
-    equipment_placement: { score: number; max_score: number; issues: string[] }
-    surface_cleanliness: { score: number; max_score: number; issues: string[] }
-    safety_compliance: { score: number; max_score: number; issues: string[] }
-    environmental_hygiene: { score: number; max_score: number; issues: string[] }
-  }
-  summary: string
-  checked_at: string
-}
-
-function CategoryScore({ 
-  name, 
-  icon,
-  data 
-}: { 
-  name: string
-  icon: string
-  data: { score: number; max_score: number; issues: string[] }
-}) {
-  const percentage = (data.score / data.max_score) * 100
-  const isGood = percentage >= 80
-  
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="glass-panel p-4"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{icon}</span>
-          <h4 className="font-display font-semibold text-text-primary">{name}</h4>
-        </div>
-        <span className={`font-mono font-bold
-          ${isGood ? 'text-status-success' : 'text-status-warning'}`}
-        >
-          {data.score}/{data.max_score}
-        </span>
-      </div>
-      
-      {/* Progress bar */}
-      <div className="h-2 bg-railway-700 rounded-full overflow-hidden mb-3">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.8 }}
-          className={`h-full rounded-full
-            ${isGood ? 'bg-gradient-to-r from-status-success to-accent-cyan' : 
-              'bg-gradient-to-r from-status-warning to-accent-blue'}`}
-        />
-      </div>
-      
-      {/* Issues */}
-      {data.issues.length > 0 && (
-        <div className="space-y-1">
-          {data.issues.map((issue, i) => (
-            <p key={i} className="text-xs text-text-muted flex items-start gap-2">
-              <span className="text-status-warning">!</span>
-              {issue}
-            </p>
-          ))}
-        </div>
-      )}
-    </motion.div>
-  )
+const categoryNames: Record<string, string> = {
+  equipment_placement: '器材归位',
+  surface_cleanliness: '台面整洁',
+  safety_compliance: '安全规范',
+  environmental_hygiene: '环境卫生',
 }
 
 export default function EnvironmentCheckPage() {
-  const { t } = useTranslation()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [selectedClass, setSelectedClass] = useState<string>('')
-  const [selectedStudent, setSelectedStudent] = useState<string>('')
-  const [selectedLab, setSelectedLab] = useState<string>('')
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const [result, setResult] = useState<CheckResult | null>(null)
-  
-  // Fetch labs
-  const { data: labs } = useQuery<Lab[]>({
-    queryKey: ['labs'],
-    queryFn: async () => {
-      const res = await api.get('/api/v1/environment/labs')
-      return res.data
-    },
-  })
+  const queryClient = useQueryClient()
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [classId, setClassId] = useState('')
+  const [studentId, setStudentId] = useState('')
+  const [labId, setLabId] = useState('')
+  const [scoreId, setScoreId] = useState('')
+  const [image, setImage] = useState('')
+  const [result, setResult] = useState<any>(null)
+  const [reviewDetails, setReviewDetails] = useState<any>({})
+  const [reviewSummary, setReviewSummary] = useState('')
+  const [note, setNote] = useState('')
+  const [taskId, setTaskId] = useState('')
 
-  const { data: classes = [] } = useQuery<ClassInfo[]>({
-    queryKey: ['environment-classes'],
-    queryFn: async () => (await api.get('/api/v1/students/classes')).data,
+  const classes = useQuery({ queryKey: ['environment-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
+  const students = useQuery({ queryKey: ['environment-students', classId], queryFn: async () => (await api.get(`/api/v1/students/classes/${classId}/students`)).data, enabled: Boolean(classId) })
+  const labs = useQuery({ queryKey: ['environment-labs'], queryFn: async () => (await api.get('/api/v1/environment/labs')).data })
+  const scores = useQuery({ queryKey: ['environment-scores', studentId], queryFn: async () => (await api.get(`/api/v1/scores/student/${studentId}`, { params: { page_size: 100 } })).data, enabled: Boolean(studentId) })
+  const history = useQuery({ queryKey: ['environment-history', studentId], queryFn: async () => (await api.get(`/api/v1/environment/history/${studentId}`)).data, enabled: Boolean(studentId) })
+  const check = useMutation({
+    mutationFn: async () => (await api.post('/api/v1/environment/tasks', { student_id: studentId, lab_id: labId, score_id: scoreId || undefined, image_base64: image })).data,
+    onSuccess: (data) => setTaskId(data.id),
   })
-
-  const { data: students = [], isFetching: studentsLoading } = useQuery<StudentInfo[]>({
-    queryKey: ['environment-students', selectedClass],
-    queryFn: async () => (await api.get(`/api/v1/students/classes/${selectedClass}/students`)).data,
-    enabled: Boolean(selectedClass),
+  const task = useQuery({
+    queryKey: ['environment-task', taskId],
+    queryFn: async () => (await api.get(`/api/v1/environment/tasks/${taskId}`)).data,
+    enabled: Boolean(taskId),
+    refetchInterval: (query) => ['pending', 'running'].includes((query.state.data as any)?.status) ? 800 : false,
   })
-  
-  // Check mutation
-  const checkMutation = useMutation({
-    mutationFn: async (imageBase64: string) => {
-      const res = await api.post('/api/v1/environment/check', {
-        student_id: selectedStudent,
-        lab_id: selectedLab,
-        image_base64: imageBase64,
-      })
-      return res.data
-    },
-    onSuccess: (data) => {
-      setResult(data)
-    },
+  const review = useMutation({
+    mutationFn: async (status: 'confirmed' | 'modified' | 'rejected') => (await api.post(`/api/v1/environment/checks/${result.id}/review`, { status, reviewed_details: reviewDetails, reviewed_summary: reviewSummary, note })).data,
+    onSuccess: (data) => { setResult(data); queryClient.invalidateQueries({ queryKey: ['environment-history', studentId] }) },
   })
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result as string
-      setPreviewImage(base64)
+  useEffect(() => {
+    if (!result) return
+    setReviewDetails(structuredClone(result.reviewed_details || result.details || {}))
+    setReviewSummary(result.reviewed_summary || result.summary || '')
+    setNote(result.review_note || '')
+  }, [result?.id, result?.reviewed_at])
+  useEffect(() => {
+    if (task.data?.status === 'completed' && task.data.result) {
+      setResult(task.data.result)
+      queryClient.invalidateQueries({ queryKey: ['environment-history', studentId] })
     }
+  }, [task.data?.status, task.data?.check_id])
+
+  const loadFile = (file?: File) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setImage(String(reader.result || ''))
     reader.readAsDataURL(file)
   }
-  
-  const handleCheck = () => {
-    if (!previewImage || !selectedLab || !selectedStudent) return
-    
-    // Extract base64 data (remove data:image/xxx;base64, prefix)
-    const base64Data = previewImage.split(',')[1]
-    checkMutation.mutate(base64Data)
-  }
-  
-  const reset = () => {
-    setPreviewImage(null)
-    setResult(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
+  const reset = () => { setImage(''); setResult(null); setTaskId(''); setReviewDetails({}); setReviewSummary(''); setNote(''); if (fileInput.current) fileInput.current.value = '' }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="font-display text-2xl font-bold text-gradient">
-          {t('env_check.title')}
-        </h1>
-        <p className="text-text-muted mt-1">
-          由教师选择关联学生与实训室，上传照片并复核环境规范情况
-        </p>
+  return <div className="space-y-6">
+    <header><p className="eyebrow">ENVIRONMENT EVIDENCE & REVIEW</p><h1 className="page-title">环境图片检查与人工复核</h1><p className="mt-2 text-sm text-text-muted">标准图与现场图智能对比，AI 原始结果和人工复核结果分别留存</p></header>
+    <section className="railway-card grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
+      <Field label="授权班级"><select className="input-field" value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId(''); reset() }}><option value="">选择班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="关联学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => { setStudentId(e.target.value); setScoreId(''); reset() }}><option value="">选择学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="实训室与标准图"><select className="input-field" value={labId} onChange={(e) => setLabId(e.target.value)}><option value="">选择实训室</option>{labs.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="关联实训记录"><select className="input-field" value={scoreId} disabled={!studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">不关联</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{item.project_name} · {item.percentage}分</option>)}</select></Field>
+    </section>
+
+    {!result && <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
+      <section className="railway-card p-5"><h2 className="section-heading">创建检查任务</h2><input ref={fileInput} className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => loadFile(e.target.files?.[0])} /><button onClick={() => fileInput.current?.click()} className="mt-5 flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-railway-500 bg-railway-800/40">{image ? <img src={image} alt="现场图片预览" className="h-full w-full object-cover" /> : <span className="text-text-muted">点击上传 JPG/PNG/WebP 现场图片（最大 10MB）</span>}</button><button className="btn-primary mt-4 w-full" disabled={!studentId || !labId || !image || check.isPending || ['pending', 'running'].includes(task.data?.status)} onClick={() => check.mutate()}>{check.isPending ? '正在提交…' : '发起智能检查'}</button>{taskId && <div className={task.data?.status === 'failed' ? 'alert-warning mt-4 rounded p-3 text-sm' : 'alert-success mt-4 rounded p-3 text-sm'}>任务状态：{taskLabel(task.data?.status)}{task.data?.error_message && <p className="mt-1">{task.data.error_message}</p>}</div>}{check.error && <p className="alert-warning mt-4 rounded p-3 text-sm">{getErrorMessage(check.error, '环境检查任务提交失败')}</p>}</section>
+      <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史检查记录</h2></div><div className="divide-y divide-railway-600/50">{history.data?.map((item: any) => <button key={item.id} onClick={() => setResult(item)} className="grid w-full gap-2 p-4 text-left hover:bg-railway-700/40 sm:grid-cols-[1fr_auto]"><div><p className="text-text-primary">{item.lab_name}</p><p className="text-xs text-text-muted">{new Date(item.checked_at).toLocaleString('zh-CN')}</p></div><div className="text-right"><p className="font-mono text-accent-cyan">AI {item.total_score}分</p><p className={item.review_status ? 'text-xs text-status-success' : 'text-xs text-status-warning'}>{reviewLabel(item.review_status)}</p></div></button>)}{studentId && !history.data?.length && <p className="p-5 text-sm text-text-muted">该学生暂无环境检查记录</p>}</div></section>
+    </div>}
+
+    {result && <div className="space-y-5">
+      <section className="railway-card flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="eyebrow">CHECK {result.id}</p><h2 className="section-heading">AI 原始结果与人工复核</h2><p className="mt-1 text-xs text-text-muted">{result.lab_name} · {new Date(result.checked_at).toLocaleString('zh-CN')}</p></div><div className="flex items-center gap-4"><span className="font-mono text-3xl text-accent-cyan">{result.total_score}</span><span className={result.review_status ? 'text-status-success' : 'text-status-warning'}>{reviewLabel(result.review_status)}</span><button className="railway-button" onClick={reset}>返回列表</button></div></section>
+      <div className="grid gap-5 xl:grid-cols-2"><ImageEvidence title="标准状态图片" src={result.reference_image_url} /><ImageEvidence title="现场图片" src={result.uploaded_image_url} /></div>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className="railway-card p-5"><p className="eyebrow">IMMUTABLE AI RESULT</p><h3 className="section-heading">AI 原始检查结果</h3><p className="mt-3 text-text-secondary">{result.summary}</p><div className="mt-5 space-y-3">{Object.entries(result.details || {}).map(([key, value]: any) => <ResultRow key={key} name={categoryNames[key] || key} value={value} />)}</div>{result.suggestions?.length > 0 && <div className="mt-4 rounded border border-accent-blue/30 p-3"><p className="text-xs font-semibold text-accent-cyan">建议措施</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-text-secondary">{result.suggestions.map((item: string) => <li key={item}>{item}</li>)}</ul></div>}</section>
+        <section className="railway-card p-5"><p className="eyebrow">HUMAN REVIEW</p><h3 className="section-heading">人工复核结果</h3><label className="mt-4 block text-sm text-text-secondary">复核总结<textarea className="input-field mt-2 min-h-20" value={reviewSummary} onChange={(e) => setReviewSummary(e.target.value)} /></label><div className="mt-4 space-y-3">{Object.entries(reviewDetails || {}).map(([key, value]: any) => <div key={key} className="rounded border border-railway-600/60 p-3"><div className="flex items-center justify-between gap-3"><span>{categoryNames[key] || key}</span><label className="text-xs text-text-muted">复核分数 <input className="ml-2 w-20 rounded border border-railway-500 bg-railway-800 px-2 py-1 text-right text-text-primary" type="number" min="0" max={value.max_score} value={value.score} onChange={(e) => setReviewDetails((current: any) => ({ ...current, [key]: { ...current[key], score: Number(e.target.value) } }))} /></label></div><p className="mt-2 text-xs text-text-muted">{value.issues?.join('；') || '未发现问题'}</p></div>)}</div><label className="mt-4 block text-sm text-text-secondary">复核备注<textarea className="input-field mt-2 min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="填写修改原因或复核意见" /></label><div className="mt-4 grid gap-2 sm:grid-cols-3"><button className="railway-button" disabled={review.isPending} onClick={() => review.mutate('confirmed')}>确认 AI 结果</button><button className="btn-primary" disabled={review.isPending} onClick={() => review.mutate('modified')}>保存修改结果</button><button className="rounded border border-status-danger/50 px-3 py-2 text-sm text-status-danger" disabled={review.isPending} onClick={() => review.mutate('rejected')}>驳回转人工</button></div>{result.reviewed_at && <p className="mt-4 text-xs text-text-muted">最近复核：{result.reviewer_name || '—'} · {new Date(result.reviewed_at).toLocaleString('zh-CN')} · {result.review_note || '无备注'}</p>}</section>
       </div>
-      
-      {!result ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left - Upload */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="glass-panel p-6 space-y-6"
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">班级</label>
-                <select
-                  value={selectedClass}
-                  onChange={(e) => { setSelectedClass(e.target.value); setSelectedStudent('') }}
-                  className="input-field"
-                >
-                  <option value="">请选择负责班级</option>
-                  {classes.map(item => <option key={item.id} value={item.id}>{item.name}（{item.student_count}人）</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">关联学生</label>
-                <select
-                  value={selectedStudent}
-                  onChange={(e) => setSelectedStudent(e.target.value)}
-                  className="input-field"
-                  disabled={!selectedClass || studentsLoading}
-                >
-                  <option value="">{studentsLoading ? '加载中…' : '请选择学生'}</option>
-                  {students.map(item => <option key={item.id} value={item.id}>{item.name}（{item.student_no}）</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Lab selection */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                {t('env_check.select_lab')}
-              </label>
-              <select
-                value={selectedLab}
-                onChange={(e) => setSelectedLab(e.target.value)}
-                className="input-field"
-              >
-                <option value="">请选择实训室</option>
-                {labs?.map(lab => (
-                  <option key={lab.id} value={lab.id}>
-                    {lab.name} ({lab.building} {lab.floor}F)
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {/* Image upload */}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                {t('env_check.upload_photo')}
-              </label>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className={`
-                  relative aspect-video rounded-lg border-2 border-dashed cursor-pointer
-                  transition-all duration-300 overflow-hidden
-                  ${previewImage 
-                    ? 'border-accent-blue' 
-                    : 'border-railway-500 hover:border-accent-blue/50'
-                  }
-                `}
-              >
-                {previewImage ? (
-                  <img
-                    src={previewImage}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-text-muted">
-                    <div className="text-4xl mb-2">📷</div>
-                    <p className="text-sm">点击或拖拽上传照片</p>
-                    <p className="text-xs mt-1">支持 JPG, PNG 格式</p>
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleCheck}
-                disabled={!selectedStudent || !selectedLab || !previewImage || checkMutation.isPending}
-                className="btn-primary flex-1 flex items-center justify-center gap-2"
-              >
-                {checkMutation.isPending ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>{t('env_check.checking')}</span>
-                  </>
-                ) : (
-                  <>
-                    <span>🔍</span>
-                    <span>开始检测</span>
-                  </>
-                )}
-              </button>
-              
-              {previewImage && (
-                <button
-                  onClick={reset}
-                  className="btn-secondary"
-                >
-                  重新上传
-                </button>
-              )}
-            </div>
-
-            {checkMutation.error && (
-              <p role="alert" className="rounded-md border border-status-danger/40 bg-status-danger/10 p-3 text-sm text-status-danger">
-                {getErrorMessage(checkMutation.error, '环境检查服务暂时不可用，请稍后重试')}
-              </p>
-            )}
-          </motion.div>
-          
-          {/* Right - Instructions */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="glass-panel p-6"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4">
-              📋 检测说明
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-railway-700 flex items-center justify-center text-accent-cyan font-bold">1</div>
-                <div>
-                  <p className="font-semibold text-text-primary">选择学生和实训室</p>
-                  <p className="text-sm text-text-muted">将检查结果关联至对应实训记录</p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-railway-700 flex items-center justify-center text-accent-cyan font-bold">2</div>
-                <div>
-                  <p className="font-semibold text-text-primary">拍摄照片</p>
-                  <p className="text-sm text-text-muted">拍摄实训台及周边环境的全景照片</p>
-                </div>
-              </div>
-              
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-lg bg-railway-700 flex items-center justify-center text-accent-cyan font-bold">3</div>
-                <div>
-                  <p className="font-semibold text-text-primary">AI 检测</p>
-                  <p className="text-sm text-text-muted">系统自动对比标准照片并给出评分</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-6 p-4 bg-railway-700/30 rounded-lg">
-              <h4 className="font-semibold text-text-primary mb-2">检测项目</h4>
-              <ul className="space-y-2 text-sm text-text-muted">
-                <li>🔧 器材归位 (30分)</li>
-                <li>🧹 台面整洁 (30分)</li>
-                <li>⚡ 安全规范 (20分)</li>
-                <li>🌿 环境卫生 (20分)</li>
-              </ul>
-            </div>
-          </motion.div>
-        </div>
-      ) : (
-        /* Result Display */
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="space-y-6"
-        >
-          {/* Score Header */}
-          <div className="glass-panel-bright p-8 text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-accent-blue to-accent-cyan mb-4 shadow-glow-lg">
-              <span className="font-display text-4xl font-bold text-white">
-                {result.total_score}
-              </span>
-            </div>
-            <h2 className="font-display text-xl font-semibold text-text-primary">
-              环境检查完成
-            </h2>
-            <p className="text-text-muted mt-2">{result.summary}</p>
-          </div>
-          
-          {/* Category Scores */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CategoryScore
-              name={t('env_check.equipment')}
-              icon="🔧"
-              data={result.details.equipment_placement}
-            />
-            <CategoryScore
-              name={t('env_check.cleanliness')}
-              icon="🧹"
-              data={result.details.surface_cleanliness}
-            />
-            <CategoryScore
-              name={t('env_check.safety')}
-              icon="⚡"
-              data={result.details.safety_compliance}
-            />
-            <CategoryScore
-              name={t('env_check.hygiene')}
-              icon="🌿"
-              data={result.details.environmental_hygiene}
-            />
-          </div>
-          
-          {/* Actions */}
-          <div className="flex justify-center">
-            <button
-              onClick={reset}
-              className="btn-primary"
-            >
-              进行新的检测
-            </button>
-          </div>
-        </motion.div>
-      )}
-    </div>
-  )
+    </div>}
+  </div>
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="text-sm text-text-secondary"><span className="mb-2 block">{label}</span>{children}</label> }
+function ImageEvidence({ title, src }: { title: string; src?: string }) { return <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-4 text-sm font-semibold text-text-primary">{title}</div><div className="aspect-video bg-railway-800">{src ? <img className="h-full w-full object-cover" src={src} alt={title} /> : <div className="flex h-full items-center justify-center text-text-muted">无图片</div>}</div></section> }
+function ResultRow({ name, value }: { name: string; value: any }) { return <div className="rounded bg-railway-800/60 p-3"><div className="flex justify-between"><span className="text-text-secondary">{name}</span><span className="font-mono text-accent-cyan">{value.score}/{value.max_score}</span></div><p className="mt-2 text-xs text-text-muted">{value.issues?.join('；') || '未发现问题'}</p></div> }
+function reviewLabel(status?: string) { return ({ confirmed: '已确认', modified: '已修改复核', rejected: '已驳回', pending: '待复核' } as Record<string, string>)[status || 'pending'] || status }
+function taskLabel(status?: string) { return ({ pending: '已提交', running: 'AI 分析中', completed: '检查完成', failed: '检查失败' } as Record<string, string>)[status || 'pending'] || status }

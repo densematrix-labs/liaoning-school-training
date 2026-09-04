@@ -1,17 +1,56 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 
 from app.database import get_db
 from app.routers.auth import get_current_user
-from app.services.environment import EnvironmentCheckService
+from app.services.environment import EnvironmentCheckService, process_environment_task
 from app.schemas.auth import UserResponse
-from app.schemas.lab import EnvironmentCheckRequest, EnvironmentCheckResponse, LabResponse
-from app.models.lab import Lab
+from app.schemas.lab import EnvironmentCheckRequest, EnvironmentCheckResponse, EnvironmentReviewRequest, EnvironmentTaskResponse, LabResponse
+from app.models.lab import EnvironmentCheck, Lab
 from app.routers.permissions import require_student_access
 
 router = APIRouter(prefix="/api/v1/environment", tags=["环境检查"])
+
+
+@router.post("/tasks", response_model=EnvironmentTaskResponse)
+async def create_environment_task(
+    request: EnvironmentCheckRequest,
+    background_tasks: BackgroundTasks,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可执行环境检查")
+    await require_student_access(current_user, request.student_id, db)
+    try:
+        task = await EnvironmentCheckService(db).create_task(
+            request.student_id,
+            request.lab_id,
+            request.image_base64,
+            request.score_id,
+            current_user.id,
+        )
+        background_tasks.add_task(process_environment_task, task.id)
+        return task
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/tasks/{task_id}", response_model=EnvironmentTaskResponse)
+async def get_environment_task(
+    task_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可访问")
+    task = await EnvironmentCheckService(db).get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="环境检查任务不存在")
+    await require_student_access(current_user, task.student_id, db)
+    return task
 
 
 @router.get("/labs", response_model=List[LabResponse])
@@ -105,3 +144,37 @@ async def get_student_check_history(
     
     service = EnvironmentCheckService(db)
     return await service.get_student_history(student_id, limit)
+
+
+@router.get("/checks/{check_id}", response_model=EnvironmentCheckResponse)
+async def get_check(
+    check_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可访问")
+    check = (await db.execute(select(EnvironmentCheck).where(EnvironmentCheck.id == check_id))).scalar_one_or_none()
+    if not check:
+        raise HTTPException(status_code=404, detail="环境检查记录不存在")
+    await require_student_access(current_user, check.student_id, db)
+    return await EnvironmentCheckService(db).get_check(check_id)
+
+
+@router.post("/checks/{check_id}/review", response_model=EnvironmentCheckResponse)
+async def review_check(
+    check_id: str,
+    data: EnvironmentReviewRequest,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可复核")
+    check = (await db.execute(select(EnvironmentCheck).where(EnvironmentCheck.id == check_id))).scalar_one_or_none()
+    if not check:
+        raise HTTPException(status_code=404, detail="环境检查记录不存在")
+    await require_student_access(current_user, check.student_id, db)
+    try:
+        return await EnvironmentCheckService(db).review_check(check_id, current_user.id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

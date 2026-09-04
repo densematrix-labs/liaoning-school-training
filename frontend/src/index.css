@@ -109,6 +109,28 @@ body {
     @apply w-full px-4 py-2 bg-railway-700/50 border border-railway-500/50 rounded text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50;
   }
 
+  .input-field {
+    @apply block w-full rounded-md border border-railway-500/60 bg-railway-700/70 px-3 py-2 text-sm text-text-primary placeholder-text-muted outline-none transition focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/40 disabled:cursor-not-allowed disabled:opacity-50;
+    color-scheme: dark;
+  }
+
+  .input-field option {
+    @apply bg-railway-800 text-text-primary;
+  }
+
+  .btn-primary {
+    @apply rounded-md border border-accent-cyan bg-accent-electric/25 px-4 py-2 text-sm font-semibold text-accent-cyan transition hover:bg-accent-electric/40 hover:shadow-glow-sm disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-secondary {
+    @apply rounded-md border border-railway-500 bg-railway-700/70 px-4 py-2 text-sm font-semibold text-text-primary transition hover:border-accent-blue hover:text-accent-cyan disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .glass-panel-bright {
+    @apply rounded-lg border border-accent-blue/35 bg-railway-800/95 shadow-2xl backdrop-blur-xl;
+    box-shadow: 0 0 40px rgba(0, 170, 255, .16), 0 24px 70px rgba(0, 0, 0, .55);
+  }
+
   .data-display {
     @apply font-mono text-accent-blue text-2xl font-semibold;
     text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);

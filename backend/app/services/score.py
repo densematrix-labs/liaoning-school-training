@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from app.models.training import Score, TrainingProject, TrainingRecord
 from app.models.student import Student, Class
+from app.models.ability import SubAbility
 from app.schemas.training import (
     ScoreResponse,
     ScoreDetailResponse,
@@ -101,6 +102,20 @@ class ScoreService:
             select(Student).where(Student.id == score.student_id)
         )
         student = student_result.scalar_one_or_none()
+        class_obj = None
+        if student and student.class_id:
+            class_obj = (
+                await self.db.execute(select(Class).where(Class.id == student.class_id))
+            ).scalar_one_or_none()
+
+        record = None
+        if score.record_id:
+            record = (
+                await self.db.execute(select(TrainingRecord).where(TrainingRecord.id == score.record_id))
+            ).scalar_one_or_none()
+
+        ability_rows = (await self.db.execute(select(SubAbility))).scalars().all()
+        ability_names = {item.id: item.name for item in ability_rows}
         
         # Parse step details
         step_details = []
@@ -108,6 +123,7 @@ class ScoreService:
             steps_map = {s["id"]: s for s in project.steps}
             for step_id, detail in score.details.items():
                 step_info = steps_map.get(step_id, {})
+                related_abilities = (project.ability_mapping or {}).get(str(step_id)) or detail.get("related_abilities", step_info.get("abilities", []))
                 step_details.append(StepScoreDetail(
                     step_id=step_id,
                     step_name=step_info.get("name", step_id),
@@ -116,7 +132,16 @@ class ScoreService:
                     max_score=step_info.get("score", 10),
                     deduction=detail.get("deduction"),
                     reason=detail.get("reason"),
-                    related_abilities=step_info.get("abilities", []),
+                    related_abilities=related_abilities,
+                    related_ability_names=[
+                        ability_names.get(item, item)
+                        for item in related_abilities
+                    ],
+                    source_status=detail.get("source_status", "通过" if detail.get("passed", False) else "未通过"),
+                    applied_rule=detail.get("applied_rule", {
+                        "passed_score": detail.get("max_score", step_info.get("score", 10)),
+                        "failed_score": max(0, detail.get("score", 0)) if not detail.get("passed", False) else 0,
+                    }),
                 ))
         
         percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
@@ -133,6 +158,12 @@ class ScoreService:
             calculated_at=score.calculated_at,
             details=step_details,
             failed_abilities=score.failed_abilities or [],
+            class_name=class_obj.name if class_obj else None,
+            record_id=score.record_id,
+            source_record_id=record.external_id if record else None,
+            source_completed_at=record.completed_at if record else None,
+            steps_total=round(sum(item.score for item in step_details), 2),
+            reconciliation_ok=abs(sum(item.score for item in step_details) - score.total_score) < 0.01,
         )
     
     async def get_class_scores(
@@ -140,6 +171,10 @@ class ScoreService:
         class_id: str,
         page: int = 1,
         page_size: int = 50,
+        student_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
     ) -> ScoreListResponse:
         # Get all students in class
         students_result = await self.db.execute(
@@ -153,6 +188,14 @@ class ScoreService:
             return ScoreListResponse(scores=[], total=0, page=page, page_size=page_size)
         
         query = select(Score).where(Score.student_id.in_(student_ids))
+        if student_id:
+            query = query.where(Score.student_id == student_id)
+        if project_id:
+            query = query.where(Score.project_id == project_id)
+        if date_from:
+            query = query.where(Score.calculated_at >= date_from)
+        if date_to:
+            query = query.where(Score.calculated_at <= date_to)
         
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

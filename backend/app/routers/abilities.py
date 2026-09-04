@@ -7,6 +7,7 @@ from app.routers.auth import get_current_user
 from app.services.ability import AbilityService
 from app.schemas.auth import UserResponse
 from app.schemas.ability import AbilityProfileResponse, MajorAbilityResponse, ClassAbilityDistribution
+from app.routers.permissions import require_class_access, require_student_access
 
 router = APIRouter(prefix="/api/v1/abilities", tags=["能力图谱"])
 
@@ -45,8 +46,7 @@ async def get_student_profile(
     db: AsyncSession = Depends(get_db),
 ):
     """获取指定学生的能力图谱（教师/管理员）"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_student_access(current_user, student_id, db)
     
     service = AbilityService(db)
     result = await service.get_student_profile(student_id)
@@ -64,8 +64,7 @@ async def get_class_distribution(
     db: AsyncSession = Depends(get_db),
 ):
     """获取班级能力分布"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="无权访问")
+    await require_class_access(current_user, class_id, db)
     
     service = AbilityService(db)
     return await service.get_class_distribution(class_id)

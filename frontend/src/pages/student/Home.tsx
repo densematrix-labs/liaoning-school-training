@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { api, getErrorMessage } from '../../lib/api'
+import { api } from '../../lib/api'
 import { useAuthStore } from '../../store/auth'
+import { ReportTaskStatus, useReportTask } from '../../lib/useReportTask'
 
 export default function StudentHome() {
   const { user } = useAuthStore()
@@ -15,13 +16,7 @@ export default function StudentHome() {
     queryFn: async () => (await api.get('/api/v1/abilities/profile')).data,
   })
   const latest = scores?.scores?.[0]
-  const generateReport = useMutation({
-    mutationFn: async () => (await api.post('/api/v1/reports/generate', {
-      student_id: user?.student_id,
-      report_type: 'single',
-    })).data,
-    onSuccess: () => navigate('/reports'),
-  })
+  const generateReport = useReportTask(() => navigate('/reports'))
 
   return (
     <div className="space-y-7">
@@ -33,19 +28,20 @@ export default function StudentHome() {
         </div>
         <button
           type="button"
-          onClick={() => generateReport.mutate()}
-          disabled={!user?.student_id || generateReport.isPending}
+          onClick={() => generateReport.create.mutate({ student_id: user!.student_id!, report_type: 'single', score_id: latest?.id })}
+          disabled={!user?.student_id || !latest?.id || generateReport.create.isPending}
           className="btn-primary"
         >
-          {generateReport.isPending ? '正在生成…' : '生成诊断报告'}
+          {generateReport.create.isPending ? '正在提交…' : '生成诊断报告'}
         </button>
       </section>
 
-      {generateReport.error && (
+      {generateReport.create.error && (
         <p role="alert" className="rounded-md border border-status-danger/40 bg-status-danger/10 p-3 text-sm text-status-danger">
-          {getErrorMessage(generateReport.error, '模型服务暂时不可用，请稍后重试')}
+          报告任务提交失败，请稍后重试
         </p>
       )}
+      <ReportTaskStatus task={generateReport.task} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="已完成实训" value={scores?.total ?? '—'} unit="次" />

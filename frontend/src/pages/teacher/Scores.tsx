@@ -1,176 +1,46 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-
-interface Score {
-  id: string
-  student_name: string
-  project_name: string
-  total_score: number
-  max_score: number
-  percentage: number
-  calculated_at: string
-}
-
-interface ScoreList {
-  scores: Score[]
-  total: number
-  page: number
-  page_size: number
-  average_score: number | null
-}
-
-interface ClassInfo {
-  id: string
-  name: string
-}
-
-interface ClassSummary {
-  student_count: number
-  average_score: number
-  pass_rate: number
-  training_count: number
-}
+import ScoreEvidenceModal from '../../components/ScoreEvidenceModal'
 
 export default function TeacherScores() {
-  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
-  const classId = searchParams.get('class_id')
-  const [page, setPage] = useState(1)
-  const [selectedClass, setSelectedClass] = useState(classId || '')
-  
-  const { data: classes } = useQuery<ClassInfo[]>({
-    queryKey: ['teacher-classes'],
-    queryFn: async () => {
-      const res = await api.get('/api/v1/students/classes')
-      return res.data
-    },
+  const [classId, setClassId] = useState(searchParams.get('class_id') || '')
+  const [studentId, setStudentId] = useState('')
+  const [projectId, setProjectId] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [selectedScore, setSelectedScore] = useState('')
+  const classes = useQuery({ queryKey: ['teacher-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
+  const students = useQuery({ queryKey: ['class-students', classId], queryFn: async () => (await api.get(`/api/v1/students/classes/${classId}/students`)).data, enabled: Boolean(classId) })
+  const projects = useQuery({ queryKey: ['score-projects'], queryFn: async () => (await api.get('/api/v1/scores/projects')).data })
+  const scores = useQuery({
+    queryKey: ['class-scores', classId, studentId, projectId, dateFrom, dateTo],
+    queryFn: async () => (await api.get(`/api/v1/scores/class/${classId}`, { params: { page_size: 100, student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined } })).data,
+    enabled: Boolean(classId),
   })
-  
-  const { data: summary } = useQuery<ClassSummary>({
-    queryKey: ['class-summary', selectedClass],
-    queryFn: async () => {
-      const res = await api.get(`/api/v1/scores/class/${selectedClass}/summary`)
-      return res.data
-    },
-    enabled: !!selectedClass,
-  })
-  
-  const { data: scores, isLoading } = useQuery<ScoreList>({
-    queryKey: ['class-scores', selectedClass, page],
-    queryFn: async () => {
-      const res = await api.get(`/api/v1/scores/class/${selectedClass}`, {
-        params: { page, page_size: 20 },
-      })
-      return res.data
-    },
-    enabled: !!selectedClass,
-  })
+  const summary = useQuery({ queryKey: ['class-summary', classId], queryFn: async () => (await api.get(`/api/v1/scores/class/${classId}/summary`)).data, enabled: Boolean(classId) })
+  useEffect(() => setStudentId(''), [classId])
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-gradient">{t('nav.score_summary')}</h1>
-          <p className="text-text-muted mt-1">查看班级学生的实训成绩</p>
-        </div>
-        
-        <select
-          value={selectedClass}
-          onChange={(e) => { setSelectedClass(e.target.value); setPage(1); }}
-          className="input-field w-64"
-        >
-          <option value="">选择班级</option>
-          {classes?.map(cls => (
-            <option key={cls.id} value={cls.id}>{cls.name}</option>
-          ))}
-        </select>
-      </div>
-      
-      {selectedClass && summary && (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="card-stat">
-              <div className="text-3xl mb-2">👥</div>
-              <p className="font-display text-2xl font-bold text-accent-cyan">{summary.student_count}</p>
-              <p className="text-sm text-text-muted">学生数</p>
-            </div>
-            <div className="card-stat">
-              <div className="text-3xl mb-2">📊</div>
-              <p className="font-display text-2xl font-bold text-accent-cyan">{summary.training_count}</p>
-              <p className="text-sm text-text-muted">实训次数</p>
-            </div>
-            <div className="card-stat">
-              <div className="text-3xl mb-2">🎯</div>
-              <p className="font-display text-2xl font-bold text-accent-cyan">{summary.average_score}</p>
-              <p className="text-sm text-text-muted">平均分</p>
-            </div>
-            <div className="card-stat">
-              <div className="text-3xl mb-2">✅</div>
-              <p className="font-display text-2xl font-bold text-status-success">{summary.pass_rate}%</p>
-              <p className="text-sm text-text-muted">及格率</p>
-            </div>
-          </div>
-          
-          <div className="glass-panel overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-accent-blue/20">
-                  <th className="text-left p-4 font-display font-semibold text-text-secondary">学生</th>
-                  <th className="text-left p-4 font-display font-semibold text-text-secondary">实训项目</th>
-                  <th className="text-left p-4 font-display font-semibold text-text-secondary">得分</th>
-                  <th className="text-left p-4 font-display font-semibold text-text-secondary">状态</th>
-                  <th className="text-left p-4 font-display font-semibold text-text-secondary">时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scores?.scores.map((score, index) => (
-                  <motion.tr
-                    key={score.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.03 }}
-                    className="border-b border-railway-700/50 hover:bg-railway-700/20"
-                  >
-                    <td className="p-4 font-semibold text-text-primary">{score.student_name}</td>
-                    <td className="p-4 text-text-secondary">{score.project_name}</td>
-                    <td className="p-4">
-                      <span className={`font-mono font-bold ${score.percentage >= 60 ? 'text-accent-cyan' : 'text-status-danger'}`}>
-                        {score.percentage}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${score.percentage >= 60 ? 'bg-status-success/20 text-status-success' : 'bg-status-danger/20 text-status-danger'}`}>
-                        {score.percentage >= 60 ? '通过' : '未通过'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-text-muted text-sm">
-                      {new Date(score.calculated_at).toLocaleDateString('zh-CN')}
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-      
-      {!selectedClass && (
-        <div className="glass-panel p-12 text-center">
-          <div className="text-6xl mb-4">📊</div>
-          <h3 className="font-display text-xl font-semibold text-text-primary mb-2">请选择班级</h3>
-          <p className="text-text-muted">选择班级后查看成绩汇总</p>
-        </div>
-      )}
-      
-      {isLoading && selectedClass && (
-        <div className="flex items-center justify-center h-64">
-          <div className="w-12 h-12 border-4 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin" />
-        </div>
-      )}
-    </div>
-  )
+  return <div className="space-y-6">
+    <header><p className="eyebrow">CLASS SCORE EVIDENCE</p><h1 className="page-title">班级成绩总览</h1><p className="mt-2 text-sm text-text-muted">按班级、学生、项目和时间检索，并核对单次成绩汇总证据</p></header>
+    <section className="railway-card grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-5">
+      <Field label="班级"><select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}><option value="">选择授权班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">全部学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="实训项目"><select className="input-field" value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
+      <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
+    </section>
+    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div>}
+    <section className="space-y-3">
+      {scores.data?.scores.map((score: any) => <button key={score.id} onClick={() => setSelectedScore(score.id)} className="railway-card grid w-full gap-3 p-4 text-left hover:border-accent-blue/60 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center"><div><p className="font-semibold text-text-primary">{score.student_name}</p><p className="text-xs text-text-muted">{score.project_name}</p></div><p className="text-sm text-text-muted">{new Date(score.calculated_at).toLocaleString('zh-CN')}</p><span className="font-mono text-xl text-accent-cyan">{score.percentage}</span><span className="text-sm text-accent-blue">核对明细 →</span></button>)}
+      {!classId && <p className="railway-card p-10 text-center text-text-muted">请选择班级开始检索</p>}
+      {classId && !scores.isLoading && !scores.data?.scores.length && <p className="railway-card p-10 text-center text-text-muted">当前筛选条件下没有成绩</p>}
+    </section>
+    {selectedScore && <ScoreEvidenceModal scoreId={selectedScore} onClose={() => setSelectedScore('')} />}
+  </div>
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="text-sm text-text-secondary"><span className="mb-2 block">{label}</span>{children}</label> }
+function Metric({ label, value }: { label: string; value: string | number }) { return <div className="metric-strip"><p>{label}</p><strong className="text-accent-cyan">{value}</strong></div> }

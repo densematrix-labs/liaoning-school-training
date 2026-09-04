@@ -35,6 +35,7 @@ async def init_mock_data():
         # Check if data exists
         result = await db.execute(select(User.id).limit(1))
         if result.scalar_one_or_none():
+            await upgrade_demo_data(db)
             return  # Already has data
         
         random.seed(20260902)
@@ -166,6 +167,7 @@ async def init_mock_data():
                     "name": step["name"],
                     "order": step["sequence"],
                     "score": int(step.get("score_weight", 0.1) * 100),
+                    "failed_score": 0,
                     "abilities": step.get("ability_ids", []),
                     "description": step.get("description", ""),
                 })
@@ -178,6 +180,8 @@ async def init_mock_data():
                 duration=proj_data.get("duration_minutes", 60),
                 max_score=100,
                 steps=steps,
+                scoring_rules={"version": 1, "mode": "passed_or_failed"},
+                ability_mapping={item["id"]: item.get("abilities", []) for item in steps},
             )
             db.add(project)
             project_id_map[proj_data["id"]] = project
@@ -320,3 +324,32 @@ async def init_mock_data():
             role = "管理员" if teacher.get("is_admin") else "教师"
             print(f"    - {teacher['employee_id']} ({teacher['name']}, {role})")
         print("="*50)
+
+
+async def upgrade_demo_data(db):
+    """Backfill traceable rule and mapping metadata for existing demo databases."""
+    projects = list((await db.execute(select(TrainingProject))).scalars().all())
+    changed = False
+    for project in projects:
+        steps = []
+        for item in project.steps or []:
+            step = dict(item)
+            if "failed_score" not in step:
+                step["failed_score"] = 0
+                changed = True
+            steps.append(step)
+        mapping = project.ability_mapping or {
+            str(item.get("id")): list(item.get("abilities", []))
+            for item in steps
+            if item.get("id")
+        }
+        if not project.ability_mapping and mapping:
+            project.ability_mapping = mapping
+            changed = True
+        if not project.scoring_rules:
+            project.scoring_rules = {"version": 1, "mode": "passed_or_failed"}
+            changed = True
+        if steps != (project.steps or []):
+            project.steps = steps
+    if changed:
+        await db.commit()

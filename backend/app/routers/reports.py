@@ -1,20 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.database import get_db
 from app.routers.auth import get_current_user
-from app.services.report import ReportService
+from app.services.report import ReportService, process_report_task
 from app.schemas.auth import UserResponse
-from app.schemas.report import DiagnosticReportResponse, GenerateReportRequest
+from app.schemas.report import DiagnosticReportResponse, GenerateReportRequest, ReportTaskResponse
 from app.routers.permissions import require_student_access
 
 router = APIRouter(prefix="/api/v1/reports", tags=["诊断报告"])
 
 
-@router.post("/generate", response_model=DiagnosticReportResponse)
+@router.post("/generate", response_model=ReportTaskResponse)
 async def generate_report(
     request: GenerateReportRequest,
+    background_tasks: BackgroundTasks,
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -24,15 +25,31 @@ async def generate_report(
     service = ReportService(db)
     
     try:
-        return await service.generate_report(
+        task = await service.create_task(
             student_id=request.student_id,
             report_type=request.report_type,
             score_id=request.score_id,
+            created_by=current_user.id,
         )
+        background_tasks.add_task(process_report_task, task.id)
+        return task
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/tasks/{task_id}", response_model=ReportTaskResponse)
+async def get_report_task(
+    task_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    task = await ReportService(db).get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="报告任务不存在")
+    await require_student_access(current_user, task.student_id, db)
+    return task
 
 
 @router.get("/", response_model=List[DiagnosticReportResponse])

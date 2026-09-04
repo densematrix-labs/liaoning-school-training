@@ -4,6 +4,7 @@ from app.models.training import TrainingProject, TrainingRecord, Score
 from app.models.ability import MajorAbility, SubAbility, AbilityProfile
 from app.models.lab import Lab, EnvironmentCheck
 from app.models.report import DiagnosticReport
+from app.models.workflow import EnvironmentReview, EnvironmentTask, MockSyncException, MockSyncTask, ReportTask
 
 __all__ = [
     "User",
@@ -19,4 +20,9 @@ __all__ = [
     "Lab",
     "EnvironmentCheck",
     "DiagnosticReport",
+    "ReportTask",
+    "EnvironmentReview",
+    "EnvironmentTask",
+    "MockSyncTask",
+    "MockSyncException",
 ]

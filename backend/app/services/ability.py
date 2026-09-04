@@ -4,7 +4,7 @@ from sqlalchemy import select
 from collections import defaultdict
 
 from app.models.ability import MajorAbility, SubAbility, AbilityProfile
-from app.models.training import Score
+from app.models.training import Score, TrainingProject, TrainingRecord
 from app.models.student import Student
 from app.schemas.ability import (
     AbilityProfileResponse,
@@ -125,6 +125,21 @@ class AbilityService:
             if item.score < item.threshold
         ]
 
+        sub_ability_result = await self.db.execute(select(SubAbility))
+        sub_abilities = sub_ability_result.scalars().all()
+        evidence_by_ability = await self._build_evidence(student_id)
+        sub_ability_details = [
+            {
+                "id": sub.id,
+                "major_ability_id": sub.major_ability_id,
+                "name": sub.name,
+                "weight": sub.weight,
+                "score": round((profile.sub_abilities or {}).get(sub.id, 0) * 100, 1),
+                "evidence": evidence_by_ability.get(sub.id, []),
+            }
+            for sub in sub_abilities
+        ]
+
         return AbilityProfileResponse(
             id=profile.id,
             student_id=student_id,
@@ -139,25 +154,58 @@ class AbilityService:
             improvement_suggestions=suggestions[:3] if suggestions else None,
             total_score=total_score,
             weak_abilities=weak_abilities,
+            sub_ability_details=sub_ability_details,
         )
+
+    async def _build_evidence(self, student_id: str) -> dict[str, list[dict]]:
+        rows = await self.db.execute(
+            select(Score, TrainingProject, TrainingRecord)
+            .join(TrainingProject, TrainingProject.id == Score.project_id)
+            .join(TrainingRecord, TrainingRecord.id == Score.record_id)
+            .where(Score.student_id == student_id)
+            .order_by(Score.calculated_at.desc())
+        )
+        evidence: dict[str, list[dict]] = defaultdict(list)
+        for score, project, record in rows.all():
+            step_map = {str(step.get("id")): step for step in (project.steps or [])}
+            mapping = project.ability_mapping or {}
+            for step_id, detail in (score.details or {}).items():
+                related = mapping.get(str(step_id)) or detail.get("related_abilities", [])
+                step = step_map.get(str(step_id), {})
+                item = {
+                    "score_id": score.id,
+                    "source_record_id": record.external_id,
+                    "project_name": project.name,
+                    "step_id": str(step_id),
+                    "step_name": step.get("name", str(step_id)),
+                    "passed": bool(detail.get("passed", False)),
+                    "score": detail.get("score", 0),
+                    "max_score": detail.get("max_score", step.get("score", 0)),
+                    "calculated_at": score.calculated_at.isoformat() if score.calculated_at else None,
+                }
+                for ability_id in related:
+                    evidence[str(ability_id)].append(item)
+        return evidence
     
     async def recalculate_profile(self, student_id: str) -> Optional[AbilityProfile]:
         """Calculate ability profile from all scores"""
         scores_result = await self.db.execute(
-            select(Score).where(Score.student_id == student_id)
+            select(Score, TrainingProject)
+            .join(TrainingProject, TrainingProject.id == Score.project_id)
+            .where(Score.student_id == student_id)
         )
-        scores = scores_result.scalars().all()
+        score_rows = scores_result.all()
         
-        if not scores:
+        if not score_rows:
             return None
         
         # Aggregate ability scores
         ability_scores = defaultdict(list)
         
-        for score in scores:
+        for score, project in score_rows:
             if score.details:
                 for step_id, detail in score.details.items():
-                    abilities = detail.get("related_abilities", [])
+                    abilities = (project.ability_mapping or {}).get(str(step_id)) or detail.get("related_abilities", [])
                     step_score = detail.get("score", 0)
                     max_score = detail.get("max_score", 10)
                     normalized = step_score / max_score if max_score > 0 else 0

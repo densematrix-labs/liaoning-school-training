@@ -89,6 +89,7 @@ class AbilityProfileResponse(BaseModel):
     improvement_suggestions: Optional[list[str]] = None
     total_score: float = 0
     weak_abilities: list[dict[str, Any]] = Field(default_factory=list)
+    sub_ability_details: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ClassAbilityDistribution(BaseModel):

@@ -3,7 +3,7 @@
 import pytest
 from passlib.context import CryptContext
 
-from app.models.student import Class, Major
+from app.models.student import Class, Major, Student
 from app.models.user import User, UserRole
 
 
@@ -76,3 +76,24 @@ async def test_student_cannot_run_environment_check(client, student_headers):
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_teacher_cannot_access_other_class_ability_or_student_profile(client, test_db, role_records):
+    password_hash = CryptContext(schemes=["bcrypt"], deprecated="auto").hash("testpass")
+    async with test_db() as session:
+        session.add_all(role_records["users"])
+        session.add(role_records["major"])
+        session.add_all(role_records["classes"])
+        session.add(User(id="student-b-user", username="student-b", password_hash=password_hash, name="乙班学生", role=UserRole.STUDENT))
+        session.add(Student(id="student-b", user_id="student-b-user", student_no="B001", name="乙班学生", major_id="major-a", class_id="class-b", enrollment_year=2023))
+        await session.commit()
+
+    headers = await login(client, "teacher-a")
+    class_ability = await client.get("/api/v1/abilities/class/class-b", headers=headers)
+    student_ability = await client.get("/api/v1/abilities/student/student-b", headers=headers)
+    student_scores = await client.get("/api/v1/scores/student/student-b", headers=headers)
+
+    assert class_ability.status_code == 403
+    assert student_ability.status_code == 403
+    assert student_scores.status_code == 403

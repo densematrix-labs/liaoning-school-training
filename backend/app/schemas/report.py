@@ -27,3 +27,17 @@ class DiagnosticReportResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReportTaskResponse(BaseModel):
+    id: str
+    student_id: str
+    score_id: Optional[str] = None
+    report_type: str
+    status: str
+    report_id: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    report: Optional[DiagnosticReportResponse] = None

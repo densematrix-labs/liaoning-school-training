@@ -8,9 +8,20 @@ from app.routers.auth import get_current_user
 from app.services.score import ScoreService
 from app.schemas.auth import UserResponse
 from app.schemas.training import ScoreListResponse, ScoreDetailResponse, ClassScoreSummary
+from app.models.training import TrainingProject
+from sqlalchemy import select
 from app.routers.permissions import require_class_access, require_student_access
 
 router = APIRouter(prefix="/api/v1/scores", tags=["成绩管理"])
+
+
+@router.get("/projects")
+async def get_projects(
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(select(TrainingProject).order_by(TrainingProject.name))).scalars().all()
+    return [{"id": item.id, "name": item.name} for item in rows]
 
 
 @router.get("/", response_model=ScoreListResponse)
@@ -62,6 +73,10 @@ async def get_class_scores(
     class_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    student_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -73,6 +88,10 @@ async def get_class_scores(
         class_id=class_id,
         page=page,
         page_size=page_size,
+        student_id=student_id,
+        project_id=project_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

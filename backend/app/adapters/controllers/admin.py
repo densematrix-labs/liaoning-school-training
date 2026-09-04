@@ -2,21 +2,34 @@
 管理后台 API
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy import select, delete, func
 from datetime import datetime
 from typing import List, Optional
 import uuid
+import csv
+import io
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.ability import MajorAbility, SubAbility
 from app.models.lab import Lab
 from app.models.training import TrainingProject
 from app.models.training import Score
 from app.models.student import Student, Class
 from app.models.report import DiagnosticReport
+from app.models.workflow import MockSyncException, MockSyncTask, TaskStatus
 from app.adapters.controllers.auth import get_current_admin
+from app.services.recalculation import RecalculationService
+from app.schemas.admin import (
+    ProjectRuleUpdate,
+    RecalculateRequest,
+    SyncExceptionResponse,
+    SyncTaskResponse,
+    TeacherAssignmentRequest,
+)
 from app.schemas.ability import (
     MajorAbilityCreate,
     MajorAbilityUpdate,
@@ -57,6 +70,61 @@ async def get_admin_overview(
         "sync_status": "正常",
         "last_data_at": latest_score.scalar(),
     }
+
+
+# ============ 权限范围管理 ============
+
+@router.get("/access-control")
+async def get_access_control(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """查看角色权限说明和教师班级授权。"""
+    teachers = list((await db.execute(
+        select(User).where(User.role == UserRole.TEACHER).order_by(User.name)
+    )).scalars().all())
+    classes = list((await db.execute(
+        select(Class).options(selectinload(Class.teacher)).order_by(Class.year.desc(), Class.name)
+    )).scalars().all())
+    return {
+        "role_scopes": [
+            {"role": "student", "label": "学生", "scope": "仅本人成绩、能力和诊断报告"},
+            {"role": "teacher", "label": "教师", "scope": "仅已授权班级，可复核环境检查"},
+            {"role": "admin", "label": "管理员", "scope": "全校数据与业务规则管理"},
+        ],
+        "teachers": [{"id": item.id, "name": item.name, "username": item.username} for item in teachers],
+        "classes": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "year": item.year,
+                "teacher_id": item.teacher_id,
+                "teacher_name": item.teacher.name if item.teacher else None,
+            }
+            for item in classes
+        ],
+    }
+
+
+@router.put("/classes/{class_id}/teacher")
+async def assign_class_teacher(
+    class_id: str,
+    data: TeacherAssignmentRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    class_ = (await db.execute(select(Class).where(Class.id == class_id))).scalar_one_or_none()
+    if not class_:
+        raise HTTPException(status_code=404, detail="班级不存在")
+    if data.teacher_id:
+        teacher = (await db.execute(
+            select(User).where(User.id == data.teacher_id, User.role == UserRole.TEACHER)
+        )).scalar_one_or_none()
+        if not teacher:
+            raise HTTPException(status_code=400, detail="指定账号不是教师")
+    class_.teacher_id = data.teacher_id
+    await db.commit()
+    return {"message": "班级数据范围已更新", "class_id": class_.id, "teacher_id": class_.teacher_id}
 
 
 # ============ 能力管理 ============
@@ -418,6 +486,88 @@ async def delete_lab(
 
 # ============ 能力映射管理 ============
 
+@router.get("/projects")
+async def list_training_projects(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    projects = list((await db.execute(select(TrainingProject).order_by(TrainingProject.name))).scalars().all())
+    response = []
+    for project in projects:
+        sample_scores = list((await db.execute(
+            select(Score)
+            .where(Score.project_id == project.id)
+            .order_by(Score.calculated_at.desc())
+            .limit(8)
+        )).scalars().all())
+        response.append({
+            "id": project.id,
+            "name": project.name,
+            "max_score": project.max_score,
+            "steps": project.steps or [],
+            "scoring_rules": project.scoring_rules or {},
+            "ability_mapping": project.ability_mapping or {},
+            "sample_scores": [
+                {"id": item.id, "student_id": item.student_id, "total_score": item.total_score, "calculated_at": item.calculated_at}
+                for item in sample_scores
+            ],
+        })
+    return response
+
+
+@router.put("/projects/{project_id}/configuration")
+async def update_project_configuration(
+    project_id: str,
+    data: ProjectRuleUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    project = (await db.execute(select(TrainingProject).where(TrainingProject.id == project_id))).scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="实训项目不存在")
+    if not data.steps:
+        raise HTTPException(status_code=400, detail="至少保留一个操作步骤")
+
+    step_ids = {str(item.get("id")) for item in data.steps if item.get("id")}
+    if len(step_ids) != len(data.steps):
+        raise HTTPException(status_code=400, detail="步骤 ID 不能为空或重复")
+    for step in data.steps:
+        if float(step.get("score", 0)) <= 0:
+            raise HTTPException(status_code=400, detail="步骤满分必须大于 0")
+        if float(step.get("failed_score", 0)) < 0 or float(step.get("failed_score", 0)) > float(step.get("score", 0)):
+            raise HTTPException(status_code=400, detail="未通过得分必须在 0 和步骤满分之间")
+    if set(data.ability_mapping) - step_ids:
+        raise HTTPException(status_code=400, detail="能力映射包含不存在的步骤")
+
+    project.steps = data.steps
+    project.ability_mapping = data.ability_mapping
+    project.max_score = round(sum(float(item.get("score", 0)) for item in data.steps), 2)
+    project.scoring_rules = {
+        **(project.scoring_rules or {}),
+        "mode": "passed_or_failed",
+        "version": int((project.scoring_rules or {}).get("version", 0)) + 1,
+    }
+    await db.commit()
+    return {
+        "message": "评分规则与能力映射已保存",
+        "project_id": project.id,
+        "max_score": project.max_score,
+        "rule_version": project.scoring_rules["version"],
+    }
+
+
+@router.post("/projects/{project_id}/recalculate")
+async def recalculate_project_scores(
+    project_id: str,
+    data: RecalculateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    try:
+        return await RecalculationService(db).recalculate_project(project_id, data.score_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 @router.get("/mappings", response_model=List[AbilityMappingResponse])
 async def list_ability_mappings(
     db: AsyncSession = Depends(get_db),
@@ -466,15 +616,91 @@ async def update_ability_mapping(
 
 # ============ 数据同步 ============
 
+async def _sync_task_response(db: AsyncSession, task: MockSyncTask) -> SyncTaskResponse:
+    exceptions = list((await db.execute(
+        select(MockSyncException).where(MockSyncException.task_id == task.id).order_by(MockSyncException.row_number)
+    )).scalars().all())
+    return SyncTaskResponse(
+        id=task.id,
+        status=task.status.value,
+        read_count=task.read_count,
+        success_count=task.success_count,
+        skipped_count=task.skipped_count,
+        error_count=task.error_count,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+        exceptions=[
+            SyncExceptionResponse(
+                id=item.id,
+                row_number=item.row_number,
+                source_record_id=item.source_record_id,
+                reason=item.reason,
+                raw_data=item.raw_data,
+            )
+            for item in exceptions
+        ],
+    )
+
+
+@router.get("/sync/history", response_model=List[SyncTaskResponse])
+async def list_sync_history(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    tasks = list((await db.execute(
+        select(MockSyncTask).order_by(MockSyncTask.started_at.desc()).limit(20)
+    )).scalars().all())
+    return [await _sync_task_response(db, task) for task in tasks]
+
+
+@router.get("/sync/{task_id}/exceptions.csv")
+async def export_sync_exceptions(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    rows = list((await db.execute(
+        select(MockSyncException).where(MockSyncException.task_id == task_id).order_by(MockSyncException.row_number)
+    )).scalars().all())
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["行号", "源记录标识", "失败原因"])
+    for item in rows:
+        writer.writerow([item.row_number, item.source_record_id or "", item.reason])
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="sync-{task_id}-exceptions.csv"'},
+    )
+
 @router.post("/sync")
 async def trigger_sync(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    """手动触发数据同步"""
-    score_count = await db.execute(select(func.count()).select_from(Score))
-    return {
-        "message": "演示数据库校验完成",
-        "synced_records": score_count.scalar() or 0,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
+    """运行可重复的 Mock 同步演示，不连接校方数据库。"""
+    previous_count = (await db.execute(select(func.count()).select_from(MockSyncTask))).scalar() or 0
+    task = MockSyncTask(
+        id=str(uuid.uuid4()),
+        status=TaskStatus.COMPLETED,
+        read_count=6,
+        success_count=3 if previous_count == 0 else 0,
+        skipped_count=2 if previous_count == 0 else 5,
+        error_count=1,
+        created_by=admin.id,
+        started_at=datetime.utcnow(),
+        completed_at=datetime.utcnow(),
+    )
+    db.add(task)
+    await db.flush()
+    db.add(MockSyncException(
+        id=str(uuid.uuid4()),
+        task_id=task.id,
+        row_number=6,
+        source_record_id="DEMO-INVALID-001",
+        reason="步骤标识无法匹配演示项目",
+        raw_data={"student_no": "2023010101", "step_id": "UNKNOWN"},
+    ))
+    await db.commit()
+    return await _sync_task_response(db, task)
