@@ -203,6 +203,8 @@ describe('all role workspaces render populated acceptance states', () => {
     window.history.pushState({}, '', '/student')
     render(<App />)
     expect(document.body.textContent).toContain('学习概览')
+    expect(document.body.textContent).toContain('能力看板')
+    expect(document.body.textContent).toContain('查看你的强项、弱项，以及是否达到毕业标准')
     cleanup()
     window.history.pushState({}, '', '/')
     render(<App />)

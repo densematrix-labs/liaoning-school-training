@@ -64,7 +64,11 @@ export default function StudentHome() {
           ) : <p className="text-text-muted">暂无成绩数据</p>}
         </section>
         <section className="railway-card p-6">
-          <div className="mb-5"><p className="eyebrow">ABILITY SIGNAL</p><h3 className="section-heading">能力短板</h3></div>
+          <div className="mb-5">
+            <p className="eyebrow">ABILITY SIGNAL</p>
+            <h3 className="section-heading">能力看板</h3>
+            <p className="mt-2 text-xs text-text-muted">查看你的强项、弱项，以及是否达到毕业标准</p>
+          </div>
           <div className="space-y-3">
             {ability?.weak_abilities?.slice(0, 3).map((item: any) => (
               <div key={item.ability_id} className="flex items-center justify-between border-b border-railway-600/50 pb-3">
