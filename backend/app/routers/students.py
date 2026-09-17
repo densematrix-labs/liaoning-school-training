@@ -132,36 +132,27 @@ async def get_class_students(
     """获取班级学生列表"""
     await require_class_access(current_user, class_id, db)
     
-    result = await db.execute(
-        select(Student).where(Student.class_id == class_id)
-    )
-    students = result.scalars().all()
-    
-    responses = []
-    for student in students:
-        # Get major and class names
-        major_result = await db.execute(
-            select(Major).where(Major.id == student.major_id)
-        )
-        major = major_result.scalar_one_or_none()
-        
-        class_result = await db.execute(
-            select(Class).where(Class.id == student.class_id)
-        )
-        cls = class_result.scalar_one_or_none()
-        
-        responses.append(StudentResponse(
+    rows = (await db.execute(
+        select(Student, Major.name, Class.name)
+        .join(Major, Major.id == Student.major_id)
+        .join(Class, Class.id == Student.class_id)
+        .where(Student.class_id == class_id)
+        .order_by(Student.student_no)
+    )).all()
+
+    return [
+        StudentResponse(
             id=student.id,
             student_no=student.student_no,
             name=student.name,
             major_id=student.major_id,
-            major_name=major.name if major else None,
+            major_name=major_name,
             class_id=student.class_id,
-            class_name=cls.name if cls else None,
+            class_name=class_name,
             enrollment_year=student.enrollment_year,
-        ))
-    
-    return responses
+        )
+        for student, major_name, class_name in rows
+    ]
 
 
 @router.get("/classes/{class_id}/overview")
