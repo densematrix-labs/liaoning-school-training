@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, getErrorMessage } from '../../lib/api'
 import ScoreEvidenceModal from '../../components/ScoreEvidenceModal'
+import { useAuthStore } from '../../store/auth'
 
 export default function TeacherScores() {
+  const { user } = useAuthStore()
+  const queryClient = useQueryClient()
+  const importInput = useRef<HTMLInputElement>(null)
   const [searchParams] = useSearchParams()
   const [classId, setClassId] = useState(searchParams.get('class_id') || '')
   const [studentId, setStudentId] = useState('')
@@ -12,6 +16,10 @@ export default function TeacherScores() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [selectedScore, setSelectedScore] = useState('')
+  const importFile = useMutation({
+    mutationFn: async (file: File) => { const form = new FormData(); form.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', form)).data },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['class-scores'] }); queryClient.invalidateQueries({ queryKey: ['class-summary'] }); if (importInput.current) importInput.current.value = '' },
+  })
   const classes = useQuery({ queryKey: ['teacher-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
   const students = useQuery({ queryKey: ['class-students', classId], queryFn: async () => (await api.get(`/api/v1/students/classes/${classId}/students`)).data, enabled: Boolean(classId) })
   const projects = useQuery({ queryKey: ['score-projects'], queryFn: async () => (await api.get('/api/v1/scores/projects')).data })
@@ -32,7 +40,10 @@ export default function TeacherScores() {
       <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
       <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
     </section>
-    {classId && <><div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div><div className="flex justify-end"><button className="railway-button" onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出当前筛选 CSV</button></div></>}
+    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div>}
+    <div className="flex flex-wrap items-center justify-end gap-3">{user?.role === 'admin' ? <><input ref={importInput} className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && importFile.mutate(e.target.files[0])} /><button className="railway-button" disabled={importFile.isPending} onClick={() => importInput.current?.click()}>{importFile.isPending ? '正在导入…' : '导入实训记录 CSV'}</button></> : <span className="text-xs text-text-muted">CSV 导入涉及全校数据写入，仅管理员可执行</span>}<button className="railway-button" disabled={!classId} onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出当前筛选 CSV</button></div>
+    {importFile.data && <p className="alert-success rounded p-3 text-sm">CSV 导入完成：读取 {importFile.data.read_count} 条，新增 {importFile.data.success_count} 条，跳过 {importFile.data.skipped_count} 条，异常 {importFile.data.error_count} 条。</p>}
+    {importFile.error && <p className="alert-warning rounded p-3 text-sm">{getErrorMessage(importFile.error, 'CSV 导入失败')}</p>}
     <section className="space-y-3">
       {scores.data?.scores.map((score: any) => <button key={score.id} onClick={() => setSelectedScore(score.id)} className="railway-card grid w-full gap-3 p-4 text-left hover:border-accent-blue/60 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center"><div><p className="font-semibold text-text-primary">{score.student_name}</p><p className="text-xs text-text-muted">{score.project_name}</p></div><p className="text-sm text-text-muted">{new Date(score.calculated_at).toLocaleString('zh-CN')}</p><span className="font-mono text-xl text-accent-cyan">{score.percentage}</span><span className="text-sm text-accent-blue">核对明细 →</span></button>)}
       {!classId && <p className="railway-card p-10 text-center text-text-muted">请选择班级开始检索</p>}

@@ -125,7 +125,7 @@ async def test_environment_review_preserves_ai_result_and_reviewer(client, auth_
             lab_id="env-lab",
             uploaded_image_url="data:image/png;base64,AA==",
             total_score=80,
-            details={"surface_cleanliness": {"score": 20, "max_score": 30, "issues": ["台面有遗留物"]}},
+            details={"surface_cleanliness": {"score": 20, "max_score": 30, "issues": ["台面有遗留物"]}, "__suggestions__": ["清理台面"]},
             summary="AI 原始结论",
         ))
         await session.commit()
@@ -139,7 +139,9 @@ async def test_environment_review_preserves_ai_result_and_reviewer(client, auth_
         headers=auth_headers,
         json={
             "status": "modified",
-            "reviewed_details": {"surface_cleanliness": {"score": 25, "max_score": 30, "issues": []}},
+            "reviewed_details": {"surface_cleanliness": {"score": 25, "max_score": 30, "issues": [], "comment": "现场已清理"}},
+            "reviewed_suggestions": ["清理台面"],
+            "reviewed_suggestions_comment": "建议已落实",
             "reviewed_summary": "人工复核后调整",
             "note": "已核对现场",
         },
@@ -149,6 +151,12 @@ async def test_environment_review_preserves_ai_result_and_reviewer(client, auth_
     assert data["summary"] == "AI 原始结论"
     assert data["reviewed_summary"] == "人工复核后调整"
     assert data["reviewer_name"] == "Test User"
+    assert data["final_score"] == 25
+    assert data["reviewed_details"]["surface_cleanliness"]["comment"] == "现场已清理"
+    assert "__suggestions__" not in data["reviewed_details"]
+    assert data["reviewed_suggestions"] == ["清理台面"]
+    assert data["reviewed_suggestions_comment"] == "建议已落实"
+    assert data["reviewed_at"]
     async with test_db() as session:
         review = (await session.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == "env-check"))).scalar_one()
         assert review.status == "modified"

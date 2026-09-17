@@ -17,6 +17,7 @@ class DiagnosticReportResponse(BaseModel):
     student_id: str
     student_name: Optional[str] = None
     report_type: str
+    score_id: Optional[str] = None
     title: str
     content: str
     content_html: Optional[str] = None

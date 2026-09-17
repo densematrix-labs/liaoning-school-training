@@ -120,6 +120,8 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     for path in teacher_paths:
         response = await client.get(path, headers=teacher)
         assert response.status_code == 200, (path, response.text)
+    report_list = await client.get(f"/api/v1/reports/student/{ids['student']}", headers=teacher)
+    assert report_list.json()[0]["score_id"] == ids["score"]
 
     for path in ["/api/v1/dashboard/", "/api/v1/dashboard/overview", "/api/v1/dashboard/realtime", "/api/v1/dashboard/ability-distribution", "/api/v1/dashboard/training-trend", "/api/v1/dashboard/class-comparison", "/api/v1/dashboard/alerts"]:
         response = await client.get(path, headers=auth_headers)

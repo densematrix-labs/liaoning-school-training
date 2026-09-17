@@ -58,6 +58,7 @@ class EnvironmentCheckResponse(BaseModel):
     lab_id: str
     lab_name: Optional[str] = None
     total_score: int
+    final_score: int
     max_score: int = 100
     details: dict
     summary: str
@@ -67,6 +68,8 @@ class EnvironmentCheckResponse(BaseModel):
     reference_image_url: Optional[str] = None
     review_status: Optional[str] = None
     reviewed_details: Optional[dict] = None
+    reviewed_suggestions: List[str] = Field(default_factory=list)
+    reviewed_suggestions_comment: Optional[str] = None
     reviewed_summary: Optional[str] = None
     review_note: Optional[str] = None
     reviewer_name: Optional[str] = None
@@ -76,6 +79,8 @@ class EnvironmentCheckResponse(BaseModel):
 class EnvironmentReviewRequest(BaseModel):
     status: str
     reviewed_details: Optional[dict] = None
+    reviewed_suggestions: Optional[List[str]] = None
+    reviewed_suggestions_comment: Optional[str] = None
     reviewed_summary: Optional[str] = None
     note: Optional[str] = None
 

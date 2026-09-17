@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 import base64
 import json
@@ -299,9 +300,19 @@ class EnvironmentCheckService:
             self.db.add(review)
         review.reviewer_id = reviewer_id
         review.status = data.status
-        review.reviewed_details = data.reviewed_details or check.details
+        reviewed_details = dict(data.reviewed_details or {
+            key: value for key, value in (check.details or {}).items() if key != "__suggestions__"
+        })
+        reviewed_details["__suggestions__"] = {
+            "items": data.reviewed_suggestions
+            if data.reviewed_suggestions is not None
+            else (check.details or {}).get("__suggestions__", []),
+            "comment": data.reviewed_suggestions_comment or "",
+        }
+        review.reviewed_details = reviewed_details
         review.reviewed_summary = data.reviewed_summary or check.summary
         review.note = data.note
+        review.reviewed_at = datetime.utcnow()
         await self.db.commit()
         lab = (await self.db.execute(select(Lab).where(Lab.id == check.lab_id))).scalar_one_or_none()
         return await self._to_response(check, lab)
@@ -314,12 +325,30 @@ class EnvironmentCheckService:
         if review:
             reviewer = (await self.db.execute(select(User).where(User.id == review.reviewer_id))).scalar_one_or_none()
             reviewer_name = reviewer.name if reviewer else None
+        raw_reviewed_details = dict(review.reviewed_details or {}) if review else {}
+        raw_reviewed_suggestions = raw_reviewed_details.pop("__suggestions__", None)
+        if isinstance(raw_reviewed_suggestions, dict):
+            reviewed_suggestions = raw_reviewed_suggestions.get("items") or []
+            reviewed_suggestions_comment = raw_reviewed_suggestions.get("comment") or None
+        elif isinstance(raw_reviewed_suggestions, list):
+            reviewed_suggestions = raw_reviewed_suggestions
+            reviewed_suggestions_comment = None
+        else:
+            reviewed_suggestions = (check.details or {}).get("__suggestions__", []) if review else []
+            reviewed_suggestions_comment = None
+        reviewed_scores = [
+            value.get("score")
+            for value in raw_reviewed_details.values()
+            if isinstance(value, dict) and isinstance(value.get("score"), (int, float))
+        ]
+        final_score = round(sum(reviewed_scores)) if review and reviewed_scores else check.total_score
         return EnvironmentCheckResponse(
             id=check.id,
             student_id=check.student_id,
             lab_id=check.lab_id,
             lab_name=lab.name if lab else None,
             total_score=check.total_score,
+            final_score=final_score,
             max_score=100,
             details={k: CategoryScore(**v) for k, v in (check.details or {}).items() if k != "__suggestions__"},
             summary=check.summary or "",
@@ -328,7 +357,9 @@ class EnvironmentCheckService:
             uploaded_image_url=check.uploaded_image_url,
             reference_image_url=lab.reference_image_url if lab else None,
             review_status=review.status if review else None,
-            reviewed_details=review.reviewed_details if review else None,
+            reviewed_details=raw_reviewed_details if review else None,
+            reviewed_suggestions=reviewed_suggestions,
+            reviewed_suggestions_comment=reviewed_suggestions_comment,
             reviewed_summary=review.reviewed_summary if review else None,
             review_note=review.note if review else None,
             reviewer_name=reviewer_name,

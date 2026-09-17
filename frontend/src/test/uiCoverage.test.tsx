@@ -54,8 +54,8 @@ const ability = {
 }
 
 const scoreList = { total: 1, average_score: 80, scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', project_id: 'project-1', project_name: '实训项目', total_score: 80, max_score: 100, percentage: 80, calculated_at: '2026-09-17T08:00:00' }] }
-const report = { id: 'report-1', report_type: 'single', title: '诊断报告', content: '# 诊断\n改进建议', generated_at: '2026-09-17T08:00:00' }
-const environmentResult = { id: 'check-1', lab_name: '实训室1', total_score: 88, summary: '整体规范', reviewed_summary: '人工确认规范', review_status: 'confirmed', review_note: '已确认', reviewer_name: '教师甲', reviewed_at: '2026-09-17T08:00:00', checked_at: '2026-09-17T08:00:00', uploaded_image_url: '/current.jpg', reference_image_url: '/reference.jpg', details: { surface_cleanliness: { score: 25, max_score: 30, issues: ['少量遗留物'] } }, suggestions: ['清理台面'] }
+const report = { id: 'report-1', report_type: 'single', score_id: 'score-1', title: '诊断报告', content: '# 诊断\n改进建议', generated_at: '2026-09-17T08:00:00' }
+const environmentResult = { id: 'check-1', lab_name: '实训室1', total_score: 88, final_score: 25, summary: '整体规范', reviewed_summary: '人工确认规范', review_status: 'confirmed', review_note: '已确认', reviewer_name: '教师甲', reviewed_at: '2026-09-17T08:00:00', checked_at: '2026-09-17T08:00:00', uploaded_image_url: '/current.jpg', reference_image_url: '/reference.jpg', details: { surface_cleanliness: { score: 25, max_score: 30, issues: ['少量遗留物'] } }, reviewed_details: { surface_cleanliness: { score: 25, max_score: 30, issues: ['少量遗留物'], comment: '已核对' } }, suggestions: ['清理台面'], reviewed_suggestions: ['清理台面'], reviewed_suggestions_comment: '建议已落实' }
 
 function queryData(key: readonly unknown[]) {
   const name = String(key[0])
@@ -164,6 +164,18 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.change(screen.getByLabelText('授权班级'), { target: { value: 'class-1' } })
     fireEvent.click(screen.getByText('学生甲'))
     expect(screen.getByText('STUDENT COMPREHENSIVE DETAIL')).toBeInTheDocument()
+    cleanup()
+    renderPage(<TeacherReports />)
+    expect(screen.getByLabelText('生成报告类型')).toBeInTheDocument()
+    expect(screen.queryByLabelText('筛选历史报告类型')).not.toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('授权班级'), { target: { value: 'class-1' } })
+    fireEvent.change(screen.getByLabelText('学生'), { target: { value: 'student-1' } })
+    expect(screen.getByLabelText('筛选历史报告类型')).toBeInTheDocument()
+    cleanup()
+    renderPage(<EnvironmentCheckPage />)
+    expect(screen.queryByText('__suggestions__')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('已核对')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('建议已落实')).toBeInTheDocument()
   })
 
   it('renders administrator configuration and operations', () => {

@@ -48,7 +48,7 @@ body {
 
 .role-badge { border: 1px solid currentColor; padding: 1px 6px; font-size: 10px; letter-spacing: .08em; }
 .role-intro { position: relative; display: flex; flex-direction: column; gap: 20px; overflow: hidden; border: 1px solid rgba(0, 212, 255, .24); padding: 28px; background: linear-gradient(110deg, rgba(17, 29, 50, .96), rgba(13, 21, 37, .82)); }
-.role-intro::after { content: ''; position: absolute; right: -50px; top: -80px; width: 220px; height: 220px; border: 1px solid rgba(0, 212, 255, .14); transform: rotate(35deg); }
+.role-intro::after { content: ''; pointer-events: none; position: absolute; right: -50px; top: -80px; width: 220px; height: 220px; border: 1px solid rgba(0, 212, 255, .14); transform: rotate(35deg); }
 .role-intro h2 { margin-top: 8px; font-family: 'Orbitron', 'Noto Sans SC', sans-serif; font-size: clamp(1.35rem, 3vw, 2rem); font-weight: 700; color: #e8f4ff; }
 .role-intro p:last-child { margin-top: 8px; color: #8eb8e5; font-size: .875rem; }
 .student-intro { border-left: 4px solid #00fff2; }

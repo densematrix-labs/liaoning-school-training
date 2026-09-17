@@ -19,6 +19,8 @@ export default function EnvironmentCheckPage() {
   const [image, setImage] = useState('')
   const [result, setResult] = useState<any>(null)
   const [reviewDetails, setReviewDetails] = useState<any>({})
+  const [reviewSuggestions, setReviewSuggestions] = useState<string[]>([])
+  const [reviewSuggestionsComment, setReviewSuggestionsComment] = useState('')
   const [reviewSummary, setReviewSummary] = useState('')
   const [note, setNote] = useState('')
   const [taskId, setTaskId] = useState('')
@@ -39,12 +41,16 @@ export default function EnvironmentCheckPage() {
     refetchInterval: (query) => ['pending', 'running'].includes((query.state.data as any)?.status) ? 800 : false,
   })
   const review = useMutation({
-    mutationFn: async (status: 'confirmed' | 'modified' | 'rejected') => (await api.post(`/api/v1/environment/checks/${result.id}/review`, { status, reviewed_details: reviewDetails, reviewed_summary: reviewSummary, note })).data,
+    mutationFn: async (status: 'confirmed' | 'modified' | 'rejected') => (await api.post(`/api/v1/environment/checks/${result.id}/review`, { status, reviewed_details: reviewDetails, reviewed_suggestions: reviewSuggestions, reviewed_suggestions_comment: reviewSuggestionsComment, reviewed_summary: reviewSummary, note })).data,
     onSuccess: (data) => { setResult(data); queryClient.invalidateQueries({ queryKey: ['environment-history', studentId] }) },
   })
   useEffect(() => {
     if (!result) return
-    setReviewDetails(structuredClone(result.reviewed_details || result.details || {}))
+    const details = structuredClone(result.reviewed_details || result.details || {})
+    delete details.__suggestions__
+    setReviewDetails(details)
+    setReviewSuggestions(result.reviewed_suggestions?.length ? result.reviewed_suggestions : result.suggestions || [])
+    setReviewSuggestionsComment(result.reviewed_suggestions_comment || '')
     setReviewSummary(result.reviewed_summary || result.summary || '')
     setNote(result.review_note || '')
   }, [result?.id, result?.reviewed_at])
@@ -61,7 +67,8 @@ export default function EnvironmentCheckPage() {
     reader.onload = () => setImage(String(reader.result || ''))
     reader.readAsDataURL(file)
   }
-  const reset = () => { setImage(''); setResult(null); setTaskId(''); setReviewDetails({}); setReviewSummary(''); setNote(''); if (fileInput.current) fileInput.current.value = '' }
+  const reset = () => { setImage(''); setResult(null); setTaskId(''); setReviewDetails({}); setReviewSuggestions([]); setReviewSuggestionsComment(''); setReviewSummary(''); setNote(''); if (fileInput.current) fileInput.current.value = '' }
+  const manualScore = Object.values(reviewDetails || {}).reduce((sum: number, value: any) => sum + (Number(value?.score) || 0), 0)
 
   return <div className="space-y-6">
     <header><p className="eyebrow">ENVIRONMENT EVIDENCE & REVIEW</p><h1 className="page-title">环境图片检查与人工复核</h1><p className="mt-2 text-sm text-text-muted">标准图与现场图智能对比，AI 原始结果和人工复核结果分别留存</p></header>
@@ -74,15 +81,28 @@ export default function EnvironmentCheckPage() {
 
     {!result && <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
       <section className="railway-card p-5"><h2 className="section-heading">创建检查任务</h2><input ref={fileInput} className="hidden" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => loadFile(e.target.files?.[0])} /><button onClick={() => fileInput.current?.click()} className="mt-5 flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-railway-500 bg-railway-800/40">{image ? <img src={image} alt="现场图片预览" className="h-full w-full object-cover" /> : <span className="text-text-muted">点击上传 JPG/PNG/WebP 现场图片（最大 10MB）</span>}</button><button className="btn-primary mt-4 w-full" disabled={!studentId || !labId || !image || check.isPending || ['pending', 'running'].includes(task.data?.status)} onClick={() => check.mutate()}>{check.isPending ? '正在提交…' : '发起智能检查'}</button>{taskId && <div className={task.data?.status === 'failed' ? 'alert-warning mt-4 rounded p-3 text-sm' : 'alert-success mt-4 rounded p-3 text-sm'}>任务状态：{taskLabel(task.data?.status)}{task.data?.error_message && <p className="mt-1">{task.data.error_message}</p>}</div>}{check.error && <p className="alert-warning mt-4 rounded p-3 text-sm">{getErrorMessage(check.error, '环境检查任务提交失败')}</p>}</section>
-      <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史检查记录</h2></div><div className="divide-y divide-railway-600/50">{history.data?.map((item: any) => <button key={item.id} onClick={() => setResult(item)} className="grid w-full gap-2 p-4 text-left hover:bg-railway-700/40 sm:grid-cols-[1fr_auto]"><div><p className="text-text-primary">{item.lab_name}</p><p className="text-xs text-text-muted">{new Date(item.checked_at).toLocaleString('zh-CN')}</p></div><div className="text-right"><p className="font-mono text-accent-cyan">AI {item.total_score}分</p><p className={item.review_status ? 'text-xs text-status-success' : 'text-xs text-status-warning'}>{reviewLabel(item.review_status)}</p></div></button>)}{studentId && !history.data?.length && <p className="p-5 text-sm text-text-muted">该学生暂无环境检查记录</p>}</div></section>
+      <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史检查记录</h2></div><div className="divide-y divide-railway-600/50">{history.data?.map((item: any) => <button key={item.id} onClick={() => setResult(item)} className="grid w-full gap-2 p-4 text-left hover:bg-railway-700/40 sm:grid-cols-[1fr_auto]"><div><p className="text-text-primary">{item.lab_name}</p><p className="text-xs text-text-muted">{new Date(item.checked_at).toLocaleString('zh-CN')}</p></div><div className="text-right"><p className="font-mono text-accent-cyan">{item.review_status ? '人工' : 'AI'} {item.final_score ?? item.total_score}分</p><p className={item.review_status ? 'text-xs text-status-success' : 'text-xs text-status-warning'}>{reviewLabel(item.review_status)}</p></div></button>)}{studentId && !history.data?.length && <p className="p-5 text-sm text-text-muted">该学生暂无环境检查记录</p>}</div></section>
     </div>}
 
     {result && <div className="space-y-5">
-      <section className="railway-card flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="eyebrow">CHECK {result.id}</p><h2 className="section-heading">AI 原始结果与人工复核</h2><p className="mt-1 text-xs text-text-muted">{result.lab_name} · {new Date(result.checked_at).toLocaleString('zh-CN')}</p></div><div className="flex items-center gap-4"><span className="font-mono text-3xl text-accent-cyan">{result.total_score}</span><span className={result.review_status ? 'text-status-success' : 'text-status-warning'}>{reviewLabel(result.review_status)}</span><button className="railway-button" onClick={reset}>返回列表</button></div></section>
+      <section className="railway-card flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="eyebrow">CHECK {result.id}</p><h2 className="section-heading">AI 原始结果与人工复核</h2><p className="mt-1 text-xs text-text-muted">{result.lab_name} · {new Date(result.checked_at).toLocaleString('zh-CN')}</p></div><div className="flex items-center gap-4"><div className="text-right"><span className="font-mono text-3xl text-accent-cyan">{result.review_status ? (result.final_score ?? manualScore) : result.total_score}</span><p className="text-[10px] text-text-muted">{result.review_status ? '人工最终分' : 'AI 原始分'}</p></div><span className={result.review_status ? 'text-status-success' : 'text-status-warning'}>{reviewLabel(result.review_status)}</span><button className="railway-button" onClick={reset}>返回列表</button></div></section>
       <div className="grid gap-5 xl:grid-cols-2"><ImageEvidence title="标准状态图片" src={result.reference_image_url} /><ImageEvidence title="现场图片" src={result.uploaded_image_url} /></div>
       <div className="grid gap-5 xl:grid-cols-2">
         <section className="railway-card p-5"><p className="eyebrow">IMMUTABLE AI RESULT</p><h3 className="section-heading">AI 原始检查结果</h3><p className="mt-3 text-text-secondary">{result.summary}</p><div className="mt-5 space-y-3">{Object.entries(result.details || {}).map(([key, value]: any) => <ResultRow key={key} name={categoryNames[key] || key} value={value} />)}</div>{result.suggestions?.length > 0 && <div className="mt-4 rounded border border-accent-blue/30 p-3"><p className="text-xs font-semibold text-accent-cyan">建议措施</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-text-secondary">{result.suggestions.map((item: string) => <li key={item}>{item}</li>)}</ul></div>}</section>
-        <section className="railway-card p-5"><p className="eyebrow">HUMAN REVIEW</p><h3 className="section-heading">人工复核结果</h3><label className="mt-4 block text-sm text-text-secondary">复核总结<textarea className="input-field mt-2 min-h-20" value={reviewSummary} onChange={(e) => setReviewSummary(e.target.value)} /></label><div className="mt-4 space-y-3">{Object.entries(reviewDetails || {}).map(([key, value]: any) => <div key={key} className="rounded border border-railway-600/60 p-3"><div className="flex items-center justify-between gap-3"><span>{categoryNames[key] || key}</span><label className="text-xs text-text-muted">复核分数 <input className="ml-2 w-20 rounded border border-railway-500 bg-railway-800 px-2 py-1 text-right text-text-primary" type="number" min="0" max={value.max_score} value={value.score} onChange={(e) => setReviewDetails((current: any) => ({ ...current, [key]: { ...current[key], score: Number(e.target.value) } }))} /></label></div><p className="mt-2 text-xs text-text-muted">{value.issues?.join('；') || '未发现问题'}</p></div>)}</div><label className="mt-4 block text-sm text-text-secondary">复核备注<textarea className="input-field mt-2 min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="填写修改原因或复核意见" /></label><div className="mt-4 grid gap-2 sm:grid-cols-3"><button className="railway-button" disabled={review.isPending} onClick={() => review.mutate('confirmed')}>确认 AI 结果</button><button className="btn-primary" disabled={review.isPending} onClick={() => review.mutate('modified')}>保存修改结果</button><button className="rounded border border-status-danger/50 px-3 py-2 text-sm text-status-danger" disabled={review.isPending} onClick={() => review.mutate('rejected')}>驳回转人工</button></div>{result.reviewed_at && <p className="mt-4 text-xs text-text-muted">最近复核：{result.reviewer_name || '—'} · {new Date(result.reviewed_at).toLocaleString('zh-CN')} · {result.review_note || '无备注'}</p>}</section>
+        <section className="railway-card p-5">
+          <p className="eyebrow">HUMAN REVIEW</p>
+          <div className="flex items-end justify-between gap-3"><h3 className="section-heading">人工复核结果</h3><p className="font-mono text-sm text-accent-cyan">人工评分 {manualScore}/100</p></div>
+          <label className="mt-4 block text-sm text-text-secondary">复核总结<textarea className="input-field mt-2 min-h-20" value={reviewSummary} onChange={(e) => setReviewSummary(e.target.value)} /></label>
+          <div className="mt-4 space-y-3">{Object.entries(reviewDetails || {}).map(([key, value]: any) => <div key={key} className="rounded border border-railway-600/60 p-3">
+            <div className="flex items-center justify-between gap-3"><span>{categoryNames[key] || key}</span><label className="text-xs text-text-muted">人工分数 <input className="ml-2 w-20 rounded border border-railway-500 bg-railway-800 px-2 py-1 text-right text-text-primary" type="number" min="0" max={value.max_score} value={value.score} onChange={(e) => setReviewDetails((current: any) => ({ ...current, [key]: { ...current[key], score: Number(e.target.value) } }))} /></label></div>
+            <p className="mt-2 text-xs text-text-muted">{value.issues?.join('；') || '未发现问题'}</p>
+            <label className="mt-3 block text-xs text-text-muted">教师意见<textarea className="input-field mt-1 min-h-16" value={value.comment || ''} onChange={(e) => setReviewDetails((current: any) => ({ ...current, [key]: { ...current[key], comment: e.target.value } }))} placeholder="填写本检查项的复核意见" /></label>
+          </div>)}</div>
+          <div className="mt-3 rounded border border-railway-600/60 p-3"><p className="font-medium text-text-primary">建议措施</p>{reviewSuggestions.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-text-muted">{reviewSuggestions.map((item) => <li key={item}>{item}</li>)}</ul> : <p className="mt-2 text-xs text-text-muted">AI 未提供建议措施</p>}<label className="mt-3 block text-xs text-text-muted">教师意见<textarea className="input-field mt-1 min-h-16" value={reviewSuggestionsComment} onChange={(e) => setReviewSuggestionsComment(e.target.value)} placeholder="可对建议措施补充意见；此项不计分" /></label></div>
+          <label className="mt-4 block text-sm text-text-secondary">整体复核备注<textarea className="input-field mt-2 min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="填写整体修改原因或复核意见" /></label>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3"><button className="railway-button" disabled={review.isPending} onClick={() => review.mutate('confirmed')}>确认 AI 结果</button><button className="btn-primary" disabled={review.isPending} onClick={() => review.mutate('modified')}>保存人工复核</button><button className="rounded border border-status-danger/50 px-3 py-2 text-sm text-status-danger" disabled={review.isPending} onClick={() => review.mutate('rejected')}>驳回 AI 并保存人工结果</button></div>
+          {result.reviewed_at && <p className="mt-4 text-xs text-text-muted">最近复核：{result.reviewer_name || '—'} · {new Date(result.reviewed_at).toLocaleString('zh-CN')} · {result.review_note || '无备注'}</p>}
+        </section>
       </div>
     </div>}
   </div>
