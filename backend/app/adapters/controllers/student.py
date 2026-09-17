@@ -134,13 +134,17 @@ async def get_training_record_detail(
     
     step_details = []
     for i, step in enumerate(project_steps):
-        step_result = steps_data[i] if i < len(steps_data) else {}
+        if isinstance(steps_data, dict):
+            step_result = steps_data.get(str(step.get("id")), {})
+        else:
+            step_result = steps_data[i] if i < len(steps_data) else {}
+        score_detail = (score.details or {}).get(str(step.get("id")), {}) if score and isinstance(score.details, dict) else {}
         step_details.append({
             "sequence": step.get("sequence", i + 1),
             "name": step.get("name", ""),
             "description": step.get("description", ""),
             "passed": step_result.get("passed", False),
-            "score": step_result.get("score", 0),
+            "score": score_detail.get("score", step_result.get("score", 0)),
             "ability_names": step.get("ability_names", [])
         })
     

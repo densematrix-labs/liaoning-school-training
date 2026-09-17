@@ -136,10 +136,7 @@ async def get_student_check_history(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取指定学生的环境检查历史（教师/管理员）"""
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="仅教师和管理员可访问")
-
+    """学生查看本人结果，教师/管理员查看授权范围结果。"""
     await require_student_access(current_user, student_id, db)
     
     service = EnvironmentCheckService(db)
@@ -152,8 +149,6 @@ async def get_check(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.role not in ["teacher", "admin"]:
-        raise HTTPException(status_code=403, detail="仅教师和管理员可访问")
     check = (await db.execute(select(EnvironmentCheck).where(EnvironmentCheck.id == check_id))).scalar_one_or_none()
     if not check:
         raise HTTPException(status_code=404, detail="环境检查记录不存在")

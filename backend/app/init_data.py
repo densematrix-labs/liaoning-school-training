@@ -152,6 +152,21 @@ async def init_mock_data():
             )
             db.add(lab)
             lab_id_map[room_data["id"]] = lab.id
+
+        if len(lab_id_map) < 4:
+            extra_lab = Lab(
+                id="room-004",
+                name="机车综合控制实训室",
+                building="实训楼 B 区",
+                floor=2,
+                capacity=40,
+                equipment=["机车综合控制台", "制动系统模拟装置"],
+                reference_image_url="/images/labs/standard/room-003.jpg",
+                status=LabStatus.AVAILABLE,
+                current_students=0,
+            )
+            db.add(extra_lab)
+            lab_id_map[extra_lab.id] = extra_lab.id
         
         await db.flush()
         print(f"✓ Created {len(lab_id_map)} labs")
@@ -212,6 +227,34 @@ async def init_mock_data():
                 major_id=major.id,
                 class_id=class_id_map.get(stu_data.get("class_id")),
                 enrollment_year=int(stu_data["student_id"][:4]),
+            )
+            db.add(student)
+            students.append(student)
+
+        # Expand the demo to the一期 acceptance scale while keeping the
+        # clearly labelled synthetic records deterministic.
+        reusable_hash = AuthService.get_password_hash("123456")
+        class_ids = list(class_id_map.values())
+        while len(students) < 140:
+            index = len(students) + 1
+            user_id = f"demo-scale-user-{index:03d}"
+            student_no = f"202399{index:04d}"
+            db.add(User(
+                id=user_id,
+                username=student_no,
+                password_hash=reusable_hash,
+                name=f"演示学生{index:03d}",
+                role=UserRole.STUDENT,
+            ))
+            await db.flush()
+            student = Student(
+                id=f"demo-scale-student-{index:03d}",
+                user_id=user_id,
+                student_no=student_no,
+                name=f"演示学生{index:03d}",
+                major_id=major.id,
+                class_id=class_ids[(index - 1) % len(class_ids)],
+                enrollment_year=2023,
             )
             db.add(student)
             students.append(student)
@@ -353,3 +396,35 @@ async def upgrade_demo_data(db):
             project.steps = steps
     if changed:
         await db.commit()
+
+    student_count = len(list((await db.execute(select(Student.id))).scalars().all()))
+    major = (await db.execute(select(Major).limit(1))).scalar_one_or_none()
+    classes = list((await db.execute(select(Class).order_by(Class.name))).scalars().all())
+    if major and classes and student_count < 140:
+        reusable_hash = AuthService.get_password_hash("123456")
+        for index in range(student_count + 1, 141):
+            user_id = f"demo-scale-user-{index:03d}"
+            student_id = f"demo-scale-student-{index:03d}"
+            student_no = f"202399{index:04d}"
+            exists = (await db.execute(select(User.id).where(User.username == student_no))).scalar_one_or_none()
+            if exists:
+                continue
+            db.add(User(id=user_id, username=student_no, password_hash=reusable_hash, name=f"演示学生{index:03d}", role=UserRole.STUDENT))
+            db.add(Student(id=student_id, user_id=user_id, student_no=student_no, name=f"演示学生{index:03d}", major_id=major.id, class_id=classes[(index - 1) % len(classes)].id, enrollment_year=2023))
+        await db.commit()
+
+    lab_count = len(list((await db.execute(select(Lab.id))).scalars().all()))
+    if lab_count < 4:
+        if not (await db.execute(select(Lab.id).where(Lab.id == "room-004"))).scalar_one_or_none():
+            db.add(Lab(
+                id="room-004",
+                name="机车综合控制实训室",
+                building="实训楼 B 区",
+                floor=2,
+                capacity=40,
+                equipment=["机车综合控制台", "制动系统模拟装置"],
+                reference_image_url="/images/labs/standard/room-003.jpg",
+                status=LabStatus.AVAILABLE,
+                current_students=0,
+            ))
+            await db.commit()

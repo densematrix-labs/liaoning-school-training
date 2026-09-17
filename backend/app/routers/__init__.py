@@ -5,6 +5,7 @@ from app.routers.environment import router as environment_router
 from app.routers.reports import router as reports_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.students import router as students_router
+from app.routers.operations import router as operations_router
 
 __all__ = [
     "auth_router",
@@ -14,4 +15,5 @@ __all__ = [
     "reports_router",
     "dashboard_router",
     "students_router",
+    "operations_router",
 ]

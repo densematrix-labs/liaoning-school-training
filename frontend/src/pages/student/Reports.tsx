@@ -24,7 +24,18 @@ export default function StudentReports() {
     {reportTask.create.error && <p className="alert-warning rounded p-4">报告任务提交失败</p>}
     <div className="grid gap-5 xl:grid-cols-[340px_1fr]">
       <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史报告</h2></div><div className="divide-y divide-railway-600/50">{reports.data?.map((item: any) => <button key={item.id} className="w-full p-4 text-left hover:bg-railway-700/40" onClick={() => setSelected(item)}><p className="font-medium text-text-primary">{item.title}</p><p className="mt-1 text-xs text-text-muted">{new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{!reports.data?.length && <p className="p-5 text-sm text-text-muted">暂无诊断报告</p>}</div></section>
-      <section className="railway-card min-h-80 p-6">{selected ? <><p className="eyebrow">{selected.report_type === 'single' ? 'SINGLE SESSION' : 'PERIODIC REVIEW'}</p><h2 className="section-heading">{selected.title}</h2><article className="prose prose-invert prose-cyan mt-5 max-w-none text-text-secondary"><ReactMarkdown>{selected.content}</ReactMarkdown></article></> : <div className="flex min-h-72 items-center justify-center text-text-muted">选择历史报告，或生成一份新报告</div>}</section>
+      <section className="railway-card min-h-80 p-6">{selected ? <><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">{selected.report_type === 'single' ? 'SINGLE SESSION' : 'PERIODIC REVIEW'}</p><h2 className="section-heading">{selected.title}</h2></div><a className="railway-button" href={`/api/v1/reports/${selected.id}/download.doc`} onClick={(event) => downloadReport(event, selected.id)}>下载 Word</a></div><article className="prose prose-invert prose-cyan mt-5 max-w-none text-text-secondary"><ReactMarkdown>{selected.content}</ReactMarkdown></article></> : <div className="flex min-h-72 items-center justify-center text-text-muted">选择历史报告，或生成一份新报告</div>}</section>
     </div>
   </div>
+}
+
+async function downloadReport(event: React.MouseEvent, reportId: string) {
+  event.preventDefault()
+  const response = await api.get(`/api/v1/reports/${reportId}/download.doc`, { responseType: 'blob' })
+  const url = URL.createObjectURL(response.data)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `diagnostic-report-${reportId}.doc`
+  link.click()
+  URL.revokeObjectURL(url)
 }

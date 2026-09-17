@@ -12,6 +12,7 @@ export const roleMenus: Record<Role, Array<{ to: string; label: string; icon: st
     { to: '/scores', label: '我的成绩', icon: '▥' },
     { to: '/ability', label: '能力图谱', icon: '⌁' },
     { to: '/reports', label: '诊断报告', icon: '▤' },
+    { to: '/environment-results', label: '环境结果', icon: '▣' },
   ],
   teacher: [
     { to: '/teacher', label: '教学工作台', icon: '◉' },

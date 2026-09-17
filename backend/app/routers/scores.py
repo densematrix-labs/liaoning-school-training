@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from datetime import datetime
+import csv
+import io
 
 from app.database import get_db
 from app.routers.auth import get_current_user
@@ -106,6 +109,38 @@ async def get_class_summary(
     
     service = ScoreService(db)
     return await service.get_class_summary(class_id)
+
+
+@router.get("/class/{class_id}/export.csv")
+async def export_class_scores(
+    class_id: str,
+    student_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_class_access(current_user, class_id, db)
+    data = await ScoreService(db).get_class_scores(
+        class_id=class_id,
+        page=1,
+        page_size=200,
+        student_id=student_id,
+        project_id=project_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["学生", "实训项目", "成绩", "满分", "完成时间"])
+    for item in data.scores:
+        writer.writerow([item.student_name or item.student_id, item.project_name or item.project_id, item.total_score, item.max_score, item.calculated_at.isoformat() if item.calculated_at else ""])
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="class-{class_id}-scores.csv"'},
+    )
 
 
 @router.get("/{score_id}", response_model=ScoreDetailResponse)

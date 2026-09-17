@@ -7,6 +7,7 @@ import StudentHome from './pages/student/Home'
 import StudentScores from './pages/student/Scores'
 import StudentAbility from './pages/student/Ability'
 import StudentReports from './pages/student/Reports'
+import StudentEnvironmentResults from './pages/student/EnvironmentResults'
 import EnvironmentCheckPage from './pages/student/EnvCheck'
 import TeacherHome from './pages/teacher/Home'
 import TeacherClasses from './pages/teacher/Classes'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="scores" element={<RoleRoute roles={['student']}><StudentScores /></RoleRoute>} />
           <Route path="ability" element={<RoleRoute roles={['student']}><StudentAbility /></RoleRoute>} />
           <Route path="reports" element={<RoleRoute roles={['student']}><StudentReports /></RoleRoute>} />
+          <Route path="environment-results" element={<RoleRoute roles={['student']}><StudentEnvironmentResults /></RoleRoute>} />
           <Route path="env-check" element={<RoleRoute roles={['teacher', 'admin']}><EnvironmentCheckPage /></RoleRoute>} />
 
           <Route path="teacher" element={<RoleRoute roles={['teacher']}><TeacherHome /></RoleRoute>} />

@@ -65,17 +65,34 @@ async def test_rule_recalculation_updates_score_and_ability_evidence(db_session)
 
 
 @pytest.mark.asyncio
-async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_headers):
+async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_headers, test_db):
+    async with test_db() as session:
+        session.add_all([
+            User(id="sync-student-user", username="sync-student", password_hash="unused", name="同步学生", role=UserRole.STUDENT),
+            Major(id="sync-major", code="SYNC", name="同步专业"),
+            Class(id="sync-class", name="同步班", major_id="sync-major", year=2024),
+            Student(id="sync-student", user_id="sync-student-user", student_no="SYNC001", name="同步学生", major_id="sync-major", class_id="sync-class", enrollment_year=2024),
+            MajorAbility(id="sync-major-ability", name="同步能力", weight=1, graduation_threshold=.6),
+            SubAbility(id="sync-sub-ability", major_ability_id="sync-major-ability", name="同步子能力", weight=1),
+            TrainingProject(id="sync-project", name="同步项目", major_id="sync-major", max_score=100, steps=[{"id": "sync-step", "name": "同步步骤", "score": 100, "failed_score": 0}], scoring_rules={"version": 1}, ability_mapping={"sync-step": ["sync-sub-ability"]}),
+        ])
+        await session.commit()
     first = await client.post("/api/v1/admin/sync", headers=auth_headers)
     second = await client.post("/api/v1/admin/sync", headers=auth_headers)
     history = await client.get("/api/v1/admin/sync/history", headers=auth_headers)
 
     assert first.status_code == second.status_code == history.status_code == 200
-    assert first.json()["success_count"] == 3
+    assert first.json()["read_count"] == 1000
+    assert first.json()["success_count"] == 990
+    assert first.json()["skipped_count"] == 5
+    assert first.json()["error_count"] == 5
     assert second.json()["success_count"] == 0
-    assert second.json()["skipped_count"] == 5
-    assert second.json()["exceptions"][0]["source_record_id"] == "DEMO-INVALID-001"
+    assert second.json()["skipped_count"] == 995
+    assert second.json()["exceptions"][0]["source_record_id"] == "DEMO-INVALID-000"
     assert len(history.json()) == 2
+    exported = await client.get(f"/api/v1/admin/sync/{first.json()['id']}/exceptions.csv", headers=auth_headers)
+    assert exported.status_code == 200
+    assert "DEMO-INVALID-000" in exported.content.decode("utf-8-sig")
 
 
 @pytest.mark.asyncio

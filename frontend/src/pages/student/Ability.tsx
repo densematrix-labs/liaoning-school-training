@@ -15,10 +15,14 @@ import {
   CartesianGrid,
   Tooltip,
   Cell,
+  LineChart,
+  Line,
 } from 'recharts'
 import { motion } from 'framer-motion'
+import { useAuthStore } from '../../store/auth'
 
 export default function StudentAbility() {
+  const { user } = useAuthStore()
   const [selectedAbility, setSelectedAbility] = useState<string>('')
   const { data: abilityMap, isLoading } = useQuery({
     queryKey: ['studentAbility'],
@@ -26,6 +30,11 @@ export default function StudentAbility() {
       const res = await api.get('/api/v1/abilities/profile')
       return res.data
     },
+  })
+  const { data: trend } = useQuery({
+    queryKey: ['studentAbilityTrend', user?.student_id],
+    queryFn: async () => (await api.get(`/api/v1/abilities/student/${user!.student_id}/trend`)).data,
+    enabled: Boolean(user?.student_id),
   })
 
   if (isLoading) {
@@ -49,6 +58,21 @@ export default function StudentAbility() {
         <h1 className="text-2xl font-bold text-text-primary">能力图谱</h1>
         <p className="text-text-muted mt-1">基于实训表现的能力评估分析</p>
       </div>
+
+      <section className="railway-card p-6">
+        <h2 className="section-title mb-4">能力变化趋势</h2>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={(trend?.points || []).map((point: any) => ({ ...point.abilities, date: new Date(point.date).toLocaleDateString('zh-CN') }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 212, 255, 0.1)" />
+              <XAxis dataKey="date" tick={{ fill: '#8eb8e5', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#8eb8e5' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#111d32', border: '1px solid rgba(0, 212, 255, 0.3)' }} />
+              {trend?.abilities?.map((ability: any, index: number) => <Line key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#00d4ff', '#00ff88', '#ffaa00', '#9b8cff', '#ff6688', '#66aaff'][index % 6]} dot={false} />)}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Signal label="优势能力" value={abilityMap?.strongest_ability || '—'} tone="good" />

@@ -10,9 +10,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'lcov', 'html'],
+      thresholds: {
+        statements: 95,
+        lines: 95,
+      },
       exclude: [
         'node_modules/',
         'src/test/',
+        'src/main.tsx',
+        'src/i18n/',
+        'postcss.config.js',
+        'tailwind.config.js',
         '**/*.d.ts',
         'vite.config.ts',
         'vitest.config.ts',

@@ -18,6 +18,7 @@ from app.routers import (
     reports_router,
     scores_router,
     students_router,
+    operations_router,
 )
 
 
@@ -27,7 +28,13 @@ async def lifespan(_: FastAPI):
     from app.init_data import init_mock_data
 
     await init_mock_data()
-    yield
+    from app.services.scheduler import sync_scheduler
+
+    sync_scheduler.start()
+    try:
+        yield
+    finally:
+        await sync_scheduler.stop()
 
 
 app = FastAPI(
@@ -63,6 +70,7 @@ app.include_router(
     tags=["学生个人中心"],
 )
 app.include_router(students_router)
+app.include_router(operations_router)
 
 
 @app.get("/")

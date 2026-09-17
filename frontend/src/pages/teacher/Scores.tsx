@@ -32,7 +32,7 @@ export default function TeacherScores() {
       <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
       <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
     </section>
-    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div>}
+    {classId && <><div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div><div className="flex justify-end"><button className="railway-button" onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出当前筛选 CSV</button></div></>}
     <section className="space-y-3">
       {scores.data?.scores.map((score: any) => <button key={score.id} onClick={() => setSelectedScore(score.id)} className="railway-card grid w-full gap-3 p-4 text-left hover:border-accent-blue/60 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center"><div><p className="font-semibold text-text-primary">{score.student_name}</p><p className="text-xs text-text-muted">{score.project_name}</p></div><p className="text-sm text-text-muted">{new Date(score.calculated_at).toLocaleString('zh-CN')}</p><span className="font-mono text-xl text-accent-cyan">{score.percentage}</span><span className="text-sm text-accent-blue">核对明细 →</span></button>)}
       {!classId && <p className="railway-card p-10 text-center text-text-muted">请选择班级开始检索</p>}
@@ -44,3 +44,13 @@ export default function TeacherScores() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="text-sm text-text-secondary"><span className="mb-2 block">{label}</span>{children}</label> }
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className="metric-strip"><p>{label}</p><strong className="text-accent-cyan">{value}</strong></div> }
+
+async function downloadClassScores(classId: string, params: Record<string, string | undefined>) {
+  const response = await api.get(`/api/v1/scores/class/${classId}/export.csv`, { params, responseType: 'blob' })
+  const url = URL.createObjectURL(response.data)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `class-${classId}-scores.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}

@@ -23,6 +23,7 @@ from app.models.report import DiagnosticReport
 from app.models.workflow import MockSyncException, MockSyncTask, TaskStatus
 from app.adapters.controllers.auth import get_current_admin
 from app.services.recalculation import RecalculationService
+from app.services.sync import SyncService, demo_rows
 from app.schemas.admin import (
     ProjectRuleUpdate,
     RecalculateRequest,
@@ -679,28 +680,8 @@ async def trigger_sync(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    """运行可重复的 Mock 同步演示，不连接校方数据库。"""
-    previous_count = (await db.execute(select(func.count()).select_from(MockSyncTask))).scalar() or 0
-    task = MockSyncTask(
-        id=str(uuid.uuid4()),
-        status=TaskStatus.COMPLETED,
-        read_count=6,
-        success_count=3 if previous_count == 0 else 0,
-        skipped_count=2 if previous_count == 0 else 5,
-        error_count=1,
-        created_by=admin.id,
-        started_at=datetime.utcnow(),
-        completed_at=datetime.utcnow(),
+    """运行 1000 条可重复同步演示，不连接校方数据库。"""
+    task = await SyncService(db).run(
+        demo_rows(1000), actor_id=admin.id, actor_name=admin.name
     )
-    db.add(task)
-    await db.flush()
-    db.add(MockSyncException(
-        id=str(uuid.uuid4()),
-        task_id=task.id,
-        row_number=6,
-        source_record_id="DEMO-INVALID-001",
-        reason="步骤标识无法匹配演示项目",
-        raw_data={"student_no": "2023010101", "step_id": "UNKNOWN"},
-    ))
-    await db.commit()
     return await _sync_task_response(db, task)

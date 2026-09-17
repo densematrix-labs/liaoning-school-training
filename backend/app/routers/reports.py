@@ -1,6 +1,8 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+import html
 
 from app.database import get_db
 from app.routers.auth import get_current_user
@@ -96,3 +98,21 @@ async def get_report(
     await require_student_access(current_user, result.student_id, db)
     
     return result
+
+
+@router.get("/{report_id}/download.doc")
+async def download_report(
+    report_id: str,
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await ReportService(db).get_report(report_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="报告不存在")
+    await require_student_access(current_user, result.student_id, db)
+    body = f"""<html><head><meta charset=\"utf-8\"><title>{html.escape(result.title)}</title></head><body><h1>{html.escape(result.title)}</h1><pre style=\"white-space:pre-wrap;font-family:SimSun,serif\">{html.escape(result.content)}</pre></body></html>"""
+    return Response(
+        body.encode("utf-8"),
+        media_type="application/msword",
+        headers={"Content-Disposition": f'attachment; filename="report-{report_id}.doc"'},
+    )
