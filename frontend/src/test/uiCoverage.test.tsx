@@ -48,10 +48,10 @@ const ability = {
   weakest_ability: '规范操作',
   graduation_ready: false,
   graduation_ready_count: 3,
-  graduation_total_count: 5,
-  graduation_progress: 60,
+  graduation_total_count: 6,
+  graduation_progress: 50,
   updated_at: '2026-09-17T08:00:00',
-  radar_data: [1, 2, 3, 4, 5].map((index) => ({ ability_id: `a${index}`, name: `能力${index}`, score: 60 + index, threshold: 70, weight: .2 })),
+  radar_data: [1, 2, 3, 4, 5, 6].map((index) => ({ ability_id: `a${index}`, name: `能力${index}`, score: 60 + index, threshold: 70, weight: 1 / 6 })),
   weak_abilities: [{ name: '规范操作', score: 61 }],
   improvement_suggestions: ['加强步骤训练'],
   sub_ability_details: [{ id: 's1', major_ability_id: 'a1', name: '步骤执行', score: 60, weight: 1, evidence: [{ score_id: 'score-1', step_id: 'step-1', project_name: '实训项目', source_record_id: 'SRC-1', step_name: '步骤一', passed: false, score: 5, max_score: 10 }] }],
@@ -156,7 +156,14 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(screen.getByText('存在风险 40 人')).toBeInTheDocument()
     cleanup()
     renderPage(<StudentAbility />)
-    expect(screen.getByText('3/5（60%）· 未达标')).toBeInTheDocument()
+    expect(screen.getByText('3/6（50%）· 未达标')).toBeInTheDocument()
+    for (let index = 1; index <= 6; index += 1) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`能力${index}.*查看子能力与成绩依据`) }))
+      const dialog = screen.getByRole('dialog')
+      expect(dialog).toHaveTextContent(`能力${index}：子能力与成绩依据`)
+      fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    }
     cleanup()
     const evidence = renderPage(<ScoreEvidenceModal scoreId="score-1" onClose={vi.fn()} />)
     expect(evidence.container.querySelector('.alert-success')).toHaveTextContent('核对一致')

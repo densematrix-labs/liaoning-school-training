@@ -51,6 +51,10 @@ export default function StudentAbility() {
   })) || []
 
   const barData = abilityMap?.radar_data || []
+  const selectedAbilityData = barData.find((item: any) => item.ability_id === selectedAbility)
+  const selectedSubAbilities = abilityMap?.sub_ability_details?.filter(
+    (item: any) => item.major_ability_id === selectedAbility,
+  ) || []
   const graduationReadyCount = abilityMap?.graduation_ready_count ?? barData.filter((item: any) => item.score >= item.threshold).length
   const graduationTotalCount = abilityMap?.graduation_total_count ?? barData.length
   const graduationProgress = abilityMap?.graduation_progress ?? (graduationTotalCount ? Math.round(graduationReadyCount / graduationTotalCount * 1000) / 10 : 0)
@@ -202,6 +206,7 @@ export default function StudentAbility() {
               key={ability.ability_id}
               type="button"
               onClick={() => setSelectedAbility(ability.ability_id)}
+              aria-haspopup="dialog"
               className={`p-4 rounded-lg border ${
                 ability.score >= ability.threshold
                   ? 'bg-status-success/5 border-status-success/20'
@@ -235,20 +240,64 @@ export default function StudentAbility() {
       </motion.div>
 
       {selectedAbility && (
-        <section className="railway-card p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">ABILITY EVIDENCE</p><h2 className="section-heading">子能力与支撑证据</h2></div><button className="railway-button" onClick={() => setSelectedAbility('')}>收起</button></div>
-          <div className="mt-5 space-y-4">
-            {abilityMap?.sub_ability_details?.filter((item: any) => item.major_ability_id === selectedAbility).map((item: any) => (
-              <article key={item.id} className="rounded-lg border border-railway-600/60 p-4">
-                <div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-text-primary">{item.name}</p><p className="mt-1 text-xs text-text-muted">权重 {Math.round(item.weight * 100)}%</p></div><span className="font-mono text-2xl text-accent-cyan">{item.score}</span></div>
-                <div className="mt-4 space-y-2">
-                  {item.evidence?.slice(0, 8).map((evidence: any) => <div key={`${evidence.score_id}-${evidence.step_id}`} className="grid gap-2 rounded bg-railway-800/60 p-3 text-sm md:grid-cols-[1.2fr_1.4fr_auto]"><div><p className="text-text-primary">{evidence.project_name}</p><p className="text-xs text-text-muted">{evidence.source_record_id}</p></div><p className="text-text-secondary">{evidence.step_name} · {evidence.passed ? '通过' : '未通过'}</p><span className={evidence.passed ? 'text-status-success' : 'text-status-warning'}>{evidence.score}/{evidence.max_score}</span></div>)}
-                  {!item.evidence?.length && <p className="text-sm text-text-muted">当前没有支撑该能力的步骤记录</p>}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-railway-900/90 p-3 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ability-evidence-title"
+          onClick={() => setSelectedAbility('')}
+        >
+          <section
+            className="glass-panel-bright max-h-[92vh] w-full max-w-4xl overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-railway-600/50 bg-railway-800/95 p-5 backdrop-blur">
+              <div>
+                <p className="eyebrow">ABILITY EVIDENCE</p>
+                <h2 id="ability-evidence-title" className="section-heading">
+                  {selectedAbilityData?.name || '能力'}：子能力与成绩依据
+                </h2>
+                {selectedAbilityData && (
+                  <p className="mt-2 text-sm text-text-secondary">
+                    当前能力值 {selectedAbilityData.score} 分 · 毕业达标线 {selectedAbilityData.threshold} 分
+                  </p>
+                )}
+              </div>
+              <button type="button" className="railway-button" onClick={() => setSelectedAbility('')}>关闭</button>
+            </header>
+            <div className="space-y-4 p-5">
+              {selectedSubAbilities.map((item: any) => (
+                <article key={item.id} className="rounded-lg border border-railway-600/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-text-primary">{item.name}</p>
+                      <p className="mt-1 text-xs text-text-muted">权重 {Math.round(item.weight * 100)}%</p>
+                    </div>
+                    <span className="font-mono text-2xl text-accent-cyan">{item.score}</span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {item.evidence?.slice(0, 8).map((evidence: any) => (
+                      <div key={`${evidence.score_id}-${evidence.step_id}`} className="grid gap-2 rounded bg-railway-800/60 p-3 text-sm md:grid-cols-[1.2fr_1.4fr_auto]">
+                        <div>
+                          <p className="text-text-primary">{evidence.project_name}</p>
+                          <p className="text-xs text-text-muted">数据来源：{evidence.source_record_id}</p>
+                        </div>
+                        <p className="text-text-secondary">{evidence.step_name} · {evidence.passed ? '通过' : '未通过'}</p>
+                        <span className={evidence.passed ? 'text-status-success' : 'text-status-warning'}>{evidence.score}/{evidence.max_score}</span>
+                      </div>
+                    ))}
+                    {!item.evidence?.length && <p className="text-sm text-text-muted">当前没有支撑该子能力的步骤成绩记录</p>}
+                  </div>
+                </article>
+              ))}
+              {!selectedSubAbilities.length && (
+                <p className="rounded border border-railway-600/60 bg-railway-800/50 p-4 text-sm text-text-muted">
+                  当前能力尚未配置子能力或成绩依据。
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
       )}
 
       {/* Weak Abilities Warning */}
