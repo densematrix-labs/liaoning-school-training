@@ -24,7 +24,7 @@ export default function AdminConfig() {
     <AccessControl data={access.data} />
     <OperationsPanel />
     <section className="railway-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">模拟增量、去重、异常隔离和重复执行；不连接校方 MySQL</p></div><button onClick={() => sync.mutate()} disabled={sync.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">模拟增量、去重、异常隔离和重复执行；不连接校方 MySQL</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载 1000 条演示数据</button><button onClick={() => sync.mutate()} disabled={sync.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div></div>
       {sync.error && <ErrorBox error={sync.error} />}
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-railway-800/70 text-xs text-text-muted"><tr><th className="p-3">任务</th><th>读取</th><th>新增</th><th>跳过</th><th>异常</th><th>状态</th><th>操作</th></tr></thead><tbody>{history.data?.map((item: any) => <tr key={item.id} className="border-t border-railway-600/40"><td className="p-3"><p className="font-mono text-xs text-text-secondary">{item.id.slice(0, 12)}</p><p className="text-xs text-text-muted">{new Date(item.started_at).toLocaleString('zh-CN')}</p></td><td>{item.read_count}</td><td className="text-status-success">{item.success_count}</td><td>{item.skipped_count}</td><td className="text-status-warning">{item.error_count}</td><td>{item.status === 'completed' ? '完成' : item.status}</td><td><button className="railway-button !px-2 !py-1 text-xs" disabled={!item.error_count} onClick={() => downloadExceptions(item.id)}>导出异常</button></td></tr>)}</tbody></table></div>
     </section>
@@ -37,6 +37,7 @@ function OperationsPanel() {
   const schedule = useQuery({ queryKey: ['sync-schedule'], queryFn: async () => (await api.get('/api/v1/admin/operations/sync-schedule')).data })
   const backups = useQuery({ queryKey: ['backups'], queryFn: async () => (await api.get('/api/v1/admin/operations/backups')).data })
   const logs = useQuery({ queryKey: ['audit-logs'], queryFn: async () => (await api.get('/api/v1/admin/operations/audit-logs', { params: { limit: 20 } })).data })
+  const performance = useQuery({ queryKey: ['performance-report'], queryFn: async () => (await api.get('/api/v1/admin/operations/performance-report')).data })
   const [enabled, setEnabled] = useState(true)
   const [frequency, setFrequency] = useState(24)
   const [hour, setHour] = useState(2)
@@ -51,10 +52,34 @@ function OperationsPanel() {
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">批量导入与备份</h3><label className="railway-button block cursor-pointer text-center">导入 CSV<input className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && importFile.mutate(e.target.files[0])} /></label><button className="railway-button w-full" onClick={() => backup.mutate()}>立即生成数据库备份</button><p className="text-xs text-text-muted">已留存 {backups.data?.length || 0} 个备份；恢复验证通过临时副本执行，不覆盖线上数据。</p></div>
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">运行状态</h3>{status.data && <><StatusLine name="应用" value={status.data.application.status} /><StatusLine name="数据库" value={status.data.database.status} /><StatusLine name="同步" value={status.data.sync.status} /><StatusLine name="AI" value={status.data.ai.status} /></>}</div>
     </div>
+    {performance.data && <PerformanceReport data={performance.data} />}
     <div className="border-t border-railway-600/50 p-5"><h3 className="font-semibold text-text-primary">近期审计日志</h3><div className="mt-3 space-y-2">{logs.data?.map((item: any) => <div key={item.id} className="grid gap-2 rounded bg-railway-800/50 p-3 text-xs md:grid-cols-[150px_1fr_1fr_auto]"><span>{new Date(item.created_at).toLocaleString('zh-CN')}</span><span>{item.actor_name || '系统'}</span><span>{item.action} · {item.object_type}</span><span className="text-status-success">{item.result}</span></div>)}</div></div>
     {(save.error || backup.error || importFile.error) && <ErrorBox error={save.error || backup.error || importFile.error} />}
   </section>
 }
+
+function PerformanceReport({ data }: { data: any }) {
+  return <div className="border-t border-railway-600/50 p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><p className="eyebrow">PERFORMANCE ACCEPTANCE</p><h3 className="section-heading">50 并发性能验收</h3><p className="mt-1 text-xs text-text-muted">{data.environment} · {new Date(data.verified_at).toLocaleString('zh-CN')}</p></div>
+      <span className={data.passed ? 'rounded border border-status-success/40 bg-status-success/10 px-3 py-1 text-sm text-status-success' : 'rounded border border-status-warning/40 bg-status-warning/10 px-3 py-1 text-sm text-status-warning'}>{data.passed ? '验收通过' : '未通过'}</span>
+    </div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <Metric label="并发用户" value={data.concurrent_users} />
+      <Metric label="持续时间" value={`${data.duration_seconds} 秒`} />
+      <Metric label="请求总量" value={data.total_requests} />
+      <Metric label="请求成功率" value={`${data.success_rate}%`} />
+      <Metric label="测试版本" value={data.source_commit} />
+    </div>
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <PerformanceLine item={data.basic} />
+      <PerformanceLine item={data.aggregate} />
+    </div>
+    <p className="mt-3 text-xs text-text-muted">{data.note}</p>
+  </div>
+}
+
+function PerformanceLine({ item }: { item: any }) { return <div className="rounded border border-railway-600/60 bg-railway-800/45 p-4"><div className="flex items-center justify-between gap-3"><span className="text-sm text-text-secondary">{item.label}</span><span className={item.passed ? 'text-status-success' : 'text-status-warning'}>{item.passed ? '通过' : '未通过'}</span></div><p className="mt-2 font-mono text-2xl text-accent-cyan">P95 {item.p95_seconds} 秒</p><p className="mt-1 text-xs text-text-muted">目标 ≤ {item.target_seconds} 秒</p></div> }
 
 function StatusLine({ name, value }: { name: string; value: string }) { return <div className="flex justify-between border-b border-railway-600/50 pb-2 text-sm"><span className="text-text-muted">{name}</span><span className="text-status-success">● {value}</span></div> }
 
@@ -116,3 +141,4 @@ function AccessControl({ data }: { data: any }) {
 function Metric({ label, value }: { label: string; value: any }) { return <div><p className="text-xs text-text-muted">{label}</p><p className="mt-1 font-mono text-xl text-accent-cyan">{value}</p></div> }
 function ErrorBox({ error }: { error: any }) { return <div className="alert-warning m-4 rounded p-3 text-sm">{getErrorMessage(error)}</div> }
 async function downloadExceptions(taskId: string) { const response = await api.get(`/api/v1/admin/sync/${taskId}/exceptions.csv`, { responseType: 'blob' }); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = `sync-${taskId}-exceptions.csv`; link.click(); URL.revokeObjectURL(url) }
+async function downloadDemoRows() { const response = await api.get('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }); const url = URL.createObjectURL(response.data); const link = document.createElement('a'); link.href = url; link.download = 'demo-sync-1000.csv'; link.click(); URL.revokeObjectURL(url) }

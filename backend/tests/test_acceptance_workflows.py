@@ -154,6 +154,7 @@ async def test_admin_configuration_and_operations(client, auth_headers, acceptan
         "/api/v1/admin/projects",
         "/api/v1/admin/mappings",
         "/api/v1/admin/operations/status",
+        "/api/v1/admin/operations/performance-report",
         "/api/v1/admin/operations/sync-schedule",
         "/api/v1/admin/operations/accounts",
         "/api/v1/admin/operations/classes",

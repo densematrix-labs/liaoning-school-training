@@ -97,6 +97,7 @@ function queryData(key: readonly unknown[]) {
     'admin-access': { role_scopes: [{ role: 'student', label: '学生', scope: '本人' }], teachers: [{ id: 'teacher-1', name: '教师甲', username: 'T1' }], classes: [{ id: 'class-1', name: '机车一班', year: 2023, teacher_id: 'teacher-1', teacher_name: '教师甲' }] },
     'admin-sync-history': [{ id: 'sync-1', started_at: '2026-09-17T08:00:00', read_count: 1000, success_count: 990, skipped_count: 5, error_count: 5, status: 'completed' }],
     'operations-status': { application: { status: 'healthy' }, database: { status: 'healthy' }, sync: { status: 'completed' }, ai: { status: 'configured' } },
+    'performance-report': { id: 'public-demo-20260917', environment: '公网 Demo', verified_at: '2026-09-17T08:46:31', source_commit: 'd637446', concurrent_users: 50, duration_seconds: 60, total_requests: 1784, success_rate: 100, basic: { label: '常规查询接口', p95_seconds: 1.826, target_seconds: 3, passed: true }, aggregate: { label: '汇总统计接口', p95_seconds: 5.583, target_seconds: 10, passed: true }, passed: true, note: 'Demo 工程验收记录' },
     'sync-schedule': { enabled: true, frequency_hours: 24, hour: 2 },
     backups: [{ id: 'backup-1' }],
     'audit-logs': [{ id: 'log-1', created_at: '2026-09-17T08:00:00', actor_name: '管理员', action: 'update', object_type: 'project', result: 'success' }],
@@ -198,11 +199,16 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(screen.getByDisplayValue('建议已落实')).toBeInTheDocument()
   })
 
-  it('renders administrator configuration and operations', () => {
+  it('renders administrator configuration and operations', async () => {
+    const apiGet = vi.spyOn(api, 'get').mockResolvedValue({ data: new Blob(['sync']) } as any)
     useAuthStore.setState({ user: { id: 'admin-1', username: 'A1', name: '管理员', role: 'admin' } as any })
     renderPage(<AdminHome />)
     cleanup()
     renderPage(<AdminConfig />)
+    expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()
+    expect(screen.getByText('P95 1.826 秒')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('下载 1000 条演示数据'))
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }))
     fireEvent.click(screen.getByText('保存同步计划'))
     fireEvent.click(screen.getByText('立即生成数据库备份'))
     fireEvent.click(screen.getByText('执行一次 Mock 同步'))

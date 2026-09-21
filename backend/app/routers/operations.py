@@ -244,6 +244,38 @@ async def get_runtime_status(
     }
 
 
+@router.get("/performance-report")
+async def get_performance_report(
+    admin: User = Depends(get_current_admin),
+):
+    """返回最近一次经公网复测确认的 50 并发验收结果。"""
+    return {
+        "id": "public-demo-20260917",
+        "title": "50 并发公网性能验收",
+        "environment": "公网 Demo · shixun.demo.densematrix.ai",
+        "verified_at": datetime(2026, 9, 17, 8, 46, 31),
+        "source_commit": "d637446",
+        "concurrent_users": 50,
+        "duration_seconds": 60,
+        "total_requests": 1784,
+        "success_rate": 100.0,
+        "basic": {
+            "label": "常规查询接口",
+            "p95_seconds": 1.826,
+            "target_seconds": 3.0,
+            "passed": True,
+        },
+        "aggregate": {
+            "label": "汇总统计接口",
+            "p95_seconds": 5.583,
+            "target_seconds": 10.0,
+            "passed": True,
+        },
+        "passed": True,
+        "note": "该结果为 Demo 公网工程验收记录；正式交付时需在采购人确认的服务器、网络、数据量和业务脚本下复测。",
+    }
+
+
 @router.get("/accounts")
 async def list_accounts(
     db: AsyncSession = Depends(get_db),

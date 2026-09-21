@@ -94,6 +94,13 @@ async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_he
     assert exported.status_code == 200
     assert "DEMO-INVALID-000" in exported.content.decode("utf-8-sig")
 
+    demo_data = await client.get("/api/v1/admin/sync/demo-data.csv", headers=auth_headers)
+    assert demo_data.status_code == 200
+    demo_text = demo_data.content.decode("utf-8-sig")
+    assert len(demo_text.splitlines()) == 1001
+    assert "DEMO-SYNC-000000" in demo_text
+    assert "DEMO-INVALID-004" in demo_text
+
 
 @pytest.mark.asyncio
 async def test_admin_can_assign_teacher_scope(client, auth_headers, test_db):

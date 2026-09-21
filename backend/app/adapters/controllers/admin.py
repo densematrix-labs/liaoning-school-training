@@ -675,6 +675,31 @@ async def export_sync_exceptions(
         headers={"Content-Disposition": f'attachment; filename="sync-{task_id}-exceptions.csv"'},
     )
 
+
+@router.get("/sync/demo-data.csv")
+async def export_demo_sync_data(
+    admin: User = Depends(get_current_admin),
+):
+    """下载与 Mock 同步任务完全一致的 1000 条演示输入数据。"""
+    output = io.StringIO()
+    fields = [
+        "source_record_id",
+        "student_index",
+        "project_index",
+        "completed_at",
+        "duplicate",
+        "invalid",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(demo_rows(1000))
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="demo-sync-1000.csv"'},
+    )
+
 @router.post("/sync")
 async def trigger_sync(
     db: AsyncSession = Depends(get_db),
