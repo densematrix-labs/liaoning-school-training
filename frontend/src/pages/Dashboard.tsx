@@ -9,8 +9,6 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
@@ -38,6 +36,9 @@ interface DashboardData {
     ability_id: string
     ability_name: string
     avg: number
+    threshold: number
+    ready_count: number
+    not_ready_count: number
     distribution: number[]
   }>
   trend: Array<{
@@ -53,6 +54,13 @@ interface DashboardData {
     current_students: number
     capacity: number
   }>
+  graduation_summary: {
+    total_students: number
+    evaluated_students: number
+    ready_count: number
+    risk_count: number
+    ready_rate: number
+  }
   updated_at: string
 }
 
@@ -497,43 +505,43 @@ export default function Dashboard() {
             </div>
           </motion.div>
           
-          {/* Distribution Bar Chart */}
+          {/* Complete ability and graduation distribution */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
             className="glass-panel p-5"
           >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4">
-              能力达标分布
-            </h3>
-            
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={data?.ability_distribution.map(a => ({
-                    name: a.ability_name.slice(0, 2),
-                    value: a.avg,
-                  }))}
-                  layout="vertical"
-                >
-                  <XAxis type="number" domain={[0, 100]} tick={{ fill: '#5d7a9c', fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: '#8eb8e5', fontSize: 10 }} width={30} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#111d32',
-                      border: '1px solid #234069',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="#00d4ff" 
-                    radius={[0, 4, 4, 0]}
-                    background={{ fill: '#16263f' }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+            <h3 className="font-display text-lg font-semibold text-accent-cyan">能力与毕业达标</h3>
+            <p className="mt-1 text-xs text-text-muted">完整展示全部能力维度及毕业达标状态</p>
+
+            <div className="mt-4 rounded-lg border border-railway-600/60 bg-railway-800/50 p-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-text-secondary">毕业达标进度</span>
+                <span className="font-mono text-accent-cyan">{data?.graduation_summary.ready_rate || 0}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-railway-700">
+                <div className="h-full rounded-full bg-status-success" style={{ width: `${data?.graduation_summary.ready_rate || 0}%` }} />
+              </div>
+              <div className="mt-2 flex justify-between text-xs">
+                <span className="text-status-success">已达标 {data?.graduation_summary.ready_count || 0} 人</span>
+                <span className="text-status-warning">存在风险 {data?.graduation_summary.risk_count || 0} 人</span>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {data?.ability_distribution.map((ability) => (
+                <div key={ability.ability_id} className="rounded border border-railway-600/50 p-2.5">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-text-secondary">{ability.ability_name}</span>
+                    <span className="font-mono text-accent-cyan">{ability.avg} / {ability.threshold}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-railway-700">
+                    <div className="h-full rounded-full bg-accent-blue" style={{ width: `${Math.min(100, ability.avg)}%` }} />
+                  </div>
+                  <p className="mt-1 text-[10px] text-text-muted">达标 {ability.ready_count} 人 · 未达标 {ability.not_ready_count} 人</p>
+                </div>
+              ))}
             </div>
           </motion.div>
         </div>

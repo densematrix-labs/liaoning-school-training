@@ -120,12 +120,27 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     for path in teacher_paths:
         response = await client.get(path, headers=teacher)
         assert response.status_code == 200, (path, response.text)
+    class_overview = (await client.get(f"/api/v1/students/classes/{ids['class']}/overview", headers=teacher)).json()
+    assert class_overview["graduation_ready_count"] == 0
+    assert class_overview["graduation_not_ready_count"] == 1
+    assert class_overview["graduation_ready_rate"] == 0
+    assert class_overview["students"][0]["graduation_progress"] == 0
+    assert class_overview["students"][0]["graduation_ready_count"] == 0
+    assert class_overview["ability_distribution"][0]["ready_count"] == 0
+    comprehensive = (await client.get(f"/api/v1/students/{ids['student']}/comprehensive", headers=teacher)).json()
+    assert comprehensive["ability"]["graduation_progress"] == 0
+    assert comprehensive["ability"]["graduation_ready_count"] == 0
     report_list = await client.get(f"/api/v1/reports/student/{ids['student']}", headers=teacher)
     assert report_list.json()[0]["score_id"] == ids["score"]
 
     for path in ["/api/v1/dashboard/", "/api/v1/dashboard/overview", "/api/v1/dashboard/realtime", "/api/v1/dashboard/ability-distribution", "/api/v1/dashboard/training-trend", "/api/v1/dashboard/class-comparison", "/api/v1/dashboard/alerts"]:
         response = await client.get(path, headers=auth_headers)
         assert response.status_code == 200, (path, response.text)
+    dashboard = (await client.get("/api/v1/dashboard/", headers=auth_headers)).json()
+    assert dashboard["graduation_summary"]["total_students"] == 1
+    assert dashboard["graduation_summary"]["ready_count"] == 0
+    assert dashboard["ability_distribution"][0]["threshold"] == 60
+    assert dashboard["ability_distribution"][0]["ready_count"] == 0
 
 
 @pytest.mark.asyncio

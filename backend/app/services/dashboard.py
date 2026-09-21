@@ -2,7 +2,6 @@ from typing import List
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from collections import defaultdict
 
 from app.models.training import Score, TrainingProject
 from app.models.student import Student, Class
@@ -15,6 +14,7 @@ from app.schemas.dashboard import (
     AbilityDistributionItem,
     TrendDataPoint,
     LabStatusItem,
+    GraduationSummary,
 )
 
 
@@ -40,6 +40,9 @@ class DashboardService:
         
         # Lab status
         lab_status = await self._get_lab_status()
+
+        # Graduation readiness across all enrolled students
+        graduation_summary = await self._get_graduation_summary()
         
         return DashboardResponse(
             realtime=realtime,
@@ -47,6 +50,7 @@ class DashboardService:
             ability_distribution=ability_distribution,
             trend=trend,
             lab_status=lab_status,
+            graduation_summary=graduation_summary,
             updated_at=now,
         )
     
@@ -147,16 +151,13 @@ class DashboardService:
         )
         abilities = abilities_result.scalars().all()
         
-        # Aggregate
-        ability_scores = defaultdict(list)
-        for profile in profiles:
-            if profile.major_abilities:
-                for ability_id, score in profile.major_abilities.items():
-                    ability_scores[ability_id].append(score * 100)
-        
         result = []
         for ability in abilities:
-            scores = ability_scores.get(ability.id, [])
+            scores = [
+                float((profile.major_abilities or {}).get(ability.id, 0)) * 100
+                for profile in profiles
+            ]
+            threshold = round(ability.graduation_threshold * 100, 1)
             
             if scores:
                 avg = sum(scores) / len(scores)
@@ -173,10 +174,25 @@ class DashboardService:
                 ability_id=ability.id,
                 ability_name=ability.name,
                 avg=round(avg, 1),
+                threshold=threshold,
+                ready_count=sum(1 for score in scores if score >= threshold),
+                not_ready_count=sum(1 for score in scores if score < threshold),
                 distribution=distribution,
             ))
         
         return result
+
+    async def _get_graduation_summary(self) -> GraduationSummary:
+        student_count = int((await self.db.execute(select(func.count(Student.id)))).scalar() or 0)
+        profiles = list((await self.db.execute(select(AbilityProfile))).scalars().all())
+        ready_count = sum(1 for profile in profiles if profile.graduation_ready)
+        return GraduationSummary(
+            total_students=student_count,
+            evaluated_students=len(profiles),
+            ready_count=ready_count,
+            risk_count=max(student_count - ready_count, 0),
+            ready_rate=round(ready_count / student_count * 100, 1) if student_count else 0,
+        )
     
     async def _get_trend_data(self, days: int) -> List[TrendDataPoint]:
         now = datetime.utcnow()

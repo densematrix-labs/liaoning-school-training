@@ -124,6 +124,12 @@ class AbilityService:
             for item in radar_data
             if item.score < item.threshold
         ]
+        graduation_ready_count = sum(1 for item in radar_data if item.score >= item.threshold)
+        graduation_total_count = len(radar_data)
+        graduation_progress = round(
+            graduation_ready_count / graduation_total_count * 100,
+            1,
+        ) if graduation_total_count else 0
 
         sub_ability_result = await self.db.execute(select(SubAbility))
         sub_abilities = sub_ability_result.scalars().all()
@@ -147,6 +153,9 @@ class AbilityService:
             major_abilities={k: round(v * 100, 1) for k, v in major_ability_scores.items()},
             sub_abilities={k: round(v * 100, 1) for k, v in (profile.sub_abilities or {}).items()},
             graduation_ready=profile.graduation_ready,
+            graduation_ready_count=graduation_ready_count,
+            graduation_total_count=graduation_total_count,
+            graduation_progress=graduation_progress,
             radar_data=radar_data,
             updated_at=profile.updated_at,
             strongest_ability=strongest,

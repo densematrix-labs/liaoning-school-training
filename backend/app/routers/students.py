@@ -200,25 +200,45 @@ async def get_class_overview(
                 normalized = float(detail.get("score", 0) or 0) / max_score if max_score else 0
                 for ability_id in mapping.get(str(step_id)) or detail.get("related_abilities", []):
                     sub_values[str(ability_id)].append(normalized)
-        if not sub_values:
-            continue
         sub_average = {key: sum(values) / len(values) for key, values in sub_values.items()}
         major_average = {}
-        ready = True
+        passed_count = 0
         for ability in abilities:
             weighted = [(sub_average[sub.id], sub.weight) for sub in sub_by_major[ability.id] if sub.id in sub_average]
             weight_total = sum(weight for _, weight in weighted)
             value = sum(value * weight for value, weight in weighted) / weight_total if weight_total else 0
             major_average[ability.id] = value
-            ready = ready and value >= ability.graduation_threshold
-        profiles.append({"student_id": student.id, "major_abilities": major_average, "graduation_ready": ready})
+            if value >= ability.graduation_threshold:
+                passed_count += 1
+        total_count = len(abilities)
+        progress = round(passed_count / total_count * 100, 1) if total_count else 0
+        profiles.append({
+            "student_id": student.id,
+            "major_abilities": major_average,
+            "graduation_ready": bool(total_count and passed_count == total_count),
+            "graduation_ready_count": passed_count,
+            "graduation_total_count": total_count,
+            "graduation_progress": progress,
+        })
 
     ability_distribution = []
     weak_counter: Counter[str] = Counter()
     for ability in abilities:
         values = [float(profile["major_abilities"].get(ability.id, 0)) * 100 for profile in profiles]
         average = round(sum(values) / len(values), 1) if values else 0
-        ability_distribution.append({"id": ability.id, "name": ability.name, "average": average})
+        ready_count = sum(
+            1
+            for profile in profiles
+            if float(profile["major_abilities"].get(ability.id, 0)) >= ability.graduation_threshold
+        )
+        ability_distribution.append({
+            "id": ability.id,
+            "name": ability.name,
+            "average": average,
+            "threshold": round(ability.graduation_threshold * 100, 1),
+            "ready_count": ready_count,
+            "not_ready_count": len(students) - ready_count,
+        })
         for profile in profiles:
             if float(profile["major_abilities"].get(ability.id, 0)) < ability.graduation_threshold:
                 weak_counter[ability.name] += 1
@@ -242,6 +262,10 @@ async def get_class_overview(
             "training_count": len(items),
             "average_score": round(sum(values) / len(values), 1) if values else 0,
             "graduation_ready": bool(profile and profile["graduation_ready"]),
+            "graduation_ready_count": profile["graduation_ready_count"] if profile else 0,
+            "graduation_total_count": profile["graduation_total_count"] if profile else len(abilities),
+            "graduation_progress": profile["graduation_progress"] if profile else 0,
+            "graduation_risk": not bool(profile and profile["graduation_ready"]),
         })
 
     return {
@@ -252,6 +276,11 @@ async def get_class_overview(
         "completed_students": sum(1 for item in student_rows if item["training_count"] > 0),
         "average_score": round(sum(percentages) / len(percentages), 1) if percentages else 0,
         "graduation_ready_count": sum(1 for profile in profiles if profile["graduation_ready"]),
+        "graduation_not_ready_count": sum(1 for profile in profiles if not profile["graduation_ready"]),
+        "graduation_ready_rate": round(
+            sum(1 for profile in profiles if profile["graduation_ready"]) / len(students) * 100,
+            1,
+        ) if students else 0,
         "score_distribution": score_distribution,
         "ability_distribution": ability_distribution,
         "common_weak_abilities": [

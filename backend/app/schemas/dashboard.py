@@ -24,6 +24,9 @@ class AbilityDistributionItem(BaseModel):
     ability_id: str
     ability_name: str
     avg: float
+    threshold: float
+    ready_count: int
+    not_ready_count: int
     distribution: list[int]
 
 
@@ -42,12 +45,21 @@ class LabStatusItem(BaseModel):
     capacity: int
 
 
+class GraduationSummary(BaseModel):
+    total_students: int
+    evaluated_students: int
+    ready_count: int
+    risk_count: int
+    ready_rate: float
+
+
 class DashboardResponse(BaseModel):
     realtime: RealtimeStats
     class_ranking: list[ClassRanking]
     ability_distribution: list[AbilityDistributionItem]
     trend: list[TrendDataPoint]
     lab_status: list[LabStatusItem]
+    graduation_summary: GraduationSummary
     updated_at: datetime
 
 

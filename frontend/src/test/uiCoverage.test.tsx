@@ -31,13 +31,14 @@ vi.mock('framer-motion', async () => {
 const dashboard = {
   realtime: { active_students: 12, today_trainings: 30, average_score: 86, pass_rate: 92 },
   class_ranking: [1, 2, 3, 4].map((rank) => ({ class_id: `c${rank}`, class_name: `${rank}班`, average_score: 90 - rank, training_count: 20 + rank, rank })),
-  ability_distribution: [1, 2, 3, 4, 5, 6].map((index) => ({ ability_id: `a${index}`, ability_name: `能力维度${index}`, avg: 70 + index, distribution: [1, 2] })),
+  ability_distribution: [1, 2, 3, 4, 5, 6].map((index) => ({ ability_id: `a${index}`, ability_name: `能力维度${index}`, avg: 70 + index, threshold: 70, ready_count: 100, not_ready_count: 40, distribution: [1, 2] })),
   trend: [1, 2, 3, 4, 5, 6, 7].map((index) => ({ date: `2026-09-0${index}`, training_count: index, average_score: 70 + index, pass_rate: 80 })),
   lab_status: [
     { lab_id: 'l1', lab_name: '实训室1', status: 'available', current_students: 0, capacity: 30 },
     { lab_id: 'l2', lab_name: '实训室2', status: 'in_use', current_students: 12, capacity: 30 },
     { lab_id: 'l3', lab_name: '实训室3', status: 'maintenance', current_students: 0, capacity: 30 },
   ],
+  graduation_summary: { total_students: 140, evaluated_students: 140, ready_count: 100, risk_count: 40, ready_rate: 71.4 },
   updated_at: '2026-09-17T08:00:00',
 }
 
@@ -46,6 +47,9 @@ const ability = {
   strongest_ability: '安全意识',
   weakest_ability: '规范操作',
   graduation_ready: false,
+  graduation_ready_count: 3,
+  graduation_total_count: 5,
+  graduation_progress: 60,
   updated_at: '2026-09-17T08:00:00',
   radar_data: [1, 2, 3, 4, 5].map((index) => ({ ability_id: `a${index}`, name: `能力${index}`, score: 60 + index, threshold: 70, weight: .2 })),
   weak_abilities: [{ name: '规范操作', score: 61 }],
@@ -73,7 +77,7 @@ function queryData(key: readonly unknown[]) {
     'my-environment-results': [environmentResult],
     'teacher-home-classes': [{ id: 'class-1', name: '机车一班', major_name: '铁道机车', student_count: 35 }],
     'teacher-classes': [{ id: 'class-1', name: '机车一班', student_count: 35 }],
-    'class-overview': { student_count: 35, completed_students: 30, training_count: 100, average_score: 82, graduation_ready_count: 20, score_distribution: [{ label: '80-89', count: 10 }], ability_distribution: [{ name: '规范操作', average: 75 }], common_weak_abilities: [{ name: '规范操作', student_count: 5 }], students: [{ id: 'student-1', name: '学生甲', student_no: '2023001', training_count: 3, average_score: 82, graduation_ready: false }] },
+    'class-overview': { student_count: 35, completed_students: 30, training_count: 100, average_score: 82, graduation_ready_count: 20, graduation_not_ready_count: 15, graduation_ready_rate: 57.1, score_distribution: [{ label: '80-89', count: 10 }], ability_distribution: [{ name: '规范操作', average: 75, threshold: 70, ready_count: 20, not_ready_count: 15 }], common_weak_abilities: [{ name: '规范操作', student_count: 5 }], students: [{ id: 'student-1', name: '学生甲', student_no: '2023001', training_count: 3, average_score: 82, graduation_ready: false, graduation_ready_count: 3, graduation_total_count: 5, graduation_progress: 60, graduation_risk: true }] },
     'student-comprehensive': { student: { name: '学生甲', class_name: '机车一班', student_no: '2023001' }, score_summary: scoreList, ability, environment_checks: [environmentResult], reports: [report] },
     'class-students': [{ id: 'student-1', name: '学生甲' }],
     'class-scores': scoreList,
@@ -147,6 +151,13 @@ describe('all role workspaces render populated acceptance states', () => {
     const apiGet = vi.spyOn(api, 'get').mockResolvedValue({ data: new Blob(['report']) } as any)
     const pages = [<Dashboard />, <StudentHome />, <StudentScores />, <StudentAbility />, <StudentReports />, <StudentEnvironmentResults />]
     for (const page of pages) { renderPage(page); expect(document.body.textContent?.length).toBeGreaterThan(20); cleanup() }
+    renderPage(<Dashboard />)
+    expect(screen.getByText('能力维度6')).toBeInTheDocument()
+    expect(screen.getByText('存在风险 40 人')).toBeInTheDocument()
+    cleanup()
+    renderPage(<StudentAbility />)
+    expect(screen.getByText('3/5（60%）· 未达标')).toBeInTheDocument()
+    cleanup()
     const evidence = renderPage(<ScoreEvidenceModal scoreId="score-1" onClose={vi.fn()} />)
     expect(evidence.container.querySelector('.alert-success')).toHaveTextContent('核对一致')
     cleanup()
@@ -164,6 +175,8 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.change(screen.getByLabelText('授权班级'), { target: { value: 'class-1' } })
     fireEvent.click(screen.getByText('学生甲'))
     expect(screen.getByText('STUDENT COMPREHENSIVE DETAIL')).toBeInTheDocument()
+    expect(screen.getByText('毕业标准评估')).toBeInTheDocument()
+    expect(screen.getAllByText('存在毕业风险')).toHaveLength(2)
     cleanup()
     renderPage(<TeacherReports />)
     expect(screen.getByLabelText('生成报告类型')).toBeInTheDocument()

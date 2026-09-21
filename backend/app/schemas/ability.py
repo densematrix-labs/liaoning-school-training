@@ -83,6 +83,9 @@ class AbilityProfileResponse(BaseModel):
     major_abilities: dict[str, float]
     radar_data: list[RadarDataPoint]
     graduation_ready: bool
+    graduation_ready_count: int = 0
+    graduation_total_count: int = 0
+    graduation_progress: float = 0
     updated_at: Optional[datetime] = None
     strongest_ability: Optional[str] = None
     weakest_ability: Optional[str] = None

@@ -51,6 +51,9 @@ export default function StudentAbility() {
   })) || []
 
   const barData = abilityMap?.radar_data || []
+  const graduationReadyCount = abilityMap?.graduation_ready_count ?? barData.filter((item: any) => item.score >= item.threshold).length
+  const graduationTotalCount = abilityMap?.graduation_total_count ?? barData.length
+  const graduationProgress = abilityMap?.graduation_progress ?? (graduationTotalCount ? Math.round(graduationReadyCount / graduationTotalCount * 1000) / 10 : 0)
 
   return (
     <div className="space-y-6">
@@ -77,7 +80,7 @@ export default function StudentAbility() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Signal label="优势能力" value={abilityMap?.strongest_ability || '—'} tone="good" />
         <Signal label="薄弱能力" value={abilityMap?.weakest_ability || '—'} tone="warn" />
-        <Signal label="毕业能力" value={abilityMap?.graduation_ready ? '已达标' : '提升中'} tone={abilityMap?.graduation_ready ? 'good' : 'warn'} />
+        <Signal label="毕业达标进度" value={`${graduationReadyCount}/${graduationTotalCount}（${graduationProgress}%）· ${abilityMap?.graduation_ready ? '已达标' : '未达标'}`} tone={abilityMap?.graduation_ready ? 'good' : 'warn'} />
       </div>
 
       {/* Summary Card */}
