@@ -77,6 +77,26 @@ async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_he
             TrainingProject(id="sync-project", name="同步项目", major_id="sync-major", max_score=100, steps=[{"id": "sync-step", "name": "同步步骤", "score": 100, "failed_score": 0}], scoring_rules={"version": 1}, ability_mapping={"sync-step": ["sync-sub-ability"]}),
         ])
         await session.commit()
+    without_import = await client.post("/api/v1/admin/sync", headers=auth_headers)
+    assert without_import.status_code == 400
+    assert without_import.json()["detail"] == "请先导入同步数据"
+
+    demo_data = await client.get("/api/v1/admin/sync/demo-data.csv", headers=auth_headers)
+    assert demo_data.status_code == 200
+    demo_text = demo_data.content.decode("utf-8-sig")
+    assert len(demo_text.splitlines()) == 1001
+    assert "DEMO-SYNC-000000" in demo_text
+    assert "DEMO-INVALID-004" in demo_text
+    imported = await client.post(
+        "/api/v1/admin/operations/sync-import",
+        headers=auth_headers,
+        files={"file": ("demo-sync.csv", demo_data.content, "text/csv")},
+    )
+    assert imported.status_code == 200
+    assert imported.json()["status"] == "imported"
+    assert imported.json()["row_count"] == 1000
+    assert (await client.get("/api/v1/admin/sync/history", headers=auth_headers)).json() == []
+
     first = await client.post("/api/v1/admin/sync", headers=auth_headers)
     second = await client.post("/api/v1/admin/sync", headers=auth_headers)
     history = await client.get("/api/v1/admin/sync/history", headers=auth_headers)
@@ -94,13 +114,6 @@ async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_he
     assert exported.status_code == 200
     assert "DEMO-INVALID-000" in exported.content.decode("utf-8-sig")
 
-    demo_data = await client.get("/api/v1/admin/sync/demo-data.csv", headers=auth_headers)
-    assert demo_data.status_code == 200
-    demo_text = demo_data.content.decode("utf-8-sig")
-    assert len(demo_text.splitlines()) == 1001
-    assert "DEMO-SYNC-000000" in demo_text
-    assert "DEMO-INVALID-004" in demo_text
-
     rejected_reset = await client.delete(
         "/api/v1/admin/sync/demo-state?confirm=wrong",
         headers=auth_headers,
@@ -113,9 +126,17 @@ async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_he
     assert reset.status_code == 200
     assert reset.json()["deleted_tasks"] == 2
     assert reset.json()["deleted_records"] == 990
+    assert reset.json()["cleared_staged_import"] is True
     assert reset.json()["automatic_sync_enabled"] is False
     assert (await client.get("/api/v1/admin/sync/history", headers=auth_headers)).json() == []
 
+    after_reset_without_import = await client.post("/api/v1/admin/sync", headers=auth_headers)
+    assert after_reset_without_import.status_code == 400
+    await client.post(
+        "/api/v1/admin/operations/sync-import",
+        headers=auth_headers,
+        files={"file": ("demo-sync.csv", demo_data.content, "text/csv")},
+    )
     after_reset = await client.post("/api/v1/admin/sync", headers=auth_headers)
     assert after_reset.status_code == 200
     assert after_reset.json()["success_count"] == 990

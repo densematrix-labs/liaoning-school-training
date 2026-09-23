@@ -134,9 +134,8 @@ async def test_admin_forbidden(client, student_headers):
 
 @pytest.mark.asyncio
 async def test_sync_trigger(client, auth_headers):
-    """Test manual sync trigger"""
+    """Manual sync requires a staged CSV import."""
     response = await client.post("/api/v1/admin/sync", headers=auth_headers)
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert "message" in data
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "请先导入同步数据"

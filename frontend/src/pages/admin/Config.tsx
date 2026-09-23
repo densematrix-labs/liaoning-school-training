@@ -15,7 +15,6 @@ export default function AdminConfig() {
   })
   const importFile = useMutation({
     mutationFn: async (file: File) => { const body = new FormData(); body.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', body)).data },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] }),
   })
 
   return <div className="space-y-7">
@@ -28,9 +27,10 @@ export default function AdminConfig() {
     <AccessControl data={access.data} />
     <OperationsPanel />
     <section className="railway-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">先下载 CSV，再通过「导入数据」写入；首次导入应为新增 990、跳过 5、异常 5</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载数据</button><label className="railway-button cursor-pointer">{importFile.isPending ? '正在导入…' : '导入数据'}<input className="hidden" type="file" accept=".csv,text/csv" disabled={importFile.isPending} onChange={(e) => { const file = e.target.files?.[0]; if (file) importFile.mutate(file); e.currentTarget.value = '' }} /></label><button onClick={() => sync.mutate()} disabled={sync.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">先导入 CSV 暂存数据，再点击「执行一次 Mock 同步」处理；第二次执行可验证重复数据去重</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载数据</button><label className="railway-button cursor-pointer">{importFile.isPending ? '正在导入…' : '导入数据'}<input className="hidden" type="file" accept=".csv,text/csv" disabled={importFile.isPending} onChange={(e) => { const file = e.target.files?.[0]; if (file) importFile.mutate(file); e.currentTarget.value = '' }} /></label><button onClick={() => sync.mutate()} disabled={sync.isPending || importFile.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div></div>
       {(sync.error || importFile.error) && <ErrorBox error={sync.error || importFile.error} />}
-      {importFile.data && <div className="alert-success m-4 rounded p-3 text-sm">导入完成：读取 {importFile.data.read_count}，新增 {importFile.data.success_count}，跳过 {importFile.data.skipped_count}，异常 {importFile.data.error_count}</div>}
+      {importFile.data && <div className="alert-success m-4 rounded p-3 text-sm">导入数据成功：已暂存 {importFile.data.row_count} 条，请点击「执行一次 Mock 同步」开始处理</div>}
+      {sync.data && <div className="alert-success m-4 rounded p-3 text-sm">同步完成：读取 {sync.data.read_count}，新增 {sync.data.success_count}，跳过 {sync.data.skipped_count}，异常 {sync.data.error_count}</div>}
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-railway-800/70 text-xs text-text-muted"><tr><th className="p-3">任务</th><th>读取</th><th>新增</th><th>跳过</th><th>异常</th><th>状态</th><th>操作</th></tr></thead><tbody>{history.data?.map((item: any) => <tr key={item.id} className="border-t border-railway-600/40"><td className="p-3"><p className="font-mono text-xs text-text-secondary">{item.id.slice(0, 12)}</p><p className="text-xs text-text-muted">{new Date(item.started_at).toLocaleString('zh-CN')}</p></td><td>{item.read_count}</td><td className="text-status-success">{item.success_count}</td><td>{item.skipped_count}</td><td className="text-status-warning">{item.error_count}</td><td>{item.status === 'completed' ? '完成' : item.status}</td><td><button className="railway-button !px-2 !py-1 text-xs" disabled={!item.error_count} onClick={() => downloadExceptions(item.id)}>导出异常</button></td></tr>)}</tbody></table></div>
     </section>
   </div>

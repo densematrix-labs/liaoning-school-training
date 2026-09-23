@@ -32,7 +32,7 @@ from app.adapters.controllers.auth import get_current_admin
 from app.services.recalculation import RecalculationService
 from app.services.ability import AbilityService
 from app.services.audit import record_audit
-from app.services.sync import SyncService, demo_rows
+from app.services.sync import PENDING_SYNC_SETTING_KEY, SyncService, demo_rows
 from app.schemas.admin import (
     ProjectRuleUpdate,
     RecalculateRequest,
@@ -743,6 +743,12 @@ async def reset_demo_sync_state(
         await db.execute(delete(MockSyncException).where(MockSyncException.task_id.in_(task_ids)))
         await db.execute(delete(MockSyncTask).where(MockSyncTask.id.in_(task_ids)))
 
+    staged_import = (await db.execute(
+        select(SystemSetting).where(SystemSetting.key == PENDING_SYNC_SETTING_KEY)
+    )).scalar_one_or_none()
+    if staged_import:
+        await db.delete(staged_import)
+
     schedule = (await db.execute(
         select(SystemSetting).where(SystemSetting.key == "sync_schedule")
     )).scalar_one_or_none()
@@ -764,6 +770,7 @@ async def reset_demo_sync_state(
             "deleted_tasks": len(task_ids),
             "deleted_records": len(records),
             "deleted_scores": len(score_ids),
+            "cleared_staged_import": staged_import is not None,
             "automatic_sync_enabled": False,
         },
     )
@@ -783,6 +790,7 @@ async def reset_demo_sync_state(
         "deleted_records": len(records),
         "deleted_scores": len(score_ids),
         "recalculated_students": recalculated,
+        "cleared_staged_import": staged_import is not None,
         "automatic_sync_enabled": False,
     }
 
@@ -792,8 +800,14 @@ async def trigger_sync(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    """运行 1000 条可重复同步演示，不连接校方数据库。"""
+    """运行已导入的演示数据，保留暂存批次以演示重复同步去重。"""
+    staged_import = (await db.execute(
+        select(SystemSetting).where(SystemSetting.key == PENDING_SYNC_SETTING_KEY)
+    )).scalar_one_or_none()
+    rows = (staged_import.value or {}).get("rows") if staged_import else None
+    if not isinstance(rows, list) or not rows:
+        raise HTTPException(status_code=400, detail="请先导入同步数据")
     task = await SyncService(db).run(
-        demo_rows(1000), actor_id=admin.id, actor_name=admin.name
+        rows, actor_id=admin.id, actor_name=admin.name
     )
     return await _sync_task_response(db, task)

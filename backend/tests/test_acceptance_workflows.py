@@ -184,7 +184,12 @@ async def test_admin_configuration_and_operations(client, auth_headers, acceptan
     csv_content = b"source_record_id,student_index,project_index,completed_at\nCSV-IMPORT-001,0,1,2026-09-01T08:00:00\n"
     imported = await client.post("/api/v1/admin/operations/sync-import", headers=auth_headers, files={"file": ("records.csv", csv_content, "text/csv")})
     assert imported.status_code == 200
-    assert imported.json()["success_count"] == 1
+    assert imported.json()["message"] == "导入数据成功"
+    assert imported.json()["row_count"] == 1
+    assert (await client.get("/api/v1/admin/sync/history", headers=auth_headers)).json() == []
+    executed = await client.post("/api/v1/admin/sync", headers=auth_headers)
+    assert executed.status_code == 200
+    assert executed.json()["success_count"] == 1
 
     config = await client.put(f"/api/v1/admin/projects/{ids['project']}/configuration", headers=auth_headers, json={"steps": [{"id": "step-1", "name": "检查", "score": 30, "failed_score": 0}, {"id": "step-2", "name": "操作", "score": 70, "failed_score": 10}], "ability_mapping": {"step-1": [ids["sub"]], "step-2": [ids["sub"]]}})
     assert config.status_code == 200

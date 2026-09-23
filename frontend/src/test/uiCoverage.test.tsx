@@ -207,6 +207,7 @@ describe('all role workspaces render populated acceptance states', () => {
     renderPage(<AdminConfig />)
     expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()
     expect(screen.getByText('P95 1.826 秒')).toBeInTheDocument()
+    expect(screen.getByText(/先导入 CSV 暂存数据/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('下载数据'))
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }))
     expect(screen.getByText('导入数据')).toBeInTheDocument()

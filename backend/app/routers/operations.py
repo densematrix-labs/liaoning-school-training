@@ -23,7 +23,7 @@ from app.models.training import TrainingProject
 from app.models.workflow import MockSyncTask
 from app.services.auth import AuthService
 from app.services.audit import record_audit
-from app.services.sync import SyncService, parse_csv
+from app.services.sync import PENDING_SYNC_SETTING_KEY, parse_csv
 
 router = APIRouter(prefix="/api/v1/admin/operations", tags=["运行管理"])
 
@@ -114,14 +114,45 @@ async def import_sync_file(
         raise HTTPException(status_code=400, detail=f"CSV 解析失败：{exc}") from exc
     if not rows:
         raise HTTPException(status_code=400, detail="CSV 中没有数据")
-    task = await SyncService(db).run(rows, actor_id=admin.id, actor_name=admin.name)
+
+    imported_at = datetime.utcnow().isoformat()
+    value = {
+        "filename": file.filename,
+        "row_count": len(rows),
+        "rows": rows,
+        "imported_at": imported_at,
+    }
+    setting = (await db.execute(
+        select(SystemSetting).where(SystemSetting.key == PENDING_SYNC_SETTING_KEY)
+    )).scalar_one_or_none()
+    before = None
+    if setting:
+        before = {
+            "filename": setting.value.get("filename"),
+            "row_count": setting.value.get("row_count"),
+            "imported_at": setting.value.get("imported_at"),
+        }
+        setting.value = value
+        setting.updated_by = admin.id
+    else:
+        db.add(SystemSetting(key=PENDING_SYNC_SETTING_KEY, value=value, updated_by=admin.id))
+    await record_audit(
+        db,
+        actor_id=admin.id,
+        actor_name=admin.name,
+        action="stage_sync_import",
+        object_type="sync_import",
+        object_id=file.filename,
+        before=before,
+        after={"filename": file.filename, "row_count": len(rows), "imported_at": imported_at},
+    )
+    await db.commit()
     return {
-        "task_id": task.id,
-        "read_count": task.read_count,
-        "success_count": task.success_count,
-        "skipped_count": task.skipped_count,
-        "error_count": task.error_count,
-        "duration_seconds": max(0, (task.completed_at - task.started_at).total_seconds()),
+        "status": "imported",
+        "message": "导入数据成功",
+        "filename": file.filename,
+        "row_count": len(rows),
+        "imported_at": imported_at,
     }
 
 

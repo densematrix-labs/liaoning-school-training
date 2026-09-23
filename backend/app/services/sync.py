@@ -14,6 +14,9 @@ from app.services.ability import AbilityService
 from app.services.audit import record_audit
 
 
+PENDING_SYNC_SETTING_KEY = "pending_mock_sync_import"
+
+
 def demo_rows(size: int = 1000) -> list[dict[str, Any]]:
     valid_count = max(1, size - 10)
     rows = [
