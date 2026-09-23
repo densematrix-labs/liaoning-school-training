@@ -14,7 +14,7 @@ export default function AdminConfig() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] }),
   })
   const importFile = useMutation({
-    mutationFn: async (file: File) => { const body = new FormData(); body.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', body)).data },
+    mutationFn: async (file: File) => { const body = new FormData(); body.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', body, { headers: { 'Content-Type': 'multipart/form-data' } })).data },
   })
 
   return <div className="space-y-7">
