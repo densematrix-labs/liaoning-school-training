@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from datetime import datetime
 from typing import List, Optional
 import uuid
@@ -14,15 +14,24 @@ import io
 
 from app.database import get_db
 from app.models.user import User, UserRole
-from app.models.ability import MajorAbility, SubAbility
+from app.models.ability import AbilityProfile, MajorAbility, SubAbility
 from app.models.lab import Lab
-from app.models.training import TrainingProject
-from app.models.training import Score
-from app.models.student import Student, Class
+from app.models.lab import EnvironmentCheck
+from app.models.operations import SystemSetting
 from app.models.report import DiagnosticReport
-from app.models.workflow import MockSyncException, MockSyncTask, TaskStatus
+from app.models.training import Score, TrainingProject, TrainingRecord
+from app.models.student import Student, Class
+from app.models.workflow import (
+    EnvironmentTask,
+    MockSyncException,
+    MockSyncTask,
+    ReportTask,
+    TaskStatus,
+)
 from app.adapters.controllers.auth import get_current_admin
 from app.services.recalculation import RecalculationService
+from app.services.ability import AbilityService
+from app.services.audit import record_audit
 from app.services.sync import SyncService, demo_rows
 from app.schemas.admin import (
     ProjectRuleUpdate,
@@ -699,6 +708,84 @@ async def export_demo_sync_data(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="demo-sync-1000.csv"'},
     )
+
+
+@router.delete("/sync/demo-state")
+async def reset_demo_sync_state(
+    confirm: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """清除 1000 条同步演示生成的数据，恢复首次导入验收状态。"""
+    if confirm != "RESET_DEMO_SYNC":
+        raise HTTPException(status_code=400, detail="确认参数不正确")
+
+    records = list((await db.execute(
+        select(TrainingRecord.id).where(TrainingRecord.external_id.like("DEMO-SYNC-%"))
+    )).scalars().all())
+    score_rows = list((await db.execute(
+        select(Score.id, Score.student_id).where(Score.record_id.in_(records))
+    )).all()) if records else []
+    score_ids = [row.id for row in score_rows]
+    affected_students = sorted({row.student_id for row in score_rows})
+
+    if score_ids:
+        for model in (DiagnosticReport, EnvironmentCheck, ReportTask, EnvironmentTask):
+            await db.execute(update(model).where(model.score_id.in_(score_ids)).values(score_id=None))
+        await db.execute(delete(Score).where(Score.id.in_(score_ids)))
+    if records:
+        await db.execute(delete(TrainingRecord).where(TrainingRecord.id.in_(records)))
+
+    task_ids = list((await db.execute(
+        select(MockSyncTask.id).where(MockSyncTask.read_count == 1000)
+    )).scalars().all())
+    if task_ids:
+        await db.execute(delete(MockSyncException).where(MockSyncException.task_id.in_(task_ids)))
+        await db.execute(delete(MockSyncTask).where(MockSyncTask.id.in_(task_ids)))
+
+    schedule = (await db.execute(
+        select(SystemSetting).where(SystemSetting.key == "sync_schedule")
+    )).scalar_one_or_none()
+    schedule_value = {**(schedule.value if schedule else {"frequency_hours": 24, "hour": 2}), "enabled": False}
+    if schedule:
+        schedule.value = schedule_value
+        schedule.updated_by = admin.id
+    else:
+        db.add(SystemSetting(key="sync_schedule", value=schedule_value, updated_by=admin.id))
+
+    await record_audit(
+        db,
+        actor_id=admin.id,
+        actor_name=admin.name,
+        action="reset_demo_sync",
+        object_type="sync_demo",
+        object_id="DEMO-SYNC",
+        after={
+            "deleted_tasks": len(task_ids),
+            "deleted_records": len(records),
+            "deleted_scores": len(score_ids),
+            "automatic_sync_enabled": False,
+        },
+    )
+    await db.commit()
+
+    recalculated = 0
+    for student_id in affected_students:
+        profile = await AbilityService(db).recalculate_profile(student_id)
+        if profile:
+            recalculated += 1
+        else:
+            await db.execute(delete(AbilityProfile).where(AbilityProfile.student_id == student_id))
+            await db.commit()
+
+    return {
+        "deleted_tasks": len(task_ids),
+        "deleted_records": len(records),
+        "deleted_scores": len(score_ids),
+        "recalculated_students": recalculated,
+        "automatic_sync_enabled": False,
+    }
+
 
 @router.post("/sync")
 async def trigger_sync(

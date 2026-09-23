@@ -13,6 +13,10 @@ export default function AdminConfig() {
     mutationFn: async () => (await api.post('/api/v1/admin/sync')).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] }),
   })
+  const importFile = useMutation({
+    mutationFn: async (file: File) => { const body = new FormData(); body.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', body)).data },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] }),
+  })
 
   return <div className="space-y-7">
     <header><p className="eyebrow">SYSTEM CONFIGURATION</p><h1 className="page-title">规则、能力与权限配置</h1><p className="mt-2 text-sm text-text-muted">所有规则修改均生成版本号，可选择样例成绩重算并查看前后差异</p></header>
@@ -24,8 +28,9 @@ export default function AdminConfig() {
     <AccessControl data={access.data} />
     <OperationsPanel />
     <section className="railway-card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">模拟增量、去重、异常隔离和重复执行；不连接校方 MySQL</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载 1000 条演示数据</button><button onClick={() => sync.mutate()} disabled={sync.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div></div>
-      {sync.error && <ErrorBox error={sync.error} />}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">MOCK SYNC AUDIT</p><h2 className="section-heading">演示数据同步闭环</h2><p className="mt-1 text-xs text-text-muted">先下载 CSV，再通过「导入数据」写入；首次导入应为新增 990、跳过 5、异常 5</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载数据</button><label className="railway-button cursor-pointer">{importFile.isPending ? '正在导入…' : '导入数据'}<input className="hidden" type="file" accept=".csv,text/csv" disabled={importFile.isPending} onChange={(e) => { const file = e.target.files?.[0]; if (file) importFile.mutate(file); e.currentTarget.value = '' }} /></label><button onClick={() => sync.mutate()} disabled={sync.isPending} className="btn-primary">{sync.isPending ? '执行中…' : '执行一次 Mock 同步'}</button></div></div>
+      {(sync.error || importFile.error) && <ErrorBox error={sync.error || importFile.error} />}
+      {importFile.data && <div className="alert-success m-4 rounded p-3 text-sm">导入完成：读取 {importFile.data.read_count}，新增 {importFile.data.success_count}，跳过 {importFile.data.skipped_count}，异常 {importFile.data.error_count}</div>}
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-railway-800/70 text-xs text-text-muted"><tr><th className="p-3">任务</th><th>读取</th><th>新增</th><th>跳过</th><th>异常</th><th>状态</th><th>操作</th></tr></thead><tbody>{history.data?.map((item: any) => <tr key={item.id} className="border-t border-railway-600/40"><td className="p-3"><p className="font-mono text-xs text-text-secondary">{item.id.slice(0, 12)}</p><p className="text-xs text-text-muted">{new Date(item.started_at).toLocaleString('zh-CN')}</p></td><td>{item.read_count}</td><td className="text-status-success">{item.success_count}</td><td>{item.skipped_count}</td><td className="text-status-warning">{item.error_count}</td><td>{item.status === 'completed' ? '完成' : item.status}</td><td><button className="railway-button !px-2 !py-1 text-xs" disabled={!item.error_count} onClick={() => downloadExceptions(item.id)}>导出异常</button></td></tr>)}</tbody></table></div>
     </section>
   </div>
@@ -44,17 +49,16 @@ function OperationsPanel() {
   useEffect(() => { if (schedule.data) { setEnabled(schedule.data.enabled); setFrequency(schedule.data.frequency_hours); setHour(schedule.data.hour) } }, [schedule.data])
   const save = useMutation({ mutationFn: async () => (await api.put('/api/v1/admin/operations/sync-schedule', { enabled, frequency_hours: frequency, hour })).data, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sync-schedule'] }) })
   const backup = useMutation({ mutationFn: async () => (await api.post('/api/v1/admin/operations/backups')).data, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backups'] }) })
-  const importFile = useMutation({ mutationFn: async (file: File) => { const body = new FormData(); body.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', body)).data }, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-sync-history'] }) })
   return <section className="railway-card overflow-hidden">
     <div className="border-b border-railway-600/50 p-5"><p className="eyebrow">OPERATIONS & AUDIT</p><h2 className="section-heading">同步计划、运行状态与备份</h2></div>
     <div className="grid gap-5 p-5 xl:grid-cols-3">
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">自动增量同步</h3><label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />启用自动任务</label><label className="text-xs text-text-muted">执行频率（小时）<input className="input-field mt-1" type="number" min="1" max="168" value={frequency} onChange={(e) => setFrequency(Number(e.target.value))} /></label><label className="text-xs text-text-muted">每日首选时刻<input className="input-field mt-1" type="number" min="0" max="23" value={hour} onChange={(e) => setHour(Number(e.target.value))} /></label><button className="btn-primary" onClick={() => save.mutate()}>保存同步计划</button></div>
-      <div className="space-y-3"><h3 className="font-semibold text-text-primary">批量导入与备份</h3><label className="railway-button block cursor-pointer text-center">导入 CSV<input className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && importFile.mutate(e.target.files[0])} /></label><button className="railway-button w-full" onClick={() => backup.mutate()}>立即生成数据库备份</button><p className="text-xs text-text-muted">已留存 {backups.data?.length || 0} 个备份；恢复验证通过临时副本执行，不覆盖线上数据。</p></div>
+      <div className="space-y-3"><h3 className="font-semibold text-text-primary">数据备份</h3><button className="railway-button w-full" onClick={() => backup.mutate()}>立即生成数据库备份</button><p className="text-xs text-text-muted">CSV 导入入口位于下方「演示数据同步闭环」。已留存 {backups.data?.length || 0} 个备份；恢复验证通过临时副本执行，不覆盖线上数据。</p></div>
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">运行状态</h3>{status.data && <><StatusLine name="应用" value={status.data.application.status} /><StatusLine name="数据库" value={status.data.database.status} /><StatusLine name="同步" value={status.data.sync.status} /><StatusLine name="AI" value={status.data.ai.status} /></>}</div>
     </div>
     {performance.data && <PerformanceReport data={performance.data} />}
     <div className="border-t border-railway-600/50 p-5"><h3 className="font-semibold text-text-primary">近期审计日志</h3><div className="mt-3 space-y-2">{logs.data?.map((item: any) => <div key={item.id} className="grid gap-2 rounded bg-railway-800/50 p-3 text-xs md:grid-cols-[150px_1fr_1fr_auto]"><span>{new Date(item.created_at).toLocaleString('zh-CN')}</span><span>{item.actor_name || '系统'}</span><span>{item.action} · {item.object_type}</span><span className="text-status-success">{item.result}</span></div>)}</div></div>
-    {(save.error || backup.error || importFile.error) && <ErrorBox error={save.error || backup.error || importFile.error} />}
+    {(save.error || backup.error) && <ErrorBox error={save.error || backup.error} />}
   </section>
 }
 

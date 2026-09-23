@@ -101,6 +101,27 @@ async def test_mock_sync_is_repeatable_and_keeps_exception_audit(client, auth_he
     assert "DEMO-SYNC-000000" in demo_text
     assert "DEMO-INVALID-004" in demo_text
 
+    rejected_reset = await client.delete(
+        "/api/v1/admin/sync/demo-state?confirm=wrong",
+        headers=auth_headers,
+    )
+    assert rejected_reset.status_code == 400
+    reset = await client.delete(
+        "/api/v1/admin/sync/demo-state?confirm=RESET_DEMO_SYNC",
+        headers=auth_headers,
+    )
+    assert reset.status_code == 200
+    assert reset.json()["deleted_tasks"] == 2
+    assert reset.json()["deleted_records"] == 990
+    assert reset.json()["automatic_sync_enabled"] is False
+    assert (await client.get("/api/v1/admin/sync/history", headers=auth_headers)).json() == []
+
+    after_reset = await client.post("/api/v1/admin/sync", headers=auth_headers)
+    assert after_reset.status_code == 200
+    assert after_reset.json()["success_count"] == 990
+    assert after_reset.json()["skipped_count"] == 5
+    assert after_reset.json()["error_count"] == 5
+
 
 @pytest.mark.asyncio
 async def test_admin_can_assign_teacher_scope(client, auth_headers, test_db):
