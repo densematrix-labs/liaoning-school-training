@@ -8,10 +8,11 @@ from app.models.lab import EnvironmentCheck, Lab
 from app.models.student import Class, Major, Student
 from app.models.training import Score, TrainingProject, TrainingRecord
 from app.models.user import User, UserRole
-from app.models.workflow import EnvironmentReview
+from app.models.workflow import EnvironmentReview, EnvironmentTask, TaskStatus
 from app.services.recalculation import RecalculationService
 from app.services.environment import EnvironmentCheckService
 from app.services.report import ReportService
+from app.services.sync import SyncService
 
 
 @pytest.mark.asyncio
@@ -209,3 +210,36 @@ async def test_environment_review_preserves_ai_result_and_reviewer(client, auth_
     async with test_db() as session:
         review = (await session.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == "env-check"))).scalar_one()
         assert review.status == "modified"
+
+
+@pytest.mark.asyncio
+async def test_training_completion_creates_automatic_environment_task(test_db):
+    async with test_db() as session:
+        session.add_all([
+            User(id="auto-admin", username="auto-admin", password_hash="unused", name="自动任务", role=UserRole.ADMIN),
+            User(id="auto-student-user", username="auto-student", password_hash="unused", name="自动学生", role=UserRole.STUDENT),
+            Major(id="auto-major", code="AUTO", name="自动检测专业"),
+            Class(id="auto-class", name="自动检测班", major_id="auto-major", year=2026),
+            Student(id="auto-student", user_id="auto-student-user", student_no="AUTO001", name="自动学生", major_id="auto-major", class_id="auto-class", enrollment_year=2026),
+            MajorAbility(id="auto-ability", name="自动能力", weight=1, graduation_threshold=.6),
+            SubAbility(id="auto-sub", major_ability_id="auto-ability", name="自动子能力", weight=1),
+            Lab(id="auto-lab", name="自动检测实训室", reference_image_url="/images/labs/standard/room-001.jpg"),
+            TrainingProject(id="auto-project", name="自动检测项目", major_id="auto-major", lab_id="auto-lab", max_score=100, steps=[{"id": "auto-step", "name": "操作", "score": 100, "failed_score": 0}], scoring_rules={"version": 1}, ability_mapping={"auto-step": ["auto-sub"]}),
+        ])
+        await session.commit()
+
+        result = await SyncService(session).run([{
+            "source_record_id": "AUTO-RECORD-001",
+            "student_index": 0,
+            "project_index": 0,
+            "completed_at": "2026-09-25T08:00:00",
+            "environment_image_url": "/images/labs/messy/messy-workshop-1.jpg",
+        }], actor_id="auto-admin", actor_name="自动任务")
+
+        assert result.success_count == 1
+        task = (await session.execute(select(EnvironmentTask))).scalar_one()
+        score = (await session.execute(select(Score))).scalar_one()
+        assert task.status == TaskStatus.PENDING
+        assert task.score_id == score.id
+        assert task.lab_id == "auto-lab"
+        assert task.image_data == "/images/labs/messy/messy-workshop-1.jpg"

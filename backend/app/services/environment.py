@@ -50,7 +50,11 @@ class EnvironmentCheckService:
             lab_id=lab_id,
             score_id=score_id,
             uploaded_image_url=(
-                image_base64 if image_base64.startswith("data:") else f"data:image/jpeg;base64,{image_base64}"
+                f"{settings.PUBLIC_BASE_URL.rstrip('/')}{image_base64}"
+                if image_base64.startswith("/")
+                else image_base64
+                if image_base64.startswith(("data:", "http://", "https://"))
+                else f"data:image/jpeg;base64,{image_base64}"
             ),
             total_score=check_result["total_score"],
             details={
@@ -73,16 +77,7 @@ class EnvironmentCheckService:
         score_id: Optional[str],
         created_by: str,
     ) -> EnvironmentTaskResponse:
-        if not image_base64.startswith(("data:image/jpeg", "data:image/png", "data:image/webp")):
-            raise ValueError("仅支持 JPG、PNG 或 WebP 图片")
-        if len(image_base64) > 14_000_000:
-            raise ValueError("图片不得超过 10MB")
-        try:
-            metadata, payload = image_base64.split(",", 1)
-            if ";base64" not in metadata or not base64.b64decode(payload, validate=True):
-                raise ValueError
-        except (ValueError, base64.binascii.Error) as exc:
-            raise ValueError("图片内容无效，请重新选择文件") from exc
+        self._validate_image_source(image_base64)
         lab = (await self.db.execute(select(Lab.id).where(Lab.id == lab_id))).scalar_one_or_none()
         if not lab:
             raise ValueError("实训室不存在")
@@ -102,6 +97,22 @@ class EnvironmentCheckService:
         await self.db.commit()
         await self.db.refresh(task)
         return await self.get_task(task.id)
+
+    @staticmethod
+    def _validate_image_source(image_source: str) -> None:
+        """Accept camera URLs from the training system and browser data URLs."""
+        if image_source.startswith(("http://", "https://", "/")):
+            return
+        if not image_source.startswith(("data:image/jpeg", "data:image/png", "data:image/webp")):
+            raise ValueError("仅支持 JPG、PNG、WebP 图片或可信图片地址")
+        if len(image_source) > 14_000_000:
+            raise ValueError("图片不得超过 10MB")
+        try:
+            metadata, payload = image_source.split(",", 1)
+            if ";base64" not in metadata or not base64.b64decode(payload, validate=True):
+                raise ValueError
+        except (ValueError, base64.binascii.Error) as exc:
+            raise ValueError("图片内容无效，请重新选择文件") from exc
 
     async def get_task(self, task_id: str) -> Optional[EnvironmentTaskResponse]:
         task = (await self.db.execute(select(EnvironmentTask).where(EnvironmentTask.id == task_id))).scalar_one_or_none()
@@ -176,11 +187,17 @@ class EnvironmentCheckService:
             }
         ]
         
-        # Add uploaded image
-        if uploaded_image.startswith("data:"):
+        # Add uploaded image. Training completion callbacks normally provide a
+        # camera URL; the legacy browser flow may still provide a data URL.
+        if uploaded_image.startswith(("data:", "http://", "https://")):
             messages[0]["content"].append({
                 "type": "image_url",
                 "image_url": {"url": uploaded_image}
+            })
+        elif uploaded_image.startswith("/"):
+            messages[0]["content"].append({
+                "type": "image_url",
+                "image_url": {"url": f"{settings.PUBLIC_BASE_URL.rstrip('/')}{uploaded_image}"}
             })
         else:
             messages[0]["content"].append({

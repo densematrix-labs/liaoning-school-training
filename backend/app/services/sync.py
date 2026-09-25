@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.student import Student
 from app.models.training import Score, TrainingProject, TrainingRecord
-from app.models.workflow import MockSyncException, MockSyncTask, TaskStatus
+from app.models.workflow import EnvironmentTask, MockSyncException, MockSyncTask, TaskStatus
 from app.services.ability import AbilityService
 from app.services.audit import record_audit
 
@@ -141,7 +141,7 @@ class SyncService:
                 )
                 self.db.add(record)
                 await self.db.flush()
-                self.db.add(Score(
+                score = Score(
                     id=str(uuid.uuid4()),
                     student_id=student.id,
                     project_id=project.id,
@@ -151,7 +151,30 @@ class SyncService:
                     details=details,
                     failed_abilities=sorted(failed),
                     calculated_at=completed_at,
-                ))
+                )
+                self.db.add(score)
+                await self.db.flush()
+
+                # The upstream training system may attach the end-of-session
+                # camera capture to the same completion record. Persist an AI
+                # inspection task immediately; the scheduler processes it in
+                # the background, so teachers only review generated results.
+                environment_image = str(
+                    raw.get("environment_image")
+                    or raw.get("environment_image_url")
+                    or raw.get("environment_image_base64")
+                    or ""
+                ).strip()
+                if environment_image and project.lab_id:
+                    self.db.add(EnvironmentTask(
+                        id=str(uuid.uuid4()),
+                        student_id=student.id,
+                        lab_id=project.lab_id,
+                        score_id=score.id,
+                        image_data=environment_image,
+                        status=TaskStatus.PENDING,
+                        created_by=actor_id,
+                    ))
                 task.success_count += 1
                 affected_students.add(student.id)
             except (ValueError, TypeError) as exc:
