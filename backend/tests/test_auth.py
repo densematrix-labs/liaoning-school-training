@@ -100,3 +100,20 @@ async def test_get_current_user_invalid_token(client):
     )
     
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_teacher_dependency_accepts_teacher_and_rejects_student():
+    """Cover the shared controller dependency used by teacher-only workflows."""
+    from fastapi import HTTPException
+
+    from app.adapters.controllers.auth import get_current_teacher
+    from app.models.user import User, UserRole
+
+    teacher = User(id="teacher-role", username="teacher-role", password_hash="x", name="教师", role=UserRole.TEACHER)
+    student = User(id="student-role", username="student-role", password_hash="x", name="学生", role=UserRole.STUDENT)
+
+    assert await get_current_teacher(teacher) is teacher
+    with pytest.raises(HTTPException) as exc_info:
+        await get_current_teacher(student)
+    assert exc_info.value.status_code == 403

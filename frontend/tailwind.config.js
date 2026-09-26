@@ -7,46 +7,46 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Railway Industrial Blue Theme
+        // Gearbox-inspired industrial control-room theme
         railway: {
-          900: '#0a0f1a',
-          800: '#0d1525',
-          700: '#111d32',
-          600: '#16263f',
-          500: '#1b304d',
-          400: '#234069',
-          300: '#2d5280',
-          200: '#3a6699',
-          100: '#4a7ab3',
-          50: '#5d8fcc',
+          900: '#032d69',
+          800: '#063d82',
+          700: '#0a4d98',
+          600: '#105dac',
+          500: '#176dc0',
+          400: '#2780d3',
+          300: '#4a98e2',
+          200: '#79b6ec',
+          100: '#acd5f5',
+          50: '#d8efff',
         },
         accent: {
-          blue: '#00d4ff',
-          cyan: '#00fff2',
-          electric: '#0088ff',
-          glow: '#00aaff',
+          blue: '#00c8ff',
+          cyan: '#64ecff',
+          electric: '#008cff',
+          glow: '#00b8ff',
         },
         status: {
-          success: '#00ff88',
-          warning: '#ffaa00',
-          danger: '#ff4455',
-          info: '#00ccff',
+          success: '#39e58c',
+          warning: '#ffc04a',
+          danger: '#ff6674',
+          info: '#5ad9ff',
         },
         text: {
-          primary: '#e8f4ff',
-          secondary: '#8eb8e5',
-          muted: '#5d7a9c',
+          primary: '#f5fbff',
+          secondary: '#bedfff',
+          muted: '#86aed2',
         }
       },
       fontFamily: {
         // Industrial/Tech fonts - avoiding Inter/Roboto
-        display: ['"Orbitron"', '"Rajdhani"', 'system-ui', 'sans-serif'],
-        body: ['"Exo 2"', '"Titillium Web"', 'system-ui', 'sans-serif'],
+        display: ['"Rajdhani"', '"Orbitron"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
+        body: ['"Rajdhani"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
         chinese: ['"Noto Sans SC"', '"Source Han Sans SC"', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
-        'grid-pattern': 'linear-gradient(rgba(0, 136, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 136, 255, 0.03) 1px, transparent 1px)',
+        'grid-pattern': 'linear-gradient(rgba(100, 236, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(100, 236, 255, 0.08) 1px, transparent 1px)',
         'gradient-radial': 'radial-gradient(ellipse at center, var(--tw-gradient-stops))',
       },
       backgroundSize: {

@@ -257,22 +257,23 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-railway-900 bg-grid noise-overlay p-6 overflow-hidden">
+    <div className="min-h-screen bg-railway-900 bg-grid noise-overlay overflow-hidden p-3 sm:p-5 lg:p-6">
       {/* Header */}
-      <header className="mb-6">
-        <div className="flex items-center justify-between">
+      <header className="mb-5 border-b border-accent-cyan/35 pb-5">
+        <div className="flex flex-wrap items-center justify-between gap-5">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-4"
+            className="flex min-w-0 items-center gap-3 sm:gap-4"
           >
-            <div className="w-12 h-12 bg-gradient-to-br from-accent-blue to-accent-cyan rounded-xl flex items-center justify-center shadow-glow-md">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-accent-cyan/70 bg-gradient-to-br from-accent-blue to-accent-cyan shadow-glow-md sm:h-12 sm:w-12">
               <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-white">
                 <path d="M12 2C8 2 4 2.5 4 6v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
               </svg>
             </div>
             <div>
-              <h1 className="font-display text-3xl font-bold text-gradient tracking-wide">
+              <p className="font-mono text-[9px] tracking-[.22em] text-accent-cyan">PUBLIC DATA CENTER · REALTIME</p>
+              <h1 className="font-display text-xl font-bold text-gradient tracking-wide sm:text-3xl">
                 智能实训能力评估平台
               </h1>
               <p className="text-text-muted text-sm">辽宁铁道职业技术学院 · 实时数据监控大屏</p>
@@ -282,11 +283,11 @@ export default function Dashboard() {
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-6"
+            className="flex items-center gap-3 sm:gap-6"
           >
             {/* Time display */}
             <div className="text-right">
-              <p className="font-mono text-2xl font-bold text-accent-cyan">
+              <p className="font-mono text-lg font-bold text-accent-cyan sm:text-2xl">
                 {time.toLocaleTimeString('zh-CN', { hour12: false })}
               </p>
               <p className="text-text-muted text-sm">
@@ -308,7 +309,7 @@ export default function Dashboard() {
       {/* Main Grid */}
       <div className="grid grid-cols-12 gap-4">
         {/* Left Column - Stats & Ranking */}
-        <div className="col-span-3 space-y-4">
+        <div className="col-span-12 space-y-4 lg:col-span-4 2xl:col-span-3">
           {/* Realtime Stats */}
           <div className="grid grid-cols-2 gap-4">
             <StatCard
@@ -386,7 +387,7 @@ export default function Dashboard() {
         </div>
         
         {/* Center Column - Charts */}
-        <div className="col-span-6 space-y-4">
+        <div className="col-span-12 space-y-4 lg:col-span-8 2xl:col-span-6">
           {/* Ability Radar */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -402,21 +403,21 @@ export default function Dashboard() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#234069" />
+                  <PolarGrid stroke="rgba(100,236,255,.28)" />
                   <PolarAngleAxis 
                     dataKey="ability" 
-                    tick={{ fill: '#8eb8e5', fontSize: 12 }}
+                    tick={{ fill: '#c7e6ff', fontSize: 12 }}
                   />
                   <PolarRadiusAxis 
                     angle={30} 
                     domain={[0, 100]} 
-                    tick={{ fill: '#5d7a9c', fontSize: 10 }}
+                    tick={{ fill: '#86aed2', fontSize: 10 }}
                   />
                   <Radar
                     name="能力值"
                     dataKey="value"
-                    stroke="#00d4ff"
-                    fill="#00d4ff"
+                    stroke="#64ecff"
+                    fill="#00c8ff"
                     fillOpacity={0.3}
                   />
                 </RadarChart>
@@ -441,32 +442,32 @@ export default function Dashboard() {
                 <AreaChart data={trendData}>
                   <defs>
                     <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#00d4ff" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#64ecff" stopOpacity={0.34}/>
+                      <stop offset="95%" stopColor="#00c8ff" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <XAxis 
                     dataKey="date" 
-                    tick={{ fill: '#8eb8e5', fontSize: 11 }}
-                    axisLine={{ stroke: '#234069' }}
+                    tick={{ fill: '#bedfff', fontSize: 11 }}
+                    axisLine={{ stroke: '#2780d3' }}
                   />
                   <YAxis 
-                    tick={{ fill: '#5d7a9c', fontSize: 11 }}
-                    axisLine={{ stroke: '#234069' }}
+                    tick={{ fill: '#86aed2', fontSize: 11 }}
+                    axisLine={{ stroke: '#2780d3' }}
                     domain={[0, 100]}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#111d32',
-                      border: '1px solid #234069',
-                      borderRadius: '8px',
+                      backgroundColor: '#063d82',
+                      border: '1px solid rgba(100,236,255,.5)',
+                      borderRadius: '4px',
                     }}
-                    labelStyle={{ color: '#8eb8e5' }}
+                    labelStyle={{ color: '#bedfff' }}
                   />
                   <Area
                     type="monotone"
                     dataKey="score"
-                    stroke="#00d4ff"
+                    stroke="#64ecff"
                     strokeWidth={2}
                     fill="url(#scoreGradient)"
                   />
@@ -477,7 +478,7 @@ export default function Dashboard() {
         </div>
         
         {/* Right Column - Lab Status */}
-        <div className="col-span-3 space-y-4">
+        <div className="col-span-12 space-y-4 lg:col-span-12 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 2xl:col-span-3 2xl:block 2xl:space-y-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -552,7 +553,7 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.8 }}
-        className="mt-4 glass-panel p-3 flex items-center justify-between text-sm"
+        className="mt-4 flex flex-wrap items-center justify-between gap-2 glass-panel p-3 text-sm"
       >
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">

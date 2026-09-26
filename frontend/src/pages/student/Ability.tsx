@@ -71,11 +71,11 @@ export default function StudentAbility() {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={(trend?.points || []).map((point: any) => ({ ...point.abilities, date: new Date(point.date).toLocaleDateString('zh-CN') }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 212, 255, 0.1)" />
-              <XAxis dataKey="date" tick={{ fill: '#8eb8e5', fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fill: '#8eb8e5' }} />
-              <Tooltip contentStyle={{ backgroundColor: '#111d32', border: '1px solid rgba(0, 212, 255, 0.3)' }} />
-              {trend?.abilities?.map((ability: any, index: number) => <Line key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#00d4ff', '#00ff88', '#ffaa00', '#9b8cff', '#ff6688', '#66aaff'][index % 6]} dot={false} />)}
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 236, 255, 0.14)" />
+              <XAxis dataKey="date" tick={{ fill: '#bedfff', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#bedfff' }} />
+              <Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)' }} />
+              {trend?.abilities?.map((ability: any, index: number) => <Line key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#64ecff', '#39e58c', '#ffc04a', '#b8a8ff', '#ff7e98', '#77baff'][index % 6]} dot={false} />)}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -119,29 +119,29 @@ export default function StudentAbility() {
           <div className="h-96">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                <PolarGrid stroke="rgba(0, 212, 255, 0.2)" />
+                <PolarGrid stroke="rgba(100, 236, 255, 0.3)" />
                 <PolarAngleAxis
                   dataKey="name"
-                  tick={{ fill: '#8eb8e5', fontSize: 12 }}
+                  tick={{ fill: '#d8efff', fontSize: 12 }}
                 />
                 <PolarRadiusAxis
                   angle={30}
                   domain={[0, 100]}
-                  tick={{ fill: '#5d7a9c', fontSize: 10 }}
+                  tick={{ fill: '#86aed2', fontSize: 10 }}
                   tickCount={5}
                 />
                 <Radar
                   name="能力值"
                   dataKey="score"
-                  stroke="#00d4ff"
-                  fill="#00d4ff"
+                  stroke="#64ecff"
+                  fill="#00c8ff"
                   fillOpacity={0.3}
                   strokeWidth={2}
                 />
                 <Radar
                   name="毕业标准"
                   dataKey="threshold"
-                  stroke="#ffaa00"
+                  stroke="#ffc04a"
                   fill="none"
                   strokeWidth={1}
                   strokeDasharray="5 5"
@@ -162,27 +162,27 @@ export default function StudentAbility() {
           <div className="h-96">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} layout="vertical" margin={{ left: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 212, 255, 0.1)" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#8eb8e5' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 236, 255, 0.14)" />
+                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#bedfff' }} />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  tick={{ fill: '#8eb8e5', fontSize: 12 }}
+                  tick={{ fill: '#bedfff', fontSize: 12 }}
                   width={80}
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#111d32',
-                    border: '1px solid rgba(0, 212, 255, 0.3)',
-                    borderRadius: '8px',
+                    backgroundColor: '#063d82',
+                    border: '1px solid rgba(100, 236, 255, 0.5)',
+                    borderRadius: '4px',
                   }}
-                  labelStyle={{ color: '#e8f4ff' }}
+                  labelStyle={{ color: '#f5fbff' }}
                 />
                 <Bar dataKey="score" radius={[0, 4, 4, 0]}>
                   {barData.map((entry: any, index: number) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.score >= entry.threshold ? '#00ff88' : '#00d4ff'}
+                      fill={entry.score >= entry.threshold ? '#39e58c' : '#64ecff'}
                     />
                   ))}
                 </Bar>

@@ -56,15 +56,15 @@ export default function AbilityRadar({
           <div className={compact ? 'h-64 px-2 py-3' : 'h-80 px-3 py-4'}>
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={data} outerRadius={compact ? '64%' : '70%'}>
-                <PolarGrid stroke="rgba(0, 212, 255, 0.24)" />
-                <PolarAngleAxis dataKey="name" tick={{ fill: '#b8d7f5', fontSize: compact ? 10 : 12 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#5d7a9c', fontSize: 9 }} tickCount={5} />
+                <PolarGrid stroke="rgba(100, 236, 255, 0.3)" />
+                <PolarAngleAxis dataKey="name" tick={{ fill: '#d8efff', fontSize: compact ? 10 : 12 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 9 }} tickCount={5} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0d1525', border: '1px solid rgba(0, 212, 255, 0.4)', borderRadius: 8 }}
-                  labelStyle={{ color: '#e8f4ff' }}
+                  contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)', borderRadius: 4 }}
+                  labelStyle={{ color: '#f5fbff' }}
                 />
-                <Radar name="当前能力" dataKey="value" stroke="#00fff2" fill="#00d4ff" fillOpacity={0.3} strokeWidth={2.5} />
-                <Radar name="毕业达标线" dataKey="threshold" stroke="#ffaa00" fill="#ffaa00" fillOpacity={0.04} strokeDasharray="5 5" strokeWidth={1.5} />
+                <Radar name="当前能力" dataKey="value" stroke="#64ecff" fill="#00c8ff" fillOpacity={0.34} strokeWidth={2.5} />
+                <Radar name="毕业达标线" dataKey="threshold" stroke="#ffc04a" fill="#ffc04a" fillOpacity={0.05} strokeDasharray="5 5" strokeWidth={1.5} />
               </RadarChart>
             </ResponsiveContainer>
           </div>
