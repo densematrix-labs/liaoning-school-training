@@ -15,6 +15,7 @@ from app.schemas.dashboard import (
     TrendDataPoint,
     LabStatusItem,
     GraduationSummary,
+    ScoreDistributionBucket,
 )
 
 
@@ -43,6 +44,9 @@ class DashboardService:
 
         # Graduation readiness across all enrolled students
         graduation_summary = await self._get_graduation_summary()
+
+        # Overall score distribution for the control-room overview
+        score_distribution = await self._get_score_distribution()
         
         return DashboardResponse(
             realtime=realtime,
@@ -51,6 +55,7 @@ class DashboardService:
             trend=trend,
             lab_status=lab_status,
             graduation_summary=graduation_summary,
+            score_distribution=score_distribution,
             updated_at=now,
         )
     
@@ -193,6 +198,30 @@ class DashboardService:
             risk_count=max(student_count - ready_count, 0),
             ready_rate=round(ready_count / student_count * 100, 1) if student_count else 0,
         )
+
+    async def _get_score_distribution(self) -> List[ScoreDistributionBucket]:
+        scores = list((await self.db.execute(select(Score))).scalars().all())
+        buckets = [
+            ("<60", 0, 60),
+            ("60-69", 60, 70),
+            ("70-79", 70, 80),
+            ("80-89", 80, 90),
+            ("90-100", 90, 101),
+        ]
+        counts = [0] * len(buckets)
+
+        for score in scores:
+            percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
+            percentage = min(max(percentage, 0), 100)
+            for index, (_, minimum, maximum) in enumerate(buckets):
+                if minimum <= percentage < maximum:
+                    counts[index] += 1
+                    break
+
+        return [
+            ScoreDistributionBucket(label=label, count=counts[index])
+            for index, (label, _, _) in enumerate(buckets)
+        ]
     
     async def _get_trend_data(self, days: int) -> List[TrendDataPoint]:
         now = datetime.utcnow()

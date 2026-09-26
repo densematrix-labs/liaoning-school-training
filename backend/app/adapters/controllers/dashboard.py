@@ -292,27 +292,26 @@ async def get_alerts(
     # 找出能力低于60%的学生
     profiles_result = await db.execute(select(AbilityProfile))
     profiles = profiles_result.scalars().all()
+
+    students_result = await db.execute(select(Student))
+    students = students_result.scalars().all()
+    students_by_id = {student.id: student for student in students}
+
+    abilities_result = await db.execute(select(MajorAbility))
+    abilities_by_id = {ability.id: ability for ability in abilities_result.scalars().all()}
     
     for profile in profiles:
         if not profile.major_abilities:
             continue
         
-        # 获取学生信息
-        student_result = await db.execute(
-            select(Student).where(Student.id == profile.student_id)
-        )
-        student = student_result.scalar_one_or_none()
+        student = students_by_id.get(profile.student_id)
         if not student:
             continue
         
         # 检查是否有低于60分的能力
         for ability_id, score in profile.major_abilities.items():
             if score < 60:
-                # 获取能力名称
-                ability_result = await db.execute(
-                    select(MajorAbility).where(MajorAbility.id == ability_id)
-                )
-                ability = ability_result.scalar_one_or_none()
+                ability = abilities_by_id.get(ability_id)
                 
                 alerts.append(AlertInfo(
                     type="ability_warning",
@@ -323,20 +322,18 @@ async def get_alerts(
                     timestamp=datetime.now().isoformat()
                 ))
     
-    # 找出连续3次未通过的学生
-    students_result = await db.execute(select(Student))
-    students = students_result.scalars().all()
-    
+    # 找出连续3次未通过的学生。一次读取后按学生分组，避免大屏轮询触发 N+1 查询。
+    scores_result = await db.execute(
+        select(Score).order_by(Score.student_id, Score.calculated_at.desc())
+    )
+    recent_scores_by_student = {}
+    for score in scores_result.scalars().all():
+        recent = recent_scores_by_student.setdefault(score.student_id, [])
+        if len(recent) < 3:
+            recent.append(score)
+
     for student in students:
-        # 获取最近3次实训
-        recent_scores = await db.execute(
-            select(Score)
-            .where(Score.student_id == student.id)
-            .order_by(Score.calculated_at.desc())
-            .limit(3)
-        )
-        scores = recent_scores.scalars().all()
-        
+        scores = recent_scores_by_student.get(student.id, [])
         if len(scores) >= 3 and all(s.total_score < 60 for s in scores):
             alerts.append(AlertInfo(
                 type="consecutive_fail",

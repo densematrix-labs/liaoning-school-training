@@ -5,6 +5,20 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_dashboard_root_includes_score_distribution(client, test_db):
+    response = await client.get("/api/v1/dashboard/")
+
+    assert response.status_code == 200
+    assert response.json()["score_distribution"] == [
+        {"label": "<60", "count": 0},
+        {"label": "60-69", "count": 0},
+        {"label": "70-79", "count": 0},
+        {"label": "80-89", "count": 0},
+        {"label": "90-100", "count": 0},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dashboard_overview(client, test_db):
     """Test dashboard overview endpoint"""
     response = await client.get("/api/v1/dashboard/overview")

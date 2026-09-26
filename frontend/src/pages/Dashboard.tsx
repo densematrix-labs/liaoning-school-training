@@ -1,20 +1,23 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
-  RadarChart,
-  PolarGrid,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
   PolarAngleAxis,
+  PolarGrid,
   PolarRadiusAxis,
   Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
 } from 'recharts'
 import { api } from '../lib/api'
 
@@ -61,516 +64,252 @@ interface DashboardData {
     risk_count: number
     ready_rate: number
   }
+  score_distribution: Array<{ label: string; count: number }>
   updated_at: string
 }
 
-// Animated counter component
+interface RealtimeActivity {
+  id: string
+  student_name: string
+  student_id: string
+  class_name: string
+  project_name: string
+  status: string
+  score: number | null
+  passed: boolean | null
+  timestamp: string | null
+}
+
+interface AlertInfo {
+  type: string
+  level: string
+  message: string
+  student_id: string | null
+  student_name: string | null
+  timestamp: string
+}
+
+const scoreColors = ['#ff6674', '#ffc04a', '#36c8ff', '#64ecff', '#39e58c']
+
 function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
   const [display, setDisplay] = useState(0)
-  
+
   useEffect(() => {
-    const duration = 1000
-    const steps = 30
+    const duration = 700
+    const steps = 24
     const increment = value / steps
+    const factor = Number.isInteger(value) ? 1 : 10
     let current = 0
-    
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       current += increment
       if (current >= value) {
         setDisplay(value)
-        clearInterval(timer)
+        window.clearInterval(timer)
       } else {
-        setDisplay(Math.floor(current))
+        setDisplay(Math.floor(current * factor) / factor)
       }
     }, duration / steps)
-    
-    return () => clearInterval(timer)
+    return () => window.clearInterval(timer)
   }, [value])
-  
-  return (
-    <span className="font-display text-4xl font-bold text-gradient tabular-nums">
-      {display.toLocaleString()}{suffix}
-    </span>
-  )
+
+  return <span>{display.toLocaleString()}{suffix}</span>
 }
 
-// Stat card component
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  suffix = '',
-  delay = 0 
-}: { 
-  icon: string
+function MetricCard({ code, label, value, suffix = '', tone = 'cyan' }: {
+  code: string
   label: string
   value: number
   suffix?: string
-  delay?: number 
+  tone?: 'cyan' | 'green' | 'amber' | 'red'
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.5 }}
-      className="card-stat relative overflow-hidden group"
-    >
-      {/* Glow effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-accent-blue/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      
-      {/* Icon */}
-      <div className="text-4xl mb-3">{icon}</div>
-      
-      {/* Value */}
-      <AnimatedNumber value={value} suffix={suffix} />
-      
-      {/* Label */}
-      <p className="text-text-muted text-sm mt-2 font-body">{label}</p>
-      
-      {/* Corner decoration */}
-      <div className="absolute top-0 right-0 w-8 h-8">
-        <div className="absolute top-0 right-0 w-full h-0.5 bg-gradient-to-l from-accent-blue/50 to-transparent" />
-        <div className="absolute top-0 right-0 w-0.5 h-full bg-gradient-to-b from-accent-blue/50 to-transparent" />
-      </div>
-    </motion.div>
+    <div className={`dashboard-metric dashboard-metric-${tone}`}>
+      <div className="dashboard-metric-head"><span>{code}</span><i aria-hidden="true" /></div>
+      <strong><AnimatedNumber value={value} suffix={suffix} /></strong>
+      <p>{label}</p>
+    </div>
   )
 }
 
-// Lab status indicator
-function LabStatusCard({ lab }: { lab: DashboardData['lab_status'][0] }) {
-  const statusColors: Record<string, string> = {
-    available: 'bg-status-success',
-    in_use: 'bg-status-warning',
-    maintenance: 'bg-status-danger',
-  }
-  
-  const statusLabels: Record<string, string> = {
-    available: '空闲',
-    in_use: '使用中',
-    maintenance: '维护中',
-  }
-  
-  const usage = (lab.current_students / lab.capacity) * 100
-  
+function PanelTitle({ code, title, meta }: { code: string; title: string; meta?: string }) {
   return (
-    <motion.div
-      whileHover={{ scale: 1.02 }}
-      className="glass-panel p-4 relative overflow-hidden"
-    >
-      {/* Status indicator */}
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-display text-sm font-semibold text-text-primary">{lab.lab_name}</h4>
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${statusColors[lab.status] || statusColors.available} animate-pulse`} />
-          <span className="text-xs text-text-muted">
-            {statusLabels[lab.status] || statusLabels.available}
-          </span>
-        </div>
-      </div>
-      
-      {/* Usage bar */}
-      <div className="h-2 bg-railway-700 rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${usage}%` }}
-          transition={{ duration: 1, delay: 0.5 }}
-          className="h-full bg-gradient-to-r from-accent-electric to-accent-cyan"
-        />
-      </div>
-      
-      {/* Stats */}
-      <div className="flex justify-between mt-2 text-xs">
-        <span className="text-accent-cyan font-mono">{lab.current_students} / {lab.capacity}</span>
-        <span className="text-text-muted">{usage.toFixed(0)}%</span>
-      </div>
-    </motion.div>
+    <div className="dashboard-panel-title">
+      <div><span>{code}</span><h2>{title}</h2></div>
+      {meta && <p>{meta}</p>}
+    </div>
   )
+}
+
+function formatTime(value: string | null) {
+  if (!value) return '--:--'
+  return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 export default function Dashboard() {
-  const { t } = useTranslation()
   const [time, setTime] = useState(new Date())
   const wsRef = useRef<WebSocket | null>(null)
-  
-  // Fetch dashboard data
+
   const { data, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
-    queryFn: async () => {
-      const res = await api.get('/api/v1/dashboard/')
-      return res.data
-    },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    queryFn: async () => (await api.get('/api/v1/dashboard/')).data,
+    refetchInterval: 30000,
   })
-  
-  // Update time every second
+  const { data: activities = [] } = useQuery<RealtimeActivity[]>({
+    queryKey: ['dashboard-realtime'],
+    queryFn: async () => (await api.get('/api/v1/dashboard/realtime?limit=6')).data,
+    refetchInterval: 30000,
+  })
+  const { data: alerts = [] } = useQuery<AlertInfo[]>({
+    queryKey: ['dashboard-alerts'],
+    queryFn: async () => (await api.get('/api/v1/dashboard/alerts?limit=4')).data,
+    refetchInterval: 30000,
+  })
+
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(timer)
+    const timer = window.setInterval(() => setTime(new Date()), 1000)
+    return () => window.clearInterval(timer)
   }, [])
-  
-  // WebSocket for realtime updates
+
   useEffect(() => {
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/dashboard/ws`
-    
     try {
       wsRef.current = new WebSocket(wsUrl)
-      
-      wsRef.current.onmessage = () => {
-        refetch()
-      }
-      
-      wsRef.current.onerror = () => {
-        // Fallback to polling
-      }
+      wsRef.current.onmessage = () => refetch()
+      wsRef.current.onerror = () => undefined
     } catch {
-      // WebSocket not available, use polling
+      // The 30-second query interval remains as the fallback.
     }
-    
-    return () => {
-      wsRef.current?.close()
-    }
+    return () => wsRef.current?.close()
   }, [refetch])
-  
-  // Prepare radar data
-  const radarData = data?.ability_distribution.map(a => ({
-    ability: a.ability_name.slice(0, 4),
-    value: a.avg,
-    fullMark: 100,
-  })) || []
-  
-  // Prepare trend data (last 7 days)
-  const trendData = data?.trend.slice(-7).map(t => ({
-    date: t.date.slice(5), // MM-DD
-    score: t.average_score,
-    count: t.training_count,
-  })) || []
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-railway-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-accent-blue/30 border-t-accent-blue rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-text-muted">{t('loading')}</p>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-railway-900">
+        <div className="text-center"><div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-accent-blue/30 border-t-accent-blue" /><p className="text-text-muted">数据加载中</p></div>
       </div>
     )
   }
 
+  const realtime = data?.realtime || { active_students: 0, today_trainings: 0, average_score: 0, pass_rate: 0 }
+  const graduation = data?.graduation_summary || { total_students: 0, evaluated_students: 0, ready_count: 0, risk_count: 0, ready_rate: 0 }
+  const ranking = data?.class_ranking.slice(0, 5) || []
+  const maxRankingScore = Math.max(...ranking.map(item => item.average_score), 100)
+  const radarData = data?.ability_distribution.map(item => ({
+    ability: item.ability_name.length > 5 ? `${item.ability_name.slice(0, 5)}…` : item.ability_name,
+    value: item.avg,
+    threshold: item.threshold,
+  })) || []
+  const trendData = data?.trend.slice(-7).map(item => ({ date: item.date.slice(5), score: item.average_score, count: item.training_count })) || []
+  const scoreDistribution = data?.score_distribution || []
+  const labs = data?.lab_status || []
+  const inUseLabs = labs.filter(lab => lab.status === 'in_use').length
+  const maintenanceLabs = labs.filter(lab => lab.status === 'maintenance')
+  const belowTargetAbilities = (data?.ability_distribution || []).filter(item => item.avg < item.threshold)
+  const riskNotices = [
+    ...(graduation.risk_count > 0 ? [{ key: 'graduation', level: 'danger', message: `${graduation.risk_count} 名学生存在毕业达标风险` }] : []),
+    ...maintenanceLabs.map(lab => ({ key: `lab-${lab.lab_id}`, level: 'warning', message: `${lab.lab_name}处于维护状态` })),
+    ...belowTargetAbilities.map(item => ({ key: `ability-${item.ability_id}`, level: 'warning', message: `${item.ability_name}均值低于达标线 ${item.threshold}` })),
+    ...alerts.map(alert => ({ key: `api-${alert.type}-${alert.student_id}-${alert.timestamp}`, level: alert.level, message: alert.message })),
+  ].slice(0, 5)
+
   return (
-    <div className="min-h-screen bg-railway-900 bg-grid noise-overlay overflow-hidden p-3 sm:p-5 lg:p-6">
-      {/* Header */}
-      <header className="mb-5 border-b border-accent-cyan/35 pb-5">
-        <div className="flex flex-wrap items-center justify-between gap-5">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex min-w-0 items-center gap-3 sm:gap-4"
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-accent-cyan/70 bg-gradient-to-br from-accent-blue to-accent-cyan shadow-glow-md sm:h-12 sm:w-12">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-white">
-                <path d="M12 2C8 2 4 2.5 4 6v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-              </svg>
-            </div>
-            <div>
-              <p className="font-mono text-[9px] tracking-[.22em] text-accent-cyan">PUBLIC DATA CENTER · REALTIME</p>
-              <h1 className="font-display text-xl font-bold text-gradient tracking-wide sm:text-3xl">
-                智能实训能力评估平台
-              </h1>
-              <p className="text-text-muted text-sm">辽宁铁道职业技术学院 · 实时数据监控大屏</p>
-            </div>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3 sm:gap-6"
-          >
-            {/* Time display */}
-            <div className="text-right">
-              <p className="font-mono text-lg font-bold text-accent-cyan sm:text-2xl">
-                {time.toLocaleTimeString('zh-CN', { hour12: false })}
-              </p>
-              <p className="text-text-muted text-sm">
-                {time.toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </p>
-            </div>
-            
-            {/* Back button */}
-            <Link
-              to="/"
-              className="btn-secondary !py-2"
-            >
-              返回系统
-            </Link>
-          </motion.div>
+    <div className="dashboard-screen bg-grid noise-overlay">
+      <header className="dashboard-header">
+        <div className="dashboard-brand">
+          <div className="signal-mark" aria-hidden="true"><span /><span /><span /></div>
+          <div><p>PUBLIC DATA CENTER · REALTIME</p><h1>智能实训能力评估平台</h1><small>辽宁铁道职业技术学院 · 实时数据监控大屏</small></div>
+        </div>
+        <div className="dashboard-clock">
+          <div><strong>{time.toLocaleTimeString('zh-CN', { hour12: false })}</strong><span>{time.toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' })}</span></div>
+          <Link to="/" className="btn-secondary !px-3 !py-1.5">返回系统</Link>
         </div>
       </header>
-      
-      {/* Main Grid */}
-      <div className="grid grid-cols-12 gap-4">
-        {/* Left Column - Stats & Ranking */}
-        <div className="col-span-12 space-y-4 lg:col-span-4 2xl:col-span-3">
-          {/* Realtime Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <StatCard
-              icon="👥"
-              label={t('dashboard.active_students')}
-              value={data?.realtime.active_students || 0}
-              delay={0}
-            />
-            <StatCard
-              icon="📊"
-              label={t('dashboard.today_trainings')}
-              value={data?.realtime.today_trainings || 0}
-              delay={0.1}
-            />
-            <StatCard
-              icon="🎯"
-              label={t('dashboard.average_score')}
-              value={data?.realtime.average_score || 0}
-              suffix=""
-              delay={0.2}
-            />
-            <StatCard
-              icon="✅"
-              label={t('dashboard.pass_rate')}
-              value={data?.realtime.pass_rate || 0}
-              suffix="%"
-              delay={0.3}
-            />
-          </div>
-          
-          {/* Class Ranking */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="glass-panel p-5"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4 flex items-center gap-2">
-              <span>🏆</span>
-              {t('dashboard.class_ranking')}
-            </h3>
-            
-            <div className="space-y-3">
-              {data?.class_ranking.slice(0, 5).map((cls, index) => (
-                <motion.div
-                  key={cls.class_id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.5 + index * 0.1 }}
-                  className="flex items-center gap-3 p-3 bg-railway-700/30 rounded-lg hover:bg-railway-700/50 transition-colors"
-                >
-                  {/* Rank badge */}
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-bold
-                    ${index === 0 ? 'bg-yellow-500/20 text-yellow-400' : 
-                      index === 1 ? 'bg-gray-400/20 text-gray-300' :
-                      index === 2 ? 'bg-orange-500/20 text-orange-400' :
-                      'bg-railway-600 text-text-muted'}`}
-                  >
-                    {cls.rank}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <p className="font-semibold text-text-primary text-sm">{cls.class_name}</p>
-                    <p className="text-xs text-text-muted">{cls.training_count} 次实训</p>
-                  </div>
-                  
-                  <div className="text-right">
-                    <p className="font-mono font-bold text-accent-cyan">{cls.average_score}</p>
-                    <p className="text-xs text-text-muted">平均分</p>
-                  </div>
+
+      <section className="dashboard-metrics" aria-label="核心指标">
+        <MetricCard code="LIVE" label="当前在训学生" value={realtime.active_students} />
+        <MetricCard code="TODAY" label="今日实训次数" value={realtime.today_trainings} />
+        <MetricCard code="AVG" label="今日平均分" value={realtime.average_score} />
+        <MetricCard code="PASS" label="今日合格率" value={realtime.pass_rate} suffix="%" tone="green" />
+        <MetricCard code="READY" label="毕业达标学生" value={graduation.ready_count} tone="green" />
+        <MetricCard code="RISK" label="毕业风险预警" value={graduation.risk_count} tone={graduation.risk_count ? 'red' : 'green'} />
+      </section>
+
+      <main className="dashboard-main-grid">
+        <div className="dashboard-column dashboard-column-left">
+          <section className="dashboard-panel dashboard-live-panel">
+            <PanelTitle code="LIVE FEED" title="实时实训动态" meta={`${inUseLabs}/${labs.length} 实训室运行`} />
+            <div className="dashboard-lab-rail">
+              {labs.slice(0, 4).map(lab => {
+                const usage = lab.capacity ? Math.round(lab.current_students / lab.capacity * 100) : 0
+                return <div key={lab.lab_id} className="dashboard-lab-item"><div><span className={`status-dot status-${lab.status}`} /><strong>{lab.lab_name}</strong><small>{lab.current_students}/{lab.capacity}</small></div><i><b style={{ width: `${usage}%` }} /></i></div>
+              })}
+            </div>
+            <div className="dashboard-feed">
+              {activities.length ? activities.slice(0, 5).map((activity, index) => (
+                <motion.div key={activity.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * .05 }} className="dashboard-feed-row">
+                  <time>{formatTime(activity.timestamp)}</time>
+                  <div><strong>{activity.student_name}</strong><span>{activity.class_name} · {activity.project_name}</span></div>
+                  <em className={activity.passed === false ? 'is-danger' : activity.status === 'in_progress' ? 'is-live' : 'is-success'}>{activity.status === 'in_progress' ? '进行中' : activity.score == null ? '已完成' : `${activity.score}分`}</em>
                 </motion.div>
-              ))}
+              )) : <div className="dashboard-empty"><span>SYNC</span><p>暂无今日实训记录，等待数据接入</p></div>}
             </div>
-          </motion.div>
-        </div>
-        
-        {/* Center Column - Charts */}
-        <div className="col-span-12 space-y-4 lg:col-span-8 2xl:col-span-6">
-          {/* Ability Radar */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className="glass-panel p-5"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4 flex items-center gap-2">
-              <span>🎯</span>
-              {t('dashboard.ability_dist')}
-            </h3>
-            
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="rgba(100,236,255,.28)" />
-                  <PolarAngleAxis 
-                    dataKey="ability" 
-                    tick={{ fill: '#c7e6ff', fontSize: 12 }}
-                  />
-                  <PolarRadiusAxis 
-                    angle={30} 
-                    domain={[0, 100]} 
-                    tick={{ fill: '#86aed2', fontSize: 10 }}
-                  />
-                  <Radar
-                    name="能力值"
-                    dataKey="value"
-                    stroke="#64ecff"
-                    fill="#00c8ff"
-                    fillOpacity={0.3}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-          
-          {/* Trend Chart */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-            className="glass-panel p-5"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4 flex items-center gap-2">
-              <span>📈</span>
-              {t('dashboard.trend')}
-            </h3>
-            
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#64ecff" stopOpacity={0.34}/>
-                      <stop offset="95%" stopColor="#00c8ff" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis 
-                    dataKey="date" 
-                    tick={{ fill: '#bedfff', fontSize: 11 }}
-                    axisLine={{ stroke: '#2780d3' }}
-                  />
-                  <YAxis 
-                    tick={{ fill: '#86aed2', fontSize: 11 }}
-                    axisLine={{ stroke: '#2780d3' }}
-                    domain={[0, 100]}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#063d82',
-                      border: '1px solid rgba(100,236,255,.5)',
-                      borderRadius: '4px',
-                    }}
-                    labelStyle={{ color: '#bedfff' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#64ecff"
-                    strokeWidth={2}
-                    fill="url(#scoreGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-        </div>
-        
-        {/* Right Column - Lab Status */}
-        <div className="col-span-12 space-y-4 lg:col-span-12 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 2xl:col-span-3 2xl:block 2xl:space-y-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="glass-panel p-5"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan mb-4 flex items-center gap-2">
-              <span>🏭</span>
-              {t('dashboard.lab_status')}
-            </h3>
-            
-            <div className="space-y-3">
-              <AnimatePresence>
-                {data?.lab_status.map((lab, index) => (
-                  <motion.div
-                    key={lab.lab_id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.6 + index * 0.1 }}
-                  >
-                    <LabStatusCard lab={lab} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-          
-          {/* Complete ability and graduation distribution */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="glass-panel p-5"
-          >
-            <h3 className="font-display text-lg font-semibold text-accent-cyan">能力与毕业达标</h3>
-            <p className="mt-1 text-xs text-text-muted">完整展示全部能力维度及毕业达标状态</p>
+          </section>
 
-            <div className="mt-4 rounded-lg border border-railway-600/60 bg-railway-800/50 p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-text-secondary">毕业达标进度</span>
-                <span className="font-mono text-accent-cyan">{data?.graduation_summary.ready_rate || 0}%</span>
-              </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-railway-700">
-                <div className="h-full rounded-full bg-status-success" style={{ width: `${data?.graduation_summary.ready_rate || 0}%` }} />
-              </div>
-              <div className="mt-2 flex justify-between text-xs">
-                <span className="text-status-success">已达标 {data?.graduation_summary.ready_count || 0} 人</span>
-                <span className="text-status-warning">存在风险 {data?.graduation_summary.risk_count || 0} 人</span>
-              </div>
+          <section className="dashboard-panel dashboard-alert-panel">
+            <PanelTitle code="ALERT" title="异常与毕业风险" meta={`${riskNotices.length} 条关注事项`} />
+            <div className="dashboard-risk-summary">
+              <div><strong>{graduation.ready_rate}%</strong><span>整体毕业达标率</span></div>
+              <i><b style={{ width: `${graduation.ready_rate}%` }} /></i>
+              <p><span>已达标 {graduation.ready_count}</span><em>风险 {graduation.risk_count}</em></p>
             </div>
+            <div className="dashboard-alert-metrics">
+              <div><strong>{graduation.risk_count}</strong><span>风险学生</span></div>
+              <div><strong>{belowTargetAbilities.length}</strong><span>待提升能力</span></div>
+              <div><strong>{maintenanceLabs.length}</strong><span>设备维护</span></div>
+            </div>
+            <div className="dashboard-alert-list">
+              {riskNotices.length ? riskNotices.map(notice => <div key={notice.key} className={`dashboard-alert dashboard-alert-${notice.level}`}><i aria-hidden="true" /><span>{notice.message}</span></div>) : <div className="dashboard-alert dashboard-alert-success"><i aria-hidden="true" /><span>当前无异常预警，系统运行平稳</span></div>}
+            </div>
+          </section>
+        </div>
 
-            <div className="mt-4 space-y-2">
-              {data?.ability_distribution.map((ability) => (
-                <div key={ability.ability_id} className="rounded border border-railway-600/50 p-2.5">
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="text-text-secondary">{ability.ability_name}</span>
-                    <span className="font-mono text-accent-cyan">{ability.avg} / {ability.threshold}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-railway-700">
-                    <div className="h-full rounded-full bg-accent-blue" style={{ width: `${Math.min(100, ability.avg)}%` }} />
-                  </div>
-                  <p className="mt-1 text-[10px] text-text-muted">达标 {ability.ready_count} 人 · 未达标 {ability.not_ready_count} 人</p>
-                </div>
-              ))}
+        <div className="dashboard-column dashboard-column-center">
+          <section className="dashboard-panel">
+            <PanelTitle code="CLASS" title="班级对比" meta="平均成绩 / 累计实训" />
+            <div className="dashboard-ranking">
+              {ranking.map((item, index) => <div key={item.class_id} className="dashboard-rank-row"><span className={`rank-number rank-${index + 1}`}>{item.rank}</span><div><p><strong>{item.class_name}</strong><small>{item.training_count} 次实训</small><em>{item.average_score}</em></p><i><b style={{ width: `${item.average_score / maxRankingScore * 100}%` }} /></i></div></div>)}
             </div>
-          </motion.div>
+          </section>
+
+          <section className="dashboard-panel dashboard-analysis-panel">
+            <PanelTitle code="SCORE" title="成绩分布与近七日趋势" meta="全量成绩 / 日均分" />
+            <div className="dashboard-dual-chart">
+              <div><h3>成绩分布</h3><ResponsiveContainer width="100%" height="100%"><BarChart data={scoreDistribution} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}><CartesianGrid stroke="rgba(100,236,255,.12)" vertical={false} /><XAxis dataKey="label" tick={{ fill: '#9bc7ed', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#86aed2', fontSize: 9 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /><Bar dataKey="count" radius={[3, 3, 0, 0]}>{scoreDistribution.map((entry, index) => <Cell key={entry.label} fill={scoreColors[index] || '#64ecff'} />)}</Bar></BarChart></ResponsiveContainer></div>
+              <div><h3>近七日平均分</h3><ResponsiveContainer width="100%" height="100%"><AreaChart data={trendData} margin={{ top: 8, right: 5, left: -25, bottom: 0 }}><defs><linearGradient id="dashboardScoreGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#64ecff" stopOpacity={.4} /><stop offset="95%" stopColor="#00c8ff" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="rgba(100,236,255,.12)" vertical={false} /><XAxis dataKey="date" tick={{ fill: '#9bc7ed', fontSize: 9 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 9 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /><Area type="monotone" dataKey="score" stroke="#64ecff" strokeWidth={2} fill="url(#dashboardScoreGradient)" /></AreaChart></ResponsiveContainer></div>
+            </div>
+          </section>
         </div>
-      </div>
-      
-      {/* Bottom status bar */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8 }}
-        className="mt-4 flex flex-wrap items-center justify-between gap-2 glass-panel p-3 text-sm"
-      >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-status-success animate-pulse" />
-            <span className="text-text-muted">系统运行正常</span>
-          </div>
-          <div className="text-text-muted">
-            数据更新: {data?.updated_at ? new Date(data.updated_at).toLocaleTimeString() : '-'}
-          </div>
+
+        <div className="dashboard-column dashboard-column-right">
+          <section className="dashboard-panel dashboard-radar-panel">
+            <PanelTitle code="ABILITY" title="能力雷达" meta="平均能力 / 毕业标准" />
+            <div className="dashboard-radar-chart"><ResponsiveContainer width="100%" height="100%"><RadarChart data={radarData} outerRadius="85%"><PolarGrid stroke="rgba(100,236,255,.3)" /><PolarAngleAxis dataKey="ability" tick={{ fill: '#c7e6ff', fontSize: 9 }} /><PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 7 }} /><Radar name="毕业标准" dataKey="threshold" stroke="#ffc04a" fill="#ffc04a" fillOpacity={.05} strokeDasharray="4 4" /><Radar name="平均能力" dataKey="value" stroke="#64ecff" fill="#00c8ff" fillOpacity={.28} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /></RadarChart></ResponsiveContainer></div>
+            <div className="dashboard-chart-legend"><span><i className="legend-cyan" />平均能力</span><span><i className="legend-amber" />毕业标准</span></div>
+          </section>
+
+          <section className="dashboard-panel dashboard-ability-panel">
+            <PanelTitle code="TARGET" title="能力达标情况" meta={`${graduation.evaluated_students}/${graduation.total_students} 已评估`} />
+            <div className="dashboard-ability-list">
+              {data?.ability_distribution.map(item => {
+                const achieved = item.avg >= item.threshold
+                return <div key={item.ability_id} className="dashboard-ability-row"><p><strong>{item.ability_name}</strong><span className={achieved ? 'is-success' : 'is-danger'}>{achieved ? '达标' : '待提升'}</span><em>{item.avg}<small> / {item.threshold}</small></em></p><i><b className={achieved ? 'is-success' : 'is-warning'} style={{ width: `${Math.min(100, item.avg)}%` }} /><mark style={{ left: `${Math.min(100, item.threshold)}%` }} /></i><small>达标 {item.ready_count} 人 · 未达标 {item.not_ready_count} 人</small></div>
+              })}
+            </div>
+          </section>
         </div>
-        
-        <div className="flex items-center gap-4 text-text-muted">
-          <span>Version 1.0.0</span>
-          <span>|</span>
-          <span>Powered by DenseMatrix AI</span>
-        </div>
-      </motion.div>
+      </main>
+
+      <footer className="dashboard-footer"><div><i />系统运行正常 <span>数据更新 {data?.updated_at ? new Date(data.updated_at).toLocaleTimeString('zh-CN', { hour12: false }) : '--:--:--'}</span></div><p>GEARBOX CONTROL UI · Powered by DenseMatrix AI</p></footer>
     </div>
   )
 }

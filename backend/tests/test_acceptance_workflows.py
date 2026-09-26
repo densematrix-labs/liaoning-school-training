@@ -141,6 +141,13 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     assert dashboard["graduation_summary"]["ready_count"] == 0
     assert dashboard["ability_distribution"][0]["threshold"] == 60
     assert dashboard["ability_distribution"][0]["ready_count"] == 0
+    assert dashboard["score_distribution"] == [
+        {"label": "<60", "count": 1},
+        {"label": "60-69", "count": 0},
+        {"label": "70-79", "count": 0},
+        {"label": "80-89", "count": 0},
+        {"label": "90-100", "count": 0},
+    ]
 
 
 @pytest.mark.asyncio

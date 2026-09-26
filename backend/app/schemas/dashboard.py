@@ -53,6 +53,11 @@ class GraduationSummary(BaseModel):
     ready_rate: float
 
 
+class ScoreDistributionBucket(BaseModel):
+    label: str
+    count: int
+
+
 class DashboardResponse(BaseModel):
     realtime: RealtimeStats
     class_ranking: list[ClassRanking]
@@ -60,6 +65,7 @@ class DashboardResponse(BaseModel):
     trend: list[TrendDataPoint]
     lab_status: list[LabStatusItem]
     graduation_summary: GraduationSummary
+    score_distribution: list[ScoreDistributionBucket]
     updated_at: datetime
 
 

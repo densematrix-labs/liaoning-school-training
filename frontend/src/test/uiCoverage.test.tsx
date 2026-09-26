@@ -39,6 +39,13 @@ const dashboard = {
     { lab_id: 'l3', lab_name: '实训室3', status: 'maintenance', current_students: 0, capacity: 30 },
   ],
   graduation_summary: { total_students: 140, evaluated_students: 140, ready_count: 100, risk_count: 40, ready_rate: 71.4 },
+  score_distribution: [
+    { label: '<60', count: 4 },
+    { label: '60-69', count: 12 },
+    { label: '70-79', count: 35 },
+    { label: '80-89', count: 61 },
+    { label: '90-100', count: 28 },
+  ],
   updated_at: '2026-09-17T08:00:00',
 }
 
@@ -65,6 +72,8 @@ function queryData(key: readonly unknown[]) {
   const name = String(key[0])
   const values: Record<string, any> = {
     dashboard,
+    'dashboard-realtime': [{ id: 'activity-1', student_name: '学生甲', student_id: '2023001', class_name: '机电2301班', project_name: '机车制动系统检修', status: 'completed', score: 88, passed: true, timestamp: '2026-09-17T08:00:00' }],
+    'dashboard-alerts': [{ type: 'ability_warning', level: 'warning', message: '学生乙 - 规范操作低于60%', student_id: 'student-2', student_name: '学生乙', timestamp: '2026-09-17T08:00:00' }],
     'student-home-scores': scoreList,
     'student-home-ability': ability,
     studentAbility: ability,
@@ -154,7 +163,9 @@ describe('all role workspaces render populated acceptance states', () => {
     for (const page of pages) { renderPage(page); expect(document.body.textContent?.length).toBeGreaterThan(20); cleanup() }
     renderPage(<Dashboard />)
     expect(screen.getByText('能力维度6')).toBeInTheDocument()
-    expect(screen.getByText('存在风险 40 人')).toBeInTheDocument()
+    expect(screen.getByText('40 名学生存在毕业达标风险')).toBeInTheDocument()
+    expect(screen.getByText('成绩分布与近七日趋势')).toBeInTheDocument()
+    expect(screen.getByText('机车制动系统检修', { exact: false })).toBeInTheDocument()
     cleanup()
     renderPage(<StudentAbility />)
     expect(screen.getByText('3/6（50%）· 未达标')).toBeInTheDocument()
