@@ -281,12 +281,45 @@ async def test_import_validation_and_permission_failures(client, auth_headers, a
     assert wrong_type.status_code == 400
     empty = await client.post("/api/v1/admin/operations/sync-import", headers=auth_headers, files={"file": ("empty.csv", b"source_record_id\n", "text/csv")})
     assert empty.status_code == 400
+    invalid_encoding = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("invalid-encoding.csv", b"\xff\xfe", "text/csv")},
+    )
+    assert invalid_encoding.status_code == 400
+    too_many_rows = (
+        "source_record_id,student_index,project_index,completed_at\n"
+        + "".join(f"ROW-{index},0,0,2026-09-17T08:00:00\n" for index in range(5001))
+    ).encode()
+    assert (await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("too-many.csv", too_many_rows, "text/csv")},
+    )).status_code == 400
     missing_fields = await client.post(
         "/api/v1/admin/operations/sync-import/preview",
         headers=auth_headers,
         files={"file": ("missing.csv", b"source_record_id,completed_at\nX,2026-09-17T08:00:00\n", "text/csv")},
     )
     assert missing_fields.status_code == 400
+    missing_required_fields = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("missing-required.csv", b"student_index,project_index\n0,0\n", "text/csv")},
+    )
+    assert missing_required_fields.status_code == 400
+    missing_student_column = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("missing-student.csv", b"source_record_id,project_index,completed_at\nX,0,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert missing_student_column.status_code == 400
+    missing_project_column = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("missing-project.csv", b"source_record_id,student_index,completed_at\nX,0,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert missing_project_column.status_code == 400
     invalid_mapping = await client.post(
         "/api/v1/admin/operations/sync-import/preview",
         headers=auth_headers,
@@ -295,6 +328,36 @@ async def test_import_validation_and_permission_failures(client, auth_headers, a
     assert invalid_mapping.status_code == 200
     assert invalid_mapping.json()["can_import"] is False
     assert invalid_mapping.json()["error_count"] == 1
+    invalid_indices = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("invalid-indices.csv", b"source_record_id,student_index,project_index,completed_at\n,not-a-number,also-bad,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert invalid_indices.status_code == 200
+    assert "缺少实训记录编号" in invalid_indices.json()["errors"][0]["reason"]
+    assert "student_index 必须是整数" in invalid_indices.json()["errors"][0]["reason"]
+    assert "project_index 必须是整数" in invalid_indices.json()["errors"][0]["reason"]
+    missing_row_mapping = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("missing-row-mapping.csv", b"source_record_id,student_no,project_name,completed_at\nX,,,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert missing_row_mapping.status_code == 200
+    assert "缺少学号或学生索引" in missing_row_mapping.json()["errors"][0]["reason"]
+    assert "缺少项目编码或项目索引" in missing_row_mapping.json()["errors"][0]["reason"]
+    invalid_code = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("invalid-code.csv", b"source_record_id,student_index,project_code,completed_at\nX,0,NO-PROJECT,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert invalid_code.status_code == 200
+    assert "项目编码不存在" in invalid_code.json()["errors"][0]["reason"]
+    rejected_import = await client.post(
+        "/api/v1/admin/operations/sync-import",
+        headers=auth_headers,
+        files={"file": ("invalid.csv", "source_record_id,student_no,project_name,completed_at\nX,NO-STUDENT,不存在项目,bad-time\n".encode(), "text/csv")},
+    )
+    assert rejected_import.status_code == 400
     assert (await client.post(
         "/api/v1/admin/operations/sync-import",
         headers=teacher,
