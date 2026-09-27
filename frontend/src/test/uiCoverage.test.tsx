@@ -249,6 +249,53 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(screen.getByDisplayValue('建议已落实')).toBeInTheDocument()
   })
 
+  it('keeps the teacher report workspace and state when score evidence closes', () => {
+    useAuthStore.setState({ user: { id: 'teacher-1', username: 'T1', name: '教师甲', role: 'teacher' } as any })
+    renderPage(<TeacherReports />, '/batch-reports')
+    fireEvent.change(screen.getByLabelText('授权班级'), { target: { value: 'class-1' } })
+    fireEvent.change(screen.getByLabelText('学生'), { target: { value: 'student-1' } })
+    fireEvent.change(screen.getByLabelText('筛选历史报告类型'), { target: { value: 'single' } })
+    fireEvent.change(screen.getByLabelText('筛选关联实训记录'), { target: { value: 'score-1' } })
+    fireEvent.click(screen.getByText(report.title))
+
+    const historyLength = window.history.length
+    const assertReportState = () => {
+      expect(window.location.pathname).toBe('/batch-reports')
+      expect(window.history.length).toBe(historyLength)
+      expect(screen.getByLabelText('授权班级')).toHaveValue('class-1')
+      expect(screen.getByLabelText('学生')).toHaveValue('student-1')
+      expect(screen.getByLabelText('筛选历史报告类型')).toHaveValue('single')
+      expect(screen.getByLabelText('筛选关联实训记录')).toHaveValue('score-1')
+      expect(screen.getAllByText(report.title)).toHaveLength(2)
+    }
+    const openEvidence = () => {
+      fireEvent.click(screen.getByRole('button', { name: /关联实训 实训项目/ }))
+      expect(screen.getByRole('dialog', { name: '单次实训成绩证据' })).toBeInTheDocument()
+      expect(window.location.pathname).toBe('/batch-reports')
+      expect(window.history.length).toBe(historyLength)
+    }
+
+    openEvidence()
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    assertReportState()
+
+    openEvidence()
+    fireEvent.click(screen.getByRole('button', { name: '关闭实训成绩证据' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    assertReportState()
+
+    openEvidence()
+    fireEvent.click(screen.getByRole('dialog', { name: '单次实训成绩证据' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    assertReportState()
+
+    openEvidence()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    assertReportState()
+  })
+
   it('renders administrator configuration and operations', async () => {
     const apiGet = vi.spyOn(api, 'get').mockResolvedValue({ data: new Blob(['sync']) } as any)
     useAuthStore.setState({ user: { id: 'admin-1', username: 'A1', name: '管理员', role: 'admin' } as any })

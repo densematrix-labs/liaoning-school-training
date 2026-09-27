@@ -1,18 +1,35 @@
+import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 
 export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: string; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const { data, isLoading, error } = useQuery({
     queryKey: ['score-detail', scoreId],
     queryFn: async () => (await api.get(`/api/v1/scores/${scoreId}`)).data,
   })
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    closeButtonRef.current?.focus()
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-railway-900/90 p-3 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-railway-900/90 p-3 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="score-evidence-title"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose() }}
+    >
       <section className="glass-panel-bright max-h-[92vh] w-full max-w-5xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <header className="sticky top-0 z-10 flex items-start justify-between border-b border-railway-600/60 bg-railway-800/95 p-5 backdrop-blur">
-          <div><p className="eyebrow">TRACEABLE SCORE EVIDENCE</p><h2 className="section-heading">单次实训成绩证据</h2></div>
-          <button className="railway-button" onClick={onClose}>关闭</button>
+          <div><p className="eyebrow">TRACEABLE SCORE EVIDENCE</p><h2 id="score-evidence-title" className="section-heading">单次实训成绩证据</h2></div>
+          <button ref={closeButtonRef} type="button" className="railway-button !px-3" aria-label="关闭实训成绩证据" onClick={onClose}>×</button>
         </header>
         {isLoading && <p className="p-8 text-text-muted">正在读取步骤证据…</p>}
         {error && <p className="m-6 alert-warning p-4">成绩明细加载失败</p>}
@@ -44,6 +61,9 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
                   {step.reason && <p className="mt-3 text-xs text-status-warning">记录说明：{step.reason}</p>}
                 </article>
               ))}
+            </div>
+            <div className="flex justify-end border-t border-railway-600/50 pt-5">
+              <button type="button" className="railway-button" onClick={onClose}>关闭</button>
             </div>
           </div>
         )}

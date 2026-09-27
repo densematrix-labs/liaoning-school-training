@@ -24,9 +24,11 @@ export function sanitizeReportText(value: string, studentName = '学生') {
 export default function ReportDocument({
   report,
   onDownload,
+  onOpenScoreEvidence,
 }: {
   report: any
   onDownload?: () => void
+  onOpenScoreEvidence?: (scoreId: string) => void
 }) {
   const { user } = useAuthStore()
   if (!report) {
@@ -60,7 +62,9 @@ export default function ReportDocument({
           <div className="mt-8 flex flex-wrap gap-2 text-xs">
             <span className="report-chip">{reportLabel}</span>
             <span className="report-chip">生成时间 {generatedAt}</span>
-            {scorePath && <Link className="report-chip transition hover:border-accent-cyan hover:text-accent-cyan" to={scorePath}>关联实训 {report.project_name || '查看成绩详情'}{trainingAt ? ` · ${trainingAt}` : ''} →</Link>}
+            {scorePath && onOpenScoreEvidence
+              ? <button type="button" className="report-chip transition hover:border-accent-cyan hover:text-accent-cyan" onClick={() => onOpenScoreEvidence(report.score_id)}>关联实训 {report.project_name || '查看成绩详情'}{trainingAt ? ` · ${trainingAt}` : ''} →</button>
+              : scorePath && <Link className="report-chip transition hover:border-accent-cyan hover:text-accent-cyan" to={scorePath}>关联实训 {report.project_name || '查看成绩详情'}{trainingAt ? ` · ${trainingAt}` : ''} →</Link>}
           </div>
           {onDownload && <button className="railway-button mt-5" onClick={onDownload}>下载 Word</button>}
         </div>

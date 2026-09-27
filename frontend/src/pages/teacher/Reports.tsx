@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import AbilityRadar from '../../components/AbilityRadar'
 import ReportDocument from '../../components/ReportDocument'
+import ScoreEvidenceModal from '../../components/ScoreEvidenceModal'
 import { api } from '../../lib/api'
 import { ReportTaskStatus, useReportTask } from '../../lib/useReportTask'
 
@@ -15,6 +16,7 @@ export default function TeacherReports() {
   const [historyType, setHistoryType] = useState<'all' | 'single' | 'periodic'>('all')
   const [historyScoreId, setHistoryScoreId] = useState('')
   const [activeReport, setActiveReport] = useState<any>(null)
+  const [evidenceScoreId, setEvidenceScoreId] = useState('')
   const reportSectionRef = useRef<HTMLElement>(null)
   const classes = useQuery({ queryKey: ['teacher-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
   const students = useQuery({ queryKey: ['class-students', classId], queryFn: async () => (await api.get(`/api/v1/students/classes/${classId}/students`)).data, enabled: Boolean(classId) })
@@ -73,7 +75,11 @@ export default function TeacherReports() {
       </section>
 
       <section ref={reportSectionRef} className="min-w-0 scroll-mt-28">
-        <ReportDocument report={activeReport} onDownload={activeReport ? () => downloadReport(activeReport.id) : undefined} />
+        <ReportDocument
+          report={activeReport}
+          onDownload={activeReport ? () => downloadReport(activeReport.id) : undefined}
+          onOpenScoreEvidence={setEvidenceScoreId}
+        />
       </section>
 
       <aside className="space-y-5 xl:sticky xl:top-28">
@@ -81,6 +87,7 @@ export default function TeacherReports() {
         {ability.data && <section className="railway-card p-5"><p className="eyebrow">DIAGNOSTIC SIGNALS</p><h2 className="section-heading">诊断信号</h2><div className="mt-4 grid gap-3"><Signal label="综合能力" value={`${ability.data.total_score || 0} 分`} tone="cyan" /><Signal label="优势能力" value={ability.data.strongest_ability || '—'} tone="good" /><Signal label="薄弱能力" value={ability.data.weakest_ability || '—'} tone="warn" /></div></section>}
       </aside>
     </div>
+    {evidenceScoreId && <ScoreEvidenceModal scoreId={evidenceScoreId} onClose={() => setEvidenceScoreId('')} />}
   </div>
 }
 
