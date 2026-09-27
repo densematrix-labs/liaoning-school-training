@@ -1,9 +1,12 @@
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum as SQLEnum
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
 import uuid
+
+
+LEGACY_GENERIC_REPORT_TITLES = frozenset({"单次实训诊断", "单次实训诊断报告"})
 
 
 class ReportType(str, enum.Enum):
@@ -26,3 +29,10 @@ class DiagnosticReport(Base):
     
     student = relationship("Student")
     score = relationship("Score")
+
+    @validates("title")
+    def reject_legacy_generic_title(self, _key: str, value: str | None) -> str | None:
+        """Keep future reports distinguishable while legacy rows remain readable."""
+        if value and value.strip() in LEGACY_GENERIC_REPORT_TITLES:
+            raise ValueError("诊断报告标题必须包含可识别的实训信息")
+        return value

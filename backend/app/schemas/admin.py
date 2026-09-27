@@ -21,6 +21,10 @@ class TeacherClassesAssignmentRequest(BaseModel):
     class_ids: list[str] = Field(default_factory=list)
 
 
+class LegacyReportCleanupRequest(BaseModel):
+    confirm: str
+
+
 class SyncExceptionResponse(BaseModel):
     id: str
     row_number: int

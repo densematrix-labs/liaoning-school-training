@@ -1,6 +1,8 @@
 """End-to-end unit/integration coverage for the tender acceptance workflows."""
 
 from datetime import datetime, timedelta
+import json
+import stat
 
 import pytest
 
@@ -14,7 +16,7 @@ from app.services.auth import AuthService
 from app.services.environment import EnvironmentCheckService, process_environment_task
 from app.services.report import ReportService, ensure_report_structure, process_report_task
 from app.models.workflow import EnvironmentTask, ReportTask, TaskStatus
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 
 @pytest.fixture
@@ -69,6 +71,136 @@ async def _login(client, username):
     response = await client.post("/api/v1/auth/login", json={"username": username, "password": "123456"})
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+@pytest.mark.asyncio
+async def test_admin_cleanup_exact_legacy_report_titles_is_backed_up_and_recoverable(
+    client, test_db, auth_headers, acceptance_data, tmp_path, monkeypatch
+):
+    from app.config import settings
+
+    ids = acceptance_data
+    monkeypatch.setattr(settings, "REPORT_BACKUP_DIR", str(tmp_path / "private-backups"))
+    async with test_db() as db:
+        for report_id, title, generated_at in [
+            ("legacy-report-1", "单次实训诊断", "2024-01-01 00:00:00"),
+            ("legacy-report-2", "单次实训诊断报告", "2024-01-02 00:00:00"),
+        ]:
+            await db.execute(text(
+                "INSERT INTO diagnostic_reports "
+                "(id, student_id, report_type, title, content, score_id, generated_at) "
+                "VALUES (:id, :student_id, 'SINGLE', :title, :content, :score_id, :generated_at)"
+            ), {
+                "id": report_id,
+                "student_id": ids["student"],
+                "title": title,
+                "content": f"{title}完整正文",
+                "score_id": ids["score"],
+                "generated_at": generated_at,
+            })
+        db.add(ReportTask(
+            id="legacy-report-task",
+            student_id=ids["student"],
+            score_id=ids["score"],
+            report_type="single",
+            report_id="legacy-report-1",
+            status=TaskStatus.COMPLETED,
+            created_by=ids["teacher"],
+        ))
+        await db.commit()
+
+    preview = await client.get("/api/v1/admin/maintenance/legacy-report-cleanup", headers=auth_headers)
+    assert preview.status_code == 200
+    assert preview.json()["matched_count"] == 2
+    assert preview.json()["delete_count"] == 2
+    assert preview.json()["preserved_count"] == 0
+    assert {row["title"] for row in preview.json()["records"]} == {"单次实训诊断", "单次实训诊断报告"}
+    assert preview.json()["latest_new_format"]["title"] == "验收报告"
+
+    denied = await client.post(
+        "/api/v1/admin/maintenance/legacy-report-cleanup",
+        headers=auth_headers,
+        json={"confirm": "wrong"},
+    )
+    assert denied.status_code == 400
+    cleaned = await client.post(
+        "/api/v1/admin/maintenance/legacy-report-cleanup",
+        headers=auth_headers,
+        json={"confirm": "BACKUP_AND_DELETE_EXACT_LEGACY_REPORTS"},
+    )
+    assert cleaned.status_code == 200
+    result = cleaned.json()
+    assert result["deleted_count"] == 2
+    assert result["remaining_legacy_count"] == 0
+    assert result["new_format_count"] == 1
+    assert result["backup"]["record_count"] == 2
+
+    backup = tmp_path / "private-backups" / result["backup"]["filename"]
+    assert backup.is_file()
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+    payload = json.loads(backup.read_text(encoding="utf-8"))
+    assert payload["format"].endswith("diagnostic-report-backup-v1")
+    assert {row["id"] for row in payload["reports"]} == {"legacy-report-1", "legacy-report-2"}
+    assert payload["linked_report_tasks"] == [
+        {"task_id": "legacy-report-task", "report_id": "legacy-report-1"}
+    ]
+    async with test_db() as db:
+        assert not list((await db.execute(
+            select(DiagnosticReport).where(DiagnosticReport.id.in_(["legacy-report-1", "legacy-report-2"]))
+        )).scalars())
+        assert (await db.get(DiagnosticReport, ids["report"])).title == "验收报告"
+        assert (await db.get(ReportTask, "legacy-report-task")).report_id is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_preserves_latest_report_when_it_still_has_legacy_title(
+    client, test_db, auth_headers, acceptance_data, tmp_path, monkeypatch
+):
+    from app.config import settings
+
+    ids = acceptance_data
+    monkeypatch.setattr(settings, "REPORT_BACKUP_DIR", str(tmp_path / "private-backups"))
+    async with test_db() as db:
+        for report_id, generated_at in [
+            ("legacy-older", "2098-01-01 00:00:00"),
+            ("legacy-latest", "2099-01-01 00:00:00"),
+        ]:
+            await db.execute(text(
+                "INSERT INTO diagnostic_reports "
+                "(id, student_id, report_type, title, content, generated_at) "
+                "VALUES (:id, :student_id, 'SINGLE', '单次实训诊断报告', '历史正文', :generated_at)"
+            ), {"id": report_id, "student_id": ids["student"], "generated_at": generated_at})
+        await db.commit()
+
+    preview = (await client.get(
+        "/api/v1/admin/maintenance/legacy-report-cleanup", headers=auth_headers
+    )).json()
+    assert preview["matched_count"] == 2
+    assert preview["delete_count"] == 1
+    assert preview["preserved_count"] == 1
+    assert next(row for row in preview["records"] if row["preserved_as_latest"])["id"] == "legacy-latest"
+
+    result = (await client.post(
+        "/api/v1/admin/maintenance/legacy-report-cleanup",
+        headers=auth_headers,
+        json={"confirm": "BACKUP_AND_DELETE_EXACT_LEGACY_REPORTS"},
+    )).json()
+    assert result["deleted_count"] == 1
+    assert result["remaining_legacy_count"] == 1
+    async with test_db() as db:
+        assert await db.get(DiagnosticReport, "legacy-latest")
+        assert await db.get(DiagnosticReport, "legacy-older") is None
+
+
+def test_future_reports_reject_exact_legacy_generic_titles():
+    with pytest.raises(ValueError):
+        DiagnosticReport(student_id="student", report_type=ReportType.SINGLE, title="单次实训诊断报告")
+    allowed = DiagnosticReport(
+        student_id="student",
+        report_type=ReportType.SINGLE,
+        title="机车启动与制动操作 · 2026-09-17 08:00 · 张伟诊断报告",
+    )
+    assert allowed.title.startswith("机车启动与制动操作")
 
 
 @pytest.mark.asyncio

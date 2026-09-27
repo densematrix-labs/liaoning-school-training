@@ -40,6 +40,7 @@ from app.schemas.admin import (
     SyncTaskResponse,
     TeacherAssignmentRequest,
     TeacherClassesAssignmentRequest,
+    LegacyReportCleanupRequest,
 )
 from app.schemas.ability import (
     MajorAbilityCreate,
@@ -51,8 +52,30 @@ from app.schemas.ability import (
     AbilityMappingResponse,
 )
 from app.schemas.lab import LabCreate, LabUpdate, LabResponse
+from app.services.report_cleanup import execute_legacy_report_cleanup, legacy_report_cleanup_plan
 
 router = APIRouter()
+
+
+@router.get("/maintenance/legacy-report-cleanup")
+async def inspect_legacy_reports(
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """只读盘点精确命中旧泛化标题的诊断报告。"""
+    return await legacy_report_cleanup_plan(db)
+
+
+@router.post("/maintenance/legacy-report-cleanup")
+async def cleanup_legacy_reports(
+    request: LegacyReportCleanupRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """备份后精确删除旧泛化标题报告；不接受模糊标题匹配。"""
+    if request.confirm != "BACKUP_AND_DELETE_EXACT_LEGACY_REPORTS":
+        raise HTTPException(status_code=400, detail="确认口令不正确")
+    return await execute_legacy_report_cleanup(db)
 
 
 @router.get("/overview")
