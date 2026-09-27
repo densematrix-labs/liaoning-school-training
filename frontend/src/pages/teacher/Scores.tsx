@@ -77,7 +77,12 @@ export default function TeacherScores() {
       previewError={previewImport.error}
       importError={importFile.error}
       result={importFile.data}
-      onSelect={(file) => { setImportCandidate(null); previewImport.mutate(file) }}
+      onSelect={(file) => {
+        setImportCandidate(null)
+        previewImport.reset()
+        importFile.reset()
+        previewImport.mutate(file)
+      }}
       onConfirm={() => importCandidate && importFile.mutate({ file: importCandidate.file })}
       onCancel={() => { setImportCandidate(null); if (importInput.current) importInput.current.value = '' }}
     />
