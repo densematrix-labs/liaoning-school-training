@@ -28,10 +28,10 @@ export function useReportTask(onCompleted?: (report: any) => void) {
 
 export function ReportTaskStatus({ task, onView }: { task: any; onView?: () => void }) {
   if (!task) return null
-  const labels: Record<string, string> = { pending: '已提交', running: '模型分析中', completed: '生成完成', failed: '生成失败' }
+  const labels: Record<string, string> = { pending: '已提交', running: '正在生成', completed: '生成完成', failed: '生成失败' }
   return createElement(
     'div',
-    { className: task.status === 'failed' ? 'alert-warning rounded p-4 text-sm' : 'alert-success rounded p-4 text-sm' },
+    { className: task.status === 'failed' ? 'alert-warning rounded p-4 text-sm' : 'alert-success rounded p-4 text-sm', role: 'status', 'aria-live': 'polite' },
     createElement(
       'div',
       { className: 'flex flex-wrap items-center justify-between gap-2' },
@@ -42,7 +42,7 @@ export function ReportTaskStatus({ task, onView }: { task: any; onView?: () => v
         task.status === 'completed' && task.report && onView
           ? createElement('button', { className: 'railway-button !px-3 !py-1 text-xs', onClick: onView }, '查看生成的报告')
           : null,
-        createElement('span', { className: 'font-mono text-xs' }, task.id),
+        createElement('span', { className: 'text-xs text-text-muted' }, '诊断报告生成任务'),
       ),
     ),
     task.error_message ? createElement('p', { className: 'mt-2' }, task.error_message) : null,

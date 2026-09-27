@@ -1,4 +1,6 @@
 import hashlib
+import csv
+import io
 import os
 import shutil
 import sqlite3
@@ -23,7 +25,7 @@ from app.models.training import TrainingProject
 from app.models.workflow import MockSyncTask
 from app.services.auth import AuthService
 from app.services.audit import record_audit
-from app.services.sync import PENDING_SYNC_SETTING_KEY, parse_csv
+from app.services.sync import PENDING_SYNC_SETTING_KEY
 
 router = APIRouter(prefix="/api/v1/admin/operations", tags=["运行管理"])
 
@@ -67,6 +69,91 @@ def _schedule_value(setting: SystemSetting | None) -> dict:
     return setting.value if setting else {"enabled": True, "frequency_hours": 24, "hour": 2}
 
 
+async def _read_sync_upload(file: UploadFile, db: AsyncSession) -> tuple[list[str], list[dict], list[dict]]:
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="当前支持 UTF-8 CSV 文件")
+    content = await file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件不得超过 20MB")
+    try:
+        text = content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+        columns = [str(item).strip() for item in (reader.fieldnames or []) if item]
+        rows = list(reader)
+    except (UnicodeDecodeError, csv.Error) as exc:
+        raise HTTPException(status_code=400, detail=f"CSV 解析失败：{exc}") from exc
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV 中没有数据")
+    if len(rows) > 5000:
+        raise HTTPException(status_code=400, detail="单次最多导入 5000 条记录")
+
+    missing = {"source_record_id", "completed_at"} - set(columns)
+    if missing:
+        raise HTTPException(status_code=400, detail=f"CSV 缺少必填字段：{'、'.join(sorted(missing))}")
+    if not ({"student_no", "student_index"} & set(columns)):
+        raise HTTPException(status_code=400, detail="CSV 需要 student_no（推荐）或 student_index 字段")
+    if not ({"project_name", "project_code", "project_index"} & set(columns)):
+        raise HTTPException(status_code=400, detail="CSV 需要 project_name（推荐）、project_code 或 project_index 字段")
+
+    student_numbers = set((await db.execute(select(Student.student_no))).scalars().all())
+    projects = list((await db.execute(select(TrainingProject))).scalars().all())
+    project_codes = {
+        str((item.scoring_rules or {}).get("code") or item.id)
+        for item in projects
+    }
+    project_name_counts = {
+        name: sum(1 for item in projects if item.name == name)
+        for name in {item.name for item in projects}
+    }
+    errors: list[dict] = []
+    for row_number, row in enumerate(rows, start=2):
+        reasons: list[str] = []
+        source_id = str(row.get("source_record_id") or "").strip()
+        if not source_id:
+            reasons.append("缺少实训记录编号")
+        completed_at = str(row.get("completed_at") or "").strip()
+        try:
+            datetime.fromisoformat(completed_at)
+        except ValueError:
+            reasons.append("完成时间格式应为 YYYY-MM-DDTHH:MM:SS")
+
+        student_no = str(row.get("student_no") or "").strip()
+        student_index = str(row.get("student_index") or "").strip()
+        if student_no:
+            if student_no not in student_numbers:
+                reasons.append("学号不存在")
+        elif student_index:
+            try:
+                int(student_index)
+            except ValueError:
+                reasons.append("student_index 必须是整数")
+        else:
+            reasons.append("缺少学号或学生索引")
+
+        project_name = str(row.get("project_name") or "").strip()
+        project_code = str(row.get("project_code") or "").strip()
+        project_index = str(row.get("project_index") or "").strip()
+        if project_name:
+            if project_name_counts.get(project_name, 0) == 0:
+                reasons.append("项目名称不存在")
+            elif project_name_counts.get(project_name, 0) > 1:
+                reasons.append("项目名称不唯一，请改用 project_code")
+        elif project_code:
+            if project_code not in project_codes:
+                reasons.append("项目编码不存在")
+        elif project_index:
+            try:
+                int(project_index)
+            except ValueError:
+                reasons.append("project_index 必须是整数")
+        else:
+            reasons.append("缺少项目编码或项目索引")
+
+        if reasons:
+            errors.append({"row_number": row_number, "source_record_id": source_id or None, "reason": "；".join(reasons)})
+    return columns, rows, errors
+
+
 @router.get("/sync-schedule")
 async def get_sync_schedule(
     db: AsyncSession = Depends(get_db),
@@ -103,22 +190,16 @@ async def import_sync_file(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="当前支持 UTF-8 CSV 文件")
-    content = await file.read()
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="文件不得超过 20MB")
-    try:
-        rows = parse_csv(content)
-    except (UnicodeDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=f"CSV 解析失败：{exc}") from exc
-    if not rows:
-        raise HTTPException(status_code=400, detail="CSV 中没有数据")
+    columns, rows, errors = await _read_sync_upload(file, db)
+    valid_count = len(rows) - len(errors)
+    if valid_count <= 0:
+        raise HTTPException(status_code=400, detail="CSV 没有可导入的有效记录，请先修正预览中的错误")
 
     imported_at = datetime.utcnow().isoformat()
     value = {
         "filename": file.filename,
         "row_count": len(rows),
+        "columns": columns,
         "rows": rows,
         "imported_at": imported_at,
     }
@@ -152,8 +233,55 @@ async def import_sync_file(
         "message": "导入数据成功",
         "filename": file.filename,
         "row_count": len(rows),
+        "valid_count": valid_count,
+        "error_count": len(errors),
         "imported_at": imported_at,
     }
+
+
+@router.post("/sync-import/preview")
+async def preview_sync_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    columns, rows, errors = await _read_sync_upload(file, db)
+    invalid_rows = {item["row_number"] for item in errors}
+    preview = []
+    for row_number, row in enumerate(rows[:10], start=2):
+        preview.append({
+            "row_number": row_number,
+            "source_record_id": row.get("source_record_id"),
+            "student": row.get("student_no") or f"学生索引 {row.get('student_index', '—')}",
+            "project": row.get("project_name") or row.get("project_code") or f"项目索引 {row.get('project_index', '—')}",
+            "completed_at": row.get("completed_at"),
+            "valid": row_number not in invalid_rows,
+        })
+    return {
+        "filename": file.filename,
+        "columns": columns,
+        "row_count": len(rows),
+        "valid_count": len(rows) - len(errors),
+        "error_count": len(errors),
+        "can_import": len(rows) > len(errors),
+        "preview": preview,
+        "errors": errors[:20],
+    }
+
+
+@router.get("/sync-import/template.csv")
+async def download_sync_template(
+    admin: User = Depends(get_current_admin),
+):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["source_record_id", "student_no", "project_name", "completed_at"])
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="training-record-import-template.csv"'},
+    )
 
 
 @router.get("/audit-logs")

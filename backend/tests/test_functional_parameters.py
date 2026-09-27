@@ -207,9 +207,35 @@ async def test_environment_review_preserves_ai_result_and_reviewer(client, auth_
     assert data["reviewed_suggestions"] == ["清理台面"]
     assert data["reviewed_suggestions_comment"] == "建议已落实"
     assert data["reviewed_at"]
+    rejected = await client.post(
+        "/api/v1/environment/checks/env-check/review",
+        headers=auth_headers,
+        json={
+            "status": "rejected",
+            "reviewed_details": {"surface_cleanliness": {"score": 10, "max_score": 30, "issues": ["仍有遗留物"], "comment": "人工复核不通过"}},
+            "reviewed_suggestions": ["重新清理台面"],
+            "reviewed_suggestions_comment": "完成清理后重新提交",
+            "reviewed_summary": "人工复核未通过",
+            "note": "现场与 AI 结论不一致",
+        },
+    )
+    assert rejected.status_code == 200
+    rejected_data = rejected.json()
+    assert rejected_data["review_status"] == "rejected"
+    assert rejected_data["final_score"] == 10
+    assert rejected_data["total_score"] == 80
+    assert rejected_data["reviewed_details"]["surface_cleanliness"]["comment"] == "人工复核不通过"
+    assert rejected_data["reviewer_name"] == "Test User"
+    assert rejected_data["review_note"] == "现场与 AI 结论不一致"
+    history = await client.get("/api/v1/environment/history/env-student", headers=auth_headers)
+    history_item = next(item for item in history.json() if item["id"] == "env-check")
+    assert history_item["final_score"] == 10
+    assert history_item["review_status"] == "rejected"
+    assert history_item["reviewed_at"]
     async with test_db() as session:
         review = (await session.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == "env-check"))).scalar_one()
-        assert review.status == "modified"
+        assert review.status == "rejected"
+        assert review.reviewed_details["surface_cleanliness"]["comment"] == "人工复核不通过"
 
 
 @pytest.mark.asyncio

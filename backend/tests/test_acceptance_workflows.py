@@ -132,6 +132,22 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     assert comprehensive["ability"]["graduation_ready_count"] == 0
     report_list = await client.get(f"/api/v1/reports/student/{ids['student']}", headers=teacher)
     assert report_list.json()[0]["score_id"] == ids["score"]
+    filtered_report_list = await client.get(
+        f"/api/v1/reports/student/{ids['student']}",
+        headers=teacher,
+        params={"report_type": "single", "score_id": ids["score"]},
+    )
+    assert [item["id"] for item in filtered_report_list.json()] == [ids["report"]]
+    assert (await client.get(
+        f"/api/v1/reports/student/{ids['student']}",
+        headers=teacher,
+        params={"report_type": "periodic", "score_id": ids["score"]},
+    )).json() == []
+    assert (await client.get(
+        f"/api/v1/reports/student/{ids['student']}",
+        headers=teacher,
+        params={"report_type": "unsupported"},
+    )).status_code == 400
 
     for path in ["/api/v1/dashboard/", "/api/v1/dashboard/overview", "/api/v1/dashboard/realtime", "/api/v1/dashboard/ability-distribution", "/api/v1/dashboard/training-trend", "/api/v1/dashboard/class-comparison", "/api/v1/dashboard/alerts"]:
         response = await client.get(path, headers=auth_headers)
@@ -188,7 +204,15 @@ async def test_admin_configuration_and_operations(client, auth_headers, acceptan
     assert project_response.status_code == 200
     image_response = await client.post(f"/api/v1/admin/operations/labs/{ids['lab']}/reference-images", headers=auth_headers, json={"image_url": "/reference-2.jpg", "label": "侧视图"})
     assert image_response.status_code == 200
-    csv_content = b"source_record_id,student_index,project_index,completed_at\nCSV-IMPORT-001,0,1,2026-09-01T08:00:00\n"
+    csv_content = "source_record_id,student_no,project_name,completed_at\nCSV-IMPORT-001,ACCEPT001,验收实训项目,2026-09-01T08:00:00\n".encode()
+    preview = await client.post("/api/v1/admin/operations/sync-import/preview", headers=auth_headers, files={"file": ("records.csv", csv_content, "text/csv")})
+    assert preview.status_code == 200
+    assert preview.json()["valid_count"] == 1
+    assert preview.json()["error_count"] == 0
+    assert preview.json()["can_import"] is True
+    template = await client.get("/api/v1/admin/operations/sync-import/template.csv", headers=auth_headers)
+    assert template.status_code == 200
+    assert b"source_record_id" in template.content
     imported = await client.post("/api/v1/admin/operations/sync-import", headers=auth_headers, files={"file": ("records.csv", csv_content, "text/csv")})
     assert imported.status_code == 200
     assert imported.json()["message"] == "导入数据成功"
@@ -252,10 +276,36 @@ async def test_backup_creation_and_restore_verification(client, auth_headers, ac
 async def test_import_validation_and_permission_failures(client, auth_headers, acceptance_data):
     ids = acceptance_data
     student = await _login(client, "ACCEPT-S")
+    teacher = await _login(client, "ACCEPT-T")
     wrong_type = await client.post("/api/v1/admin/operations/sync-import", headers=auth_headers, files={"file": ("bad.txt", b"x", "text/plain")})
     assert wrong_type.status_code == 400
     empty = await client.post("/api/v1/admin/operations/sync-import", headers=auth_headers, files={"file": ("empty.csv", b"source_record_id\n", "text/csv")})
     assert empty.status_code == 400
+    missing_fields = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("missing.csv", b"source_record_id,completed_at\nX,2026-09-17T08:00:00\n", "text/csv")},
+    )
+    assert missing_fields.status_code == 400
+    invalid_mapping = await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=auth_headers,
+        files={"file": ("invalid.csv", "source_record_id,student_no,project_name,completed_at\nX,NO-STUDENT,不存在项目,bad-time\n".encode(), "text/csv")},
+    )
+    assert invalid_mapping.status_code == 200
+    assert invalid_mapping.json()["can_import"] is False
+    assert invalid_mapping.json()["error_count"] == 1
+    assert (await client.post(
+        "/api/v1/admin/operations/sync-import",
+        headers=teacher,
+        files={"file": ("records.csv", b"source_record_id,student_index,project_index,completed_at\nX,0,0,2026-09-17T08:00:00\n", "text/csv")},
+    )).status_code == 403
+    assert (await client.post(
+        "/api/v1/admin/operations/sync-import/preview",
+        headers=teacher,
+        files={"file": ("records.csv", b"source_record_id,student_index,project_index,completed_at\nX,0,0,2026-09-17T08:00:00\n", "text/csv")},
+    )).status_code == 403
+    assert (await client.get("/api/v1/admin/operations/sync-import/template.csv", headers=student)).status_code == 403
     forbidden = await client.get("/api/v1/admin/operations/status", headers=student)
     assert forbidden.status_code == 403
     other_student = await client.get("/api/v1/students/not-owned", headers=student)
@@ -463,5 +513,14 @@ async def test_environment_and_report_http_workflows(client, test_db, acceptance
     generated = await client.post("/api/v1/reports/generate", headers=teacher, json={"student_id": ids["student"], "report_type": "single", "score_id": ids["score"]})
     assert generated.status_code == 200
     report_task_id = generated.json()["id"]
-    assert (await client.get(f"/api/v1/reports/tasks/{report_task_id}", headers=teacher)).status_code == 200
+    task_result = await client.get(f"/api/v1/reports/tasks/{report_task_id}", headers=teacher)
+    assert task_result.status_code == 200
+    assert task_result.json()["status"] == "completed"
+    assert task_result.json()["report_id"]
+    persisted_reports = await client.get(
+        f"/api/v1/reports/student/{ids['student']}",
+        headers=teacher,
+        params={"report_type": "single", "score_id": ids["score"]},
+    )
+    assert any(item["id"] == task_result.json()["report_id"] for item in persisted_reports.json())
     assert (await client.get("/api/v1/reports/tasks/missing", headers=teacher)).status_code == 404

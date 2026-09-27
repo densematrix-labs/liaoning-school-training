@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 import html
 
 from app.database import get_db
@@ -72,6 +72,8 @@ async def get_my_reports(
 async def get_student_reports(
     student_id: str,
     limit: int = 10,
+    report_type: Optional[str] = None,
+    score_id: Optional[str] = None,
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -79,7 +81,15 @@ async def get_student_reports(
     await require_student_access(current_user, student_id, db)
     
     service = ReportService(db)
-    return await service.get_student_reports(student_id, limit)
+    try:
+        return await service.get_student_reports(
+            student_id,
+            limit,
+            report_type=report_type,
+            score_id=score_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/{report_id}", response_model=DiagnosticReportResponse)

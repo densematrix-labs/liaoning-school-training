@@ -382,12 +382,18 @@ class ReportService:
         self,
         student_id: str,
         limit: int = 10,
+        report_type: Optional[str] = None,
+        score_id: Optional[str] = None,
     ) -> List[DiagnosticReportResponse]:
+        if report_type not in {None, "single", "periodic"}:
+            raise ValueError("报告类型仅支持 single 或 periodic")
+        query = select(DiagnosticReport).where(DiagnosticReport.student_id == student_id)
+        if report_type:
+            query = query.where(DiagnosticReport.report_type == ReportType(report_type))
+        if score_id:
+            query = query.where(DiagnosticReport.score_id == score_id)
         result = await self.db.execute(
-            select(DiagnosticReport)
-            .where(DiagnosticReport.student_id == student_id)
-            .order_by(DiagnosticReport.generated_at.desc())
-            .limit(limit)
+            query.order_by(DiagnosticReport.generated_at.desc()).limit(limit)
         )
         reports = result.scalars().all()
         

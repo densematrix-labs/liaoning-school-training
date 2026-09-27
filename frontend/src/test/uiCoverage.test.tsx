@@ -141,6 +141,7 @@ import ScoreEvidenceModal from '../components/ScoreEvidenceModal'
 import { useAuthStore } from '../store/auth'
 import App from '../App'
 import { api } from '../lib/api'
+import { ReportTaskStatus } from '../lib/useReportTask'
 
 function renderPage(node: React.ReactNode, route = '/') {
   window.history.pushState({}, '', route)
@@ -215,6 +216,22 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.change(screen.getByLabelText('授权班级'), { target: { value: 'class-1' } })
     fireEvent.change(screen.getByLabelText('学生'), { target: { value: 'student-1' } })
     expect(screen.getByLabelText('筛选历史报告类型')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('生成依据记录'), { target: { value: 'score-1' } })
+    fireEvent.click(screen.getByRole('button', { name: '生成诊断报告' }))
+    expect(mutationSuccess).toHaveBeenCalledWith({ student_id: 'student-1', report_type: 'single', score_id: 'score-1' })
+    fireEvent.change(screen.getByLabelText('生成报告类型'), { target: { value: 'periodic' } })
+    expect(screen.getByLabelText('生成依据记录')).toBeDisabled()
+    expect(screen.getByLabelText('生成依据记录')).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: '生成诊断报告' }))
+    expect(mutationSuccess).toHaveBeenCalledWith({ student_id: 'student-1', report_type: 'periodic', score_id: undefined })
+    cleanup()
+    renderPage(<TeacherHome />)
+    const classScoreLink = screen.getByRole('link', { name: /查看班级成绩/ })
+    expect(classScoreLink).toHaveAttribute('href', '/class-scores?class_id=class-1')
+    cleanup()
+    renderPage(<ReportTaskStatus task={{ id: 'd9537c70-1234-4234-8234-123456789abc', status: 'completed', report }} onView={vi.fn()} />)
+    expect(screen.getByRole('button', { name: '查看生成的报告' })).toBeInTheDocument()
+    expect(screen.queryByText(/d9537c70/)).not.toBeInTheDocument()
     cleanup()
     renderPage(<EnvironmentCheckPage />)
     expect(screen.queryByText('__suggestions__')).not.toBeInTheDocument()
@@ -226,6 +243,12 @@ describe('all role workspaces render populated acceptance states', () => {
     const apiGet = vi.spyOn(api, 'get').mockResolvedValue({ data: new Blob(['sync']) } as any)
     useAuthStore.setState({ user: { id: 'admin-1', username: 'A1', name: '管理员', role: 'admin' } as any })
     renderPage(<AdminHome />)
+    cleanup()
+    renderPage(<TeacherScores />)
+    expect(screen.getByText('批量导入实训记录')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '下载 CSV 模板' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择 CSV 文件' })).toBeInTheDocument()
+    expect(screen.getByText('source_record_id')).toBeInTheDocument()
     cleanup()
     renderPage(<AdminConfig />)
     expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()

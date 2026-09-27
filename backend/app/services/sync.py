@@ -74,6 +74,12 @@ class SyncService:
 
         students = list((await self.db.execute(select(Student).order_by(Student.student_no))).scalars().all())
         projects = list((await self.db.execute(select(TrainingProject).order_by(TrainingProject.name))).scalars().all())
+        students_by_no = {item.student_no: item for item in students}
+        projects_by_code = {
+            str((item.scoring_rules or {}).get("code") or item.id): item
+            for item in projects
+        }
+        projects_by_name = {item.name: item for item in projects}
         affected_students: set[str] = set()
 
         for row_number, raw in enumerate(source_rows, start=2):
@@ -90,10 +96,27 @@ class SyncService:
                     task.skipped_count += 1
                     continue
 
-                student_index = int(raw.get("student_index", row_number))
-                project_index = int(raw.get("project_index", row_number))
-                student = students[student_index % len(students)]
-                project = projects[project_index % len(projects)]
+                student_no = str(raw.get("student_no") or "").strip()
+                project_name = str(raw.get("project_name") or "").strip()
+                project_code = str(raw.get("project_code") or "").strip()
+                if student_no:
+                    student = students_by_no.get(student_no)
+                    if not student:
+                        raise ValueError("学号不存在")
+                else:
+                    student_index = int(raw.get("student_index", row_number))
+                    student = students[student_index % len(students)]
+                if project_name:
+                    project = projects_by_name.get(project_name)
+                    if not project:
+                        raise ValueError("项目名称不存在")
+                elif project_code:
+                    project = projects_by_code.get(project_code)
+                    if not project:
+                        raise ValueError("项目编码不存在")
+                else:
+                    project_index = int(raw.get("project_index", row_number))
+                    project = projects[project_index % len(projects)]
                 completed_raw = raw.get("completed_at")
                 completed_at = datetime.fromisoformat(str(completed_raw)) if completed_raw else datetime.utcnow()
 

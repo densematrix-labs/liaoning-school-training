@@ -19,7 +19,16 @@ export default function TeacherReports() {
   const classes = useQuery({ queryKey: ['teacher-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
   const students = useQuery({ queryKey: ['class-students', classId], queryFn: async () => (await api.get(`/api/v1/students/classes/${classId}/students`)).data, enabled: Boolean(classId) })
   const scores = useQuery({ queryKey: ['teacher-report-scores', studentId], queryFn: async () => (await api.get(`/api/v1/scores/student/${studentId}`, { params: { page_size: 100 } })).data, enabled: Boolean(studentId) })
-  const reports = useQuery({ queryKey: ['teacher-student-reports', studentId], queryFn: async () => (await api.get(`/api/v1/reports/student/${studentId}`)).data, enabled: Boolean(studentId) })
+  const reports = useQuery({
+    queryKey: ['teacher-student-reports', studentId, historyType, historyScoreId],
+    queryFn: async () => (await api.get(`/api/v1/reports/student/${studentId}`, {
+      params: {
+        report_type: historyType === 'all' ? undefined : historyType,
+        score_id: historyType === 'single' && historyScoreId ? historyScoreId : undefined,
+      },
+    })).data,
+    enabled: Boolean(studentId),
+  })
   const ability = useQuery({ queryKey: ['teacher-report-ability', studentId], queryFn: async () => (await api.get(`/api/v1/abilities/student/${studentId}`)).data, enabled: Boolean(studentId) })
   const showReport = (report: any) => {
     setActiveReport(report)
@@ -46,14 +55,14 @@ export default function TeacherReports() {
     <section className="railway-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-5 xl:items-end">
       <Field label="授权班级"><select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}><option value="">选择班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">选择学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-      <Field label="生成报告类型"><select className="input-field" value={reportType} onChange={(e) => setReportType(e.target.value as any)}><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
+      <Field label="生成报告类型"><select className="input-field" value={reportType} onChange={(e) => { const value = e.target.value as 'single' | 'periodic'; setReportType(value); if (value !== 'single') setScoreId('') }}><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
       <Field label="生成依据记录"><select className="input-field" value={scoreId} disabled={reportType !== 'single' || !studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">选择记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
       <button className="btn-primary" disabled={!studentId || (reportType === 'single' && !scoreId) || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: studentId, report_type: reportType, score_id: reportType === 'single' ? scoreId : undefined })}>{reportTask.create.isPending ? '正在生成…' : '生成诊断报告'}</button>
     </section>
     <ReportTaskStatus task={reportTask.task} onView={() => reportTask.task?.report && showReport(reportTask.task.report)} />
 
     {studentId && <section className="railway-card grid gap-4 p-4 sm:grid-cols-2">
-      <Field label="筛选历史报告类型"><select className="input-field" value={historyType} onChange={(e) => setHistoryType(e.target.value as any)}><option value="all">全部报告</option><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
+      <Field label="筛选历史报告类型"><select className="input-field" value={historyType} onChange={(e) => { const value = e.target.value as 'all' | 'single' | 'periodic'; setHistoryType(value); if (value !== 'single') setHistoryScoreId('') }}><option value="all">全部报告</option><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
       <Field label="筛选关联实训记录"><select className="input-field" value={historyScoreId} disabled={historyType !== 'single'} onChange={(e) => setHistoryScoreId(e.target.value)}><option value="">全部单次记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
     </section>}
 
