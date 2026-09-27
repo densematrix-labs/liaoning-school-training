@@ -88,6 +88,20 @@ async def test_teacher_many_to_many_class_assignment_is_enforced_end_to_end(clie
     # Existing legacy ownership is migrated instead of being overwritten.
     assert (await client.get("/api/v1/students/classes/class-b/students", headers=teacher_b)).status_code == 200
 
+    echoed = await client.get("/api/v1/admin/access-control", headers=admin)
+    teacher_scope = next(item for item in echoed.json()["teachers"] if item["id"] == "teacher-a")
+    assert teacher_scope["class_ids"] == ["class-a", "class-b"]
+
+    revoked = await client.put(
+        "/api/v1/admin/teachers/teacher-a/classes",
+        headers=admin,
+        json={"class_ids": ["class-a"]},
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["class_ids"] == ["class-a"]
+    assert (await client.get("/api/v1/students/classes/class-b/students", headers=teacher_a)).status_code == 403
+    assert (await client.get("/api/v1/students/classes/class-b/students", headers=teacher_b)).status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_student_cannot_run_environment_check(client, student_headers):

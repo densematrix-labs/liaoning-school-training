@@ -48,7 +48,7 @@ export default function TeacherReports() {
 
   return <div className="space-y-6">
     <header className="role-intro teacher-intro">
-      <div><p className="eyebrow">AI DIAGNOSTIC WORKBENCH</p><h1 className="page-title">学生诊断工作台</h1><p>能力画像、实训证据与结构化诊断报告在同一屏完成核对</p></div>
+      <div><p className="eyebrow">学生诊断与报告档案</p><h1 className="page-title">学生诊断工作台</h1><p>能力画像、实训证据与结构化诊断报告在同一屏完成核对</p></div>
       <div className="flex gap-6 text-right"><HeaderMetric label="历史报告" value={studentId ? filteredReports.length : '—'} /><HeaderMetric label="能力达标" value={ability.data ? `${ability.data.graduation_ready_count}/${ability.data.graduation_total_count}` : '—'} /></div>
     </header>
 

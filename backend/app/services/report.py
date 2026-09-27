@@ -22,6 +22,11 @@ from app.services.presentation import report_reference, training_record_referenc
 
 INTERNAL_CODE_PATTERN = re.compile(r"\b(?:step|sa|ma)-[a-z0-9-]+\b", re.IGNORECASE)
 UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b", re.IGNORECASE)
+SHORT_INTERNAL_ID_PATTERN = re.compile(r"\b(?=[0-9a-f]{8}\b)(?=[0-9a-f]*[a-f])[0-9a-f]{8}\b", re.IGNORECASE)
+MODEL_LINE_PATTERN = re.compile(
+    r"模型来源|模型供应商|model\s*(?:name|source|provider)|provider|bailian|dashscope|openai|gemini|qwen|\bllm\b",
+    re.IGNORECASE,
+)
 
 
 def sanitize_report_content(
@@ -33,17 +38,68 @@ def sanitize_report_content(
 ) -> str:
     """Remove internal identifiers and restore the real name locally."""
     cleaned = (content or "").replace("```markdown", "").replace("```", "")
+    cleaned = cleaned.replace("匿名学员", student_name)
     cleaned = re.sub(r"学员-[A-Za-z0-9_-]+", student_name, cleaned)
     replacements = {**step_names, **ability_names}
     for internal_id, human_name in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
         cleaned = re.sub(re.escape(str(internal_id)), str(human_name), cleaned, flags=re.IGNORECASE)
     cleaned = INTERNAL_CODE_PATTERN.sub("相关业务项", cleaned)
     cleaned = UUID_PATTERN.sub("内部记录", cleaned)
+    cleaned = SHORT_INTERNAL_ID_PATTERN.sub("内部记录", cleaned)
     cleaned = "\n".join(
         line for line in cleaned.splitlines()
-        if not re.search(r"模型来源|model\s*(?:name|source|provider)|bailian|dashscope", line, re.IGNORECASE)
+        if not MODEL_LINE_PATTERN.search(line)
     )
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
+def ensure_report_structure(
+    content: str,
+    *,
+    report_type: str,
+    project_name: str | None,
+    completed_at,
+    score_total: float | None,
+    score_max: float | None,
+) -> str:
+    """Present legacy and new reports with the same predictable section outline."""
+    normalized = re.sub(r"(?m)^##\s*薄弱环节\s*$", "## 问题与薄弱环节", content).strip()
+    if "## 整体评价" not in normalized:
+        parts = re.split(r"(?m)(?=^##\s)", normalized)
+        summary = next((part for part in parts if part.startswith("## 学生与实训摘要")), "")
+        legacy_parts = [part for part in parts if part and part != summary]
+        if legacy_parts and not any(
+            heading in normalized
+            for heading in ("## 基本信息与成绩概况", "## 能力分析", "## 问题与薄弱环节", "## 提升建议")
+        ):
+            legacy = "\n\n".join(legacy_parts)
+            legacy = re.sub(r"(?m)^#+\s*(.+)$", r"**\1**", legacy).strip()
+            normalized = f"{summary.strip()}\n\n## 整体评价\n{legacy}".strip()
+        else:
+            normalized += "\n\n## 整体评价\n- 当前报告未单独保存整体评价，可结合下列能力、问题与建议综合判断。"
+
+    fallbacks = (
+        ("## 能力分析", "- 历史报告未保存结构化能力分项，请以页面能力画像中的当前数据为准。"),
+        ("## 问题与薄弱环节", "- 历史报告未单独保存问题清单，请结合实训成绩步骤证据复核。"),
+        ("## 提升建议", "- 依据薄弱能力和未通过步骤安排针对性复训，并以再次实训结果验证改进。"),
+    )
+    for heading, fallback in fallbacks:
+        if heading not in normalized:
+            normalized += f"\n\n{heading}\n{fallback}"
+
+    if "## 关联实训" not in normalized:
+        if report_type == "single" and project_name:
+            time_label = completed_at.strftime("%Y-%m-%d %H:%M") if completed_at else "时间待确认"
+            score_label = (
+                f"{score_total:g}/{score_max:g} 分"
+                if score_total is not None and score_max is not None
+                else "成绩待确认"
+            )
+            association = f"- **实训项目：** {project_name}\n- **完成时间：** {time_label}\n- **实训成绩：** {score_label}"
+        else:
+            association = "- **报告范围：** 阶段综合表现（以报告生成时已归档的实训记录为准）"
+        normalized += f"\n\n## 关联实训\n{association}"
+    return re.sub(r"\n{3,}", "\n\n", normalized).strip()
 
 
 class ReportService:
@@ -181,7 +237,7 @@ class ReportService:
         # Generate report content via LLM
         content = await self._generate_report_content(
             # 校外模型只接收任务必需的脱敏标识，真实姓名仅在本地报告元数据中关联。
-            student_name=f"学员-{student.id[-6:]}",
+            student_name="匿名学员",
             scores_data=scores_data,
             ability_data=ability_data,
             report_type=report_type,
@@ -390,10 +446,8 @@ class ReportService:
         query = select(DiagnosticReport).where(DiagnosticReport.student_id == student_id)
         if report_type:
             query = query.where(DiagnosticReport.report_type == ReportType(report_type))
-        if score_id:
-            query = query.where(DiagnosticReport.score_id == score_id)
         result = await self.db.execute(
-            query.order_by(DiagnosticReport.generated_at.desc()).limit(limit)
+            query.order_by(DiagnosticReport.generated_at.desc())
         )
         reports = result.scalars().all()
         
@@ -402,7 +456,10 @@ class ReportService:
         )
         student = student_result.scalar_one_or_none()
         
-        return [await self._build_report_response(report, student) for report in reports]
+        responses = [await self._build_report_response(report, student) for report in reports]
+        if score_id:
+            responses = [item for item in responses if item.score_id == score_id]
+        return responses[:limit]
     
     async def get_report(self, report_id: str) -> Optional[DiagnosticReportResponse]:
         result = await self.db.execute(
@@ -448,6 +505,8 @@ class ReportService:
                 record = (await self.db.execute(
                     select(TrainingRecord).where(TrainingRecord.id == score.record_id)
                 )).scalar_one_or_none()
+        elif report.report_type == ReportType.SINGLE:
+            score, project, record = await self._infer_legacy_score(report)
 
         projects = list((await self.db.execute(select(TrainingProject))).scalars().all())
         step_names = {
@@ -501,12 +560,21 @@ class ReportService:
                 summary.append("- **报告范围：** 阶段综合表现")
             content = "\n".join(summary) + "\n\n" + content
 
+        content = ensure_report_structure(
+            content,
+            report_type=report.report_type.value,
+            project_name=project.name if project else None,
+            completed_at=completed_at,
+            score_total=score.total_score if score else None,
+            score_max=score.max_score if score else None,
+        )
+
         return DiagnosticReportResponse(
             id=report.id,
             student_id=report.student_id,
             student_name=student_name,
             report_type=report.report_type.value,
-            score_id=report.score_id,
+            score_id=score.id if score else report.score_id,
             title=title,
             content=content,
             generated_at=report.generated_at,
@@ -523,6 +591,38 @@ class ReportService:
                 record.id if record else (score.id if score else report.id),
             ) if score else None,
         )
+
+    async def _infer_legacy_score(
+        self,
+        report: DiagnosticReport,
+    ) -> tuple[Score | None, TrainingProject | None, TrainingRecord | None]:
+        """Recover traceability for legacy single reports created before score_id existed."""
+        rows = list((await self.db.execute(
+            select(Score, TrainingProject, TrainingRecord)
+            .join(TrainingProject, TrainingProject.id == Score.project_id)
+            .outerjoin(TrainingRecord, TrainingRecord.id == Score.record_id)
+            .where(Score.student_id == report.student_id)
+        )).all())
+        if not rows:
+            return None, None, None
+
+        report_text = f"{report.title or ''}\n{report.content or ''}"
+        generated_at = report.generated_at
+
+        def naive(value):
+            return value.replace(tzinfo=None) if value and value.tzinfo else value
+
+        def rank(row):
+            score, project, record = row
+            occurred_at = record.completed_at if record and record.completed_at else score.calculated_at
+            project_penalty = 0 if project.name and project.name in report_text else 1
+            if not generated_at or not occurred_at:
+                return (project_penalty, 1, float("inf"))
+            generated = naive(generated_at)
+            occurred = naive(occurred_at)
+            return (project_penalty, 0 if occurred <= generated else 1, abs((generated - occurred).total_seconds()))
+
+        return min(rows, key=rank)
 
 
 async def process_report_task(task_id: str) -> None:

@@ -14,7 +14,7 @@ export default function StudentReports() {
   const reportTask = useReportTask((report) => setSelected(report))
 
   return <div className="space-y-6">
-    <header><p className="eyebrow">AI DIAGNOSTIC REPORTS</p><h1 className="page-title">诊断报告</h1><p className="mt-2 text-sm text-text-muted">选择单次实训或汇总阶段成绩，查看任务状态与真实模型结果</p></header>
+    <header><p className="eyebrow">诊断报告档案</p><h1 className="page-title">诊断报告</h1><p className="mt-2 text-sm text-text-muted">选择单次实训或汇总阶段成绩，查看生成状态与结构化诊断结论</p></header>
     <section className="railway-card grid gap-4 p-5 lg:grid-cols-[1fr_auto_auto] lg:items-end">
       <label className="text-sm text-text-secondary"><span className="mb-2 block">单次实训记录</span><select className="input-field" value={scoreId} onChange={(e) => setScoreId(e.target.value)}><option value="">最近一次实训</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></label>
       <button className="btn-secondary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'single', score_id: scoreId || undefined })}>生成单次报告</button>

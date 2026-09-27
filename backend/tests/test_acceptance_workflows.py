@@ -12,7 +12,7 @@ from app.models.training import Score, TrainingProject, TrainingRecord
 from app.models.user import User, UserRole
 from app.services.auth import AuthService
 from app.services.environment import EnvironmentCheckService, process_environment_task
-from app.services.report import ReportService, process_report_task
+from app.services.report import ReportService, ensure_report_structure, process_report_task
 from app.models.workflow import EnvironmentTask, ReportTask, TaskStatus
 from sqlalchemy import select
 
@@ -101,6 +101,11 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     for path in student_paths:
         response = await client.get(path, headers=student)
         assert response.status_code == 200, (path, response.text)
+    score_detail = (await client.get(f"/api/v1/scores/{ids['score']}", headers=student)).json()
+    assert score_detail["record_reference"].startswith("TR-")
+    assert "ACCEPT-EXT-001" not in score_detail["record_reference"]
+    assert score_detail["project_name"] == "验收实训项目"
+    assert score_detail["source_completed_at"]
 
     teacher_paths = [
         "/api/v1/students/classes",
@@ -224,6 +229,13 @@ async def test_admin_configuration_and_operations(client, auth_headers, acceptan
 
     config = await client.put(f"/api/v1/admin/projects/{ids['project']}/configuration", headers=auth_headers, json={"steps": [{"id": "step-1", "name": "检查", "score": 30, "failed_score": 0}, {"id": "step-2", "name": "操作", "score": 70, "failed_score": 10}], "ability_mapping": {"step-1": [ids["sub"]], "step-2": [ids["sub"]]}})
     assert config.status_code == 200
+    project_options = (await client.get("/api/v1/admin/projects", headers=auth_headers)).json()
+    sample = next(item for item in project_options if item["id"] == ids["project"])["sample_scores"][0]
+    assert sample["student_name"] == "验收学生"
+    assert sample["student_no"] == "ACCEPT001"
+    assert sample["class_name"] == "验收班"
+    assert sample["project_name"] == "验收实训项目"
+    assert sample["completed_at"]
     recalc = await client.post(f"/api/v1/admin/projects/{ids['project']}/recalculate", headers=auth_headers, json={"score_id": ids["score"]})
     assert recalc.status_code == 200
 
@@ -427,6 +439,25 @@ class _FakeAsyncClient:
         return _FakeResponse(self.content)
 
 
+def test_legacy_report_text_is_wrapped_in_the_stable_section_template():
+    structured = ensure_report_structure(
+        "# 旧版诊断结论\n需要加强规范操作",
+        report_type="single",
+        project_name="历史实训项目",
+        completed_at=None,
+        score_total=None,
+        score_max=None,
+    )
+    assert "## 整体评价" in structured
+    assert "**旧版诊断结论**" in structured
+    assert "## 能力分析" in structured
+    assert "## 问题与薄弱环节" in structured
+    assert "## 提升建议" in structured
+    assert "## 关联实训" in structured
+    assert "时间待确认" in structured
+    assert "成绩待确认" in structured
+
+
 @pytest.mark.asyncio
 async def test_real_model_workflows_are_structured_and_traceable(test_db, acceptance_data, monkeypatch):
     from app.config import settings
@@ -449,7 +480,7 @@ async def test_real_model_workflows_are_structured_and_traceable(test_db, accept
         with pytest.raises(ValueError):
             await service.review_check("missing", ids["teacher"], type("Review", (), {"status": "confirmed", "reviewed_details": None, "reviewed_summary": None, "note": None})())
 
-    _FakeAsyncClient.content = "## 基本信息与成绩概况\n学员-udent：验收项目 50 分\n模型来源 bailian\n## 能力分析\nstep-2 与 accept-sub 需加强，sa-999 待复核\n## 环境规范情况\n总体规范\n## 提升建议\n继续训练"
+    _FakeAsyncClient.content = "## 基本信息与成绩概况\n匿名学员：验收项目 50 分\n模型来源 bailian\n## 能力分析\nstep-2 与 accept-sub 需加强，sa-999 待复核，d9537c70 不应显示\n## 环境规范情况\n总体规范\n## 提升建议\n继续训练"
     monkeypatch.setattr(report_module.httpx, "AsyncClient", _FakeAsyncClient)
     async with test_db() as db:
         service = ReportService(db)
@@ -459,10 +490,15 @@ async def test_real_model_workflows_are_structured_and_traceable(test_db, accept
         assert "step-" not in report.content
         assert "sa-" not in report.content
         assert "accept-sub" not in report.content
+        assert "d9537c70" not in report.content
         assert "模型来源" not in report.content
         assert "bailian" not in report.content.lower()
+        assert "## 问题与薄弱环节" in report.content
+        assert "## 关联实训" in report.content
         prompt = _FakeAsyncClient.last_json["messages"][0]["content"]
         assert "验收学生" not in prompt
+        assert ids["student"] not in prompt
+        assert "匿名学员" in prompt
         assert "step-1" not in prompt
         assert "accept-sub" not in prompt
         with pytest.raises(ValueError):
@@ -487,11 +523,22 @@ async def test_real_model_workflows_are_structured_and_traceable(test_db, accept
         await db.commit()
         historic_single = await service.get_report("historic-single-without-score")
         historic_periodic = await service.get_report("historic-periodic-without-score")
-        assert historic_single.title.startswith("单次实训诊断")
+        assert historic_single.title.startswith("验收实训项目")
+        assert historic_single.score_id == ids["score"]
+        assert historic_single.project_name == "验收实训项目"
         assert "模型来源" not in historic_single.content
         assert "step-" not in historic_single.content
+        assert "## 整体评价" in historic_single.content
+        assert "## 能力分析" in historic_single.content
+        assert "## 问题与薄弱环节" in historic_single.content
+        assert "## 提升建议" in historic_single.content
+        assert "## 关联实训" in historic_single.content
         assert historic_periodic.title.startswith("验收学生 · 阶段综合诊断报告")
         assert "验收学生" in historic_periodic.content
+        filtered_historic = await service.get_student_reports(
+            ids["student"], report_type="single", score_id=ids["score"], limit=20
+        )
+        assert "historic-single-without-score" in {item.id for item in filtered_historic}
 
 
 @pytest.mark.asyncio

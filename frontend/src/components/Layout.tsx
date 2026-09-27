@@ -68,7 +68,7 @@ export default function Layout() {
         </nav>
         <div className="absolute bottom-5 left-5 right-5 rounded border border-status-success/30 bg-status-success/5 p-3">
           <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-status-success shadow-[0_0_8px_#39e58c]" /><p className="text-xs text-status-success">数据服务在线</p></div>
-          <p className="mt-1 font-mono text-[9px] text-text-muted">SQLITE · LLM PROXY · VISION</p>
+          <p className="mt-1 text-[9px] text-text-muted">数据服务 · 智能分析 · 视觉检测</p>
         </div>
       </aside>
 

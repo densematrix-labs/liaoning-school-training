@@ -53,7 +53,6 @@ export default function TeacherScores() {
   useEffect(() => {
     if (classId !== searchParams.get('class_id')) setStudentId('')
   }, [classId, searchParams])
-  const selectedStudent = students.data?.find((item: any) => item.id === studentId)
   const visiblePassRate = scores.data?.scores?.length
     ? Math.round(scores.data.scores.filter((item: any) => item.percentage >= 60).length / scores.data.scores.length * 1000) / 10
     : 0
@@ -67,7 +66,7 @@ export default function TeacherScores() {
       <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
       <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
     </section>
-    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label={studentId ? '当前学生' : '学生数'} value={studentId ? (selectedStudent?.name || '已选择') : (summary.data?.student_count ?? '—')} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label={studentId ? '个人平均' : '班级平均'} value={studentId ? (scores.data?.average_score ?? '—') : (summary.data?.average_score ?? '—')} /><Metric label={studentId ? '个人及格率' : '及格率'} value={`${studentId ? visiblePassRate : (summary.data?.pass_rate ?? '—')}%`} /></div>}
+    {classId && <div className={`grid gap-3 ${studentId ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>{!studentId && <Metric label="学生数" value={summary.data?.student_count ?? '—'} />}<Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label={studentId ? '个人平均' : '班级平均'} value={studentId ? (scores.data?.average_score ?? '—') : (summary.data?.average_score ?? '—')} /><Metric label={studentId ? '个人及格率' : '及格率'} value={`${studentId ? visiblePassRate : (summary.data?.pass_rate ?? '—')}%`} /></div>}
     <CsvImportPanel
       isAdmin={user?.role === 'admin'}
       inputRef={importInput}

@@ -600,8 +600,9 @@ async def list_training_projects(
     response = []
     for project in projects:
         sample_scores = list((await db.execute(
-            select(Score, Student, TrainingRecord)
+            select(Score, Student, TrainingRecord, Class)
             .join(Student, Student.id == Score.student_id)
+            .join(Class, Class.id == Student.class_id)
             .outerjoin(TrainingRecord, TrainingRecord.id == Score.record_id)
             .where(Score.project_id == project.id)
             .order_by(Score.calculated_at.desc())
@@ -620,13 +621,14 @@ async def list_training_projects(
                     "student_id": score.student_id,
                     "student_name": student.name,
                     "student_no": student.student_no,
+                    "class_name": class_.name,
                     "project_name": project.name,
                     "total_score": score.total_score,
                     "max_score": score.max_score,
                     "completed_at": record.completed_at if record else score.calculated_at,
                     "calculated_at": score.calculated_at,
                 }
-                for score, student, record in sample_scores
+                for score, student, record, class_ in sample_scores
             ],
         })
     return response

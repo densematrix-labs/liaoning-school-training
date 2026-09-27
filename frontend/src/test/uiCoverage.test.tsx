@@ -102,7 +102,7 @@ function queryData(key: readonly unknown[]) {
     'admin-overview': { students: 140, classes: 4, scores: 1000, abilities: 6, labs: 4, reports: 20, database: 'SQLite', sync_status: '正常' },
     'admin-abilities': [{ id: 'a1', name: '规范操作', graduation_threshold: .7, sub_abilities: [{ id: 's1', name: '步骤执行', weight: 1 }] }],
     'admin-labs': [{ id: 'lab-1', name: '实训室1', reference_image_url: '/reference.jpg' }],
-    'admin-projects': [{ id: 'project-1', name: '实训项目', max_score: 100, steps: [{ id: 'step-1', name: '步骤一', score: 100, failed_score: 0 }], ability_mapping: { 'step-1': ['s1'] }, sample_scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', student_no: '2023001', project_name: '实训项目', total_score: 80, max_score: 100, completed_at: '2026-09-17T08:00:00' }] }],
+    'admin-projects': [{ id: 'project-1', name: '实训项目', max_score: 100, steps: [{ id: 'step-1', name: '步骤一', score: 100, failed_score: 0 }], ability_mapping: { 'step-1': ['s1'] }, sample_scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', student_no: '2023001', class_name: '机车一班', project_name: '实训项目', total_score: 80, max_score: 100, completed_at: '2026-09-17T08:00:00' }] }],
     'admin-access': { role_scopes: [{ role: 'student', label: '学生', scope: '本人' }], teachers: [{ id: 'teacher-1', name: '教师甲', username: 'T1', class_ids: ['class-1'] }], classes: [{ id: 'class-1', name: '机车一班', year: 2023, teacher_ids: ['teacher-1'], teacher_names: ['教师甲'] }] },
     'admin-sync-history': [{ id: 'sync-1', started_at: '2026-09-17T08:00:00', read_count: 1000, success_count: 990, skipped_count: 5, error_count: 5, status: 'completed' }],
     'operations-status': { application: { status: 'healthy' }, database: { status: 'healthy' }, sync: { status: 'completed' }, ai: { status: 'configured' } },
@@ -138,6 +138,7 @@ import AdminHome from '../pages/admin/Home'
 import AdminConfig from '../pages/admin/Config'
 import Layout from '../components/Layout'
 import ScoreEvidenceModal from '../components/ScoreEvidenceModal'
+import ReportDocument from '../components/ReportDocument'
 import { useAuthStore } from '../store/auth'
 import App from '../App'
 import { api } from '../lib/api'
@@ -225,6 +226,15 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.click(screen.getByRole('button', { name: '生成诊断报告' }))
     expect(mutationSuccess).toHaveBeenCalledWith({ student_id: 'student-1', report_type: 'periodic', score_id: undefined })
     cleanup()
+    renderPage(<TeacherScores />)
+    fireEvent.change(screen.getByLabelText('班级'), { target: { value: 'class-1' } })
+    expect(screen.getByText('学生数')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('学生'), { target: { value: 'student-1' } })
+    expect(screen.queryByText('学生数')).not.toBeInTheDocument()
+    expect(screen.queryByText('当前学生')).not.toBeInTheDocument()
+    expect(screen.getByText('个人平均')).toBeInTheDocument()
+    expect(screen.getByText('个人及格率')).toBeInTheDocument()
+    cleanup()
     renderPage(<TeacherHome />)
     const classScoreLink = screen.getByRole('link', { name: /查看班级成绩/ })
     expect(classScoreLink).toHaveAttribute('href', '/class-scores?class_id=class-1')
@@ -254,6 +264,7 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()
     expect(screen.getByText('P95 1.826 秒')).toBeInTheDocument()
     expect(screen.getByText(/模拟外部实训记录导入/)).toBeInTheDocument()
+    expect(screen.getByLabelText('样例成绩')).toHaveTextContent('学生甲（2023001） · 机车一班 · 实训项目 · 2026/9/17 08:00:00 · 80/100 分')
     fireEvent.click(screen.getByText('下载演示数据'))
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }))
     expect(screen.getByText('导入演示数据')).toBeInTheDocument()
@@ -262,6 +273,19 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.click(screen.getByText('立即生成数据备份'))
     fireEvent.click(screen.getByText('执行导入验证'))
     expect(mutationSuccess).toHaveBeenCalled()
+  })
+
+  it('sanitizes legacy report content again in the presentation layer', () => {
+    renderPage(<ReportDocument report={{
+      ...report,
+      student_name: '学生甲',
+      title: '实训项目 d9537c70 诊断报告',
+      content: '## 学生与实训摘要\n匿名学员\n\n模型来源：bailian\n\n## 能力分析\nstep-002-06、sa-011、d9537c70 与 123e4567-e89b-42d3-a456-426614174000',
+    }} />)
+    expect(document.body).toHaveTextContent('学生甲')
+    expect(document.body).toHaveTextContent('相关业务项')
+    expect(document.body).toHaveTextContent('内部记录')
+    expect(document.body.textContent).not.toMatch(/模型来源|bailian|step-|sa-|d9537c70|123e4567/)
   })
 
   it('renders layout and submits a demo login', async () => {
