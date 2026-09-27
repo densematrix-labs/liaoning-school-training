@@ -61,11 +61,11 @@ const ability = {
   radar_data: [1, 2, 3, 4, 5, 6].map((index) => ({ ability_id: `a${index}`, name: `能力${index}`, score: 60 + index, threshold: 70, weight: 1 / 6 })),
   weak_abilities: [{ name: '规范操作', score: 61 }],
   improvement_suggestions: ['加强步骤训练'],
-  sub_ability_details: [{ id: 's1', major_ability_id: 'a1', name: '步骤执行', score: 60, weight: 1, evidence: [{ score_id: 'score-1', step_id: 'step-1', project_name: '实训项目', source_record_id: 'SRC-1', step_name: '步骤一', passed: false, score: 5, max_score: 10 }] }],
+  sub_ability_details: [{ id: 's1', major_ability_id: 'a1', name: '步骤执行', score: 60, weight: 1, evidence: [{ score_id: 'score-1', step_id: 'step-1', project_name: '实训项目', record_reference: 'TR-20260917-ABC123', step_name: '步骤一', passed: false, score: 5, max_score: 10 }] }],
 }
 
-const scoreList = { total: 1, average_score: 80, scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', project_id: 'project-1', project_name: '实训项目', total_score: 80, max_score: 100, percentage: 80, calculated_at: '2026-09-17T08:00:00' }] }
-const report = { id: 'report-1', report_type: 'single', score_id: 'score-1', title: '诊断报告', content: '# 诊断\n改进建议', generated_at: '2026-09-17T08:00:00' }
+const scoreList = { total: 1, average_score: 80, scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', project_id: 'project-1', project_name: '实训项目', total_score: 80, max_score: 100, percentage: 80, calculated_at: '2026-09-17T08:00:00', training_completed_at: '2026-09-17T08:00:00', result_summary: '待提升：步骤一' }] }
+const report = { id: 'report-1', report_reference: 'DR-20260917-ABC123', report_type: 'single', score_id: 'score-1', student_id: 'student-1', class_id: 'class-1', project_name: '实训项目', training_completed_at: '2026-09-17T08:00:00', score_percentage: 80, title: '实训项目 · 2026-09-17 08:00 · 学生甲诊断报告', content: '## 学生与实训摘要\n- **学生：** 学生甲\n\n## 诊断\n改进建议', generated_at: '2026-09-17T08:00:00' }
 const environmentResult = { id: 'check-1', lab_name: '实训室1', total_score: 88, final_score: 25, summary: '整体规范', reviewed_summary: '人工确认规范', review_status: 'confirmed', review_note: '已确认', reviewer_name: '教师甲', reviewed_at: '2026-09-17T08:00:00', checked_at: '2026-09-17T08:00:00', uploaded_image_url: '/current.jpg', reference_image_url: '/reference.jpg', details: { surface_cleanliness: { score: 25, max_score: 30, issues: ['少量遗留物'] } }, reviewed_details: { surface_cleanliness: { score: 25, max_score: 30, issues: ['少量遗留物'], comment: '已核对' } }, suggestions: ['清理台面'], reviewed_suggestions: ['清理台面'], reviewed_suggestions_comment: '建议已落实' }
 
 function queryData(key: readonly unknown[]) {
@@ -80,7 +80,7 @@ function queryData(key: readonly unknown[]) {
     studentAbilityTrend: { abilities: [{ id: 'a1', name: '能力1' }], points: [{ date: '2026-09-17T08:00:00', abilities: { a1: 70 } }] },
     'score-projects': [{ id: 'project-1', name: '实训项目' }],
     'student-scores': scoreList,
-    'score-detail': { student_name: '学生甲', class_name: '机车一班', project_name: '实训项目', total_score: 80, max_score: 100, source_record_id: 'SRC-1', source_completed_at: '2026-09-17T08:00:00', steps_total: 80, reconciliation_ok: true, details: [{ step_id: 'step-1', step_name: '步骤一', source_status: '未通过', passed: false, score: 5, max_score: 10, applied_rule: { passed_score: 10, failed_score: 5, rule_version: 2 }, related_ability_names: ['规范操作'], reason: '步骤遗漏' }] },
+    'score-detail': { student_name: '学生甲', class_name: '机车一班', project_name: '实训项目', total_score: 80, max_score: 100, record_reference: 'TR-20260917-ABC123', source_completed_at: '2026-09-17T08:00:00', steps_total: 80, reconciliation_ok: true, details: [{ step_id: 'step-1', step_name: '步骤一', source_status: '未通过', passed: false, score: 5, max_score: 10, applied_rule: { passed_score: 10, failed_score: 5, rule_version: 2 }, related_ability_names: ['规范操作'], reason: '步骤遗漏' }] },
     'student-reports': [report],
     'student-report-scores': scoreList,
     'my-environment-results': [environmentResult],
@@ -102,8 +102,8 @@ function queryData(key: readonly unknown[]) {
     'admin-overview': { students: 140, classes: 4, scores: 1000, abilities: 6, labs: 4, reports: 20, database: 'SQLite', sync_status: '正常' },
     'admin-abilities': [{ id: 'a1', name: '规范操作', graduation_threshold: .7, sub_abilities: [{ id: 's1', name: '步骤执行', weight: 1 }] }],
     'admin-labs': [{ id: 'lab-1', name: '实训室1', reference_image_url: '/reference.jpg' }],
-    'admin-projects': [{ id: 'project-1', name: '实训项目', steps: [{ id: 'step-1', name: '步骤一', score: 100, failed_score: 0 }], ability_mapping: { 'step-1': ['s1'] }, sample_scores: [{ id: 'score-1', student_id: 'student-1', total_score: 80 }] }],
-    'admin-access': { role_scopes: [{ role: 'student', label: '学生', scope: '本人' }], teachers: [{ id: 'teacher-1', name: '教师甲', username: 'T1' }], classes: [{ id: 'class-1', name: '机车一班', year: 2023, teacher_id: 'teacher-1', teacher_name: '教师甲' }] },
+    'admin-projects': [{ id: 'project-1', name: '实训项目', max_score: 100, steps: [{ id: 'step-1', name: '步骤一', score: 100, failed_score: 0 }], ability_mapping: { 'step-1': ['s1'] }, sample_scores: [{ id: 'score-1', student_id: 'student-1', student_name: '学生甲', student_no: '2023001', project_name: '实训项目', total_score: 80, max_score: 100, completed_at: '2026-09-17T08:00:00' }] }],
+    'admin-access': { role_scopes: [{ role: 'student', label: '学生', scope: '本人' }], teachers: [{ id: 'teacher-1', name: '教师甲', username: 'T1', class_ids: ['class-1'] }], classes: [{ id: 'class-1', name: '机车一班', year: 2023, teacher_ids: ['teacher-1'], teacher_names: ['教师甲'] }] },
     'admin-sync-history': [{ id: 'sync-1', started_at: '2026-09-17T08:00:00', read_count: 1000, success_count: 990, skipped_count: 5, error_count: 5, status: 'completed' }],
     'operations-status': { application: { status: 'healthy' }, database: { status: 'healthy' }, sync: { status: 'completed' }, ai: { status: 'configured' } },
     'performance-report': { id: 'public-demo-20260917', environment: '公网 Demo', verified_at: '2026-09-17T08:46:31', source_commit: 'd637446', concurrent_users: 50, duration_seconds: 60, total_requests: 1784, success_rate: 100, basic: { label: '常规查询接口', p95_seconds: 1.826, target_seconds: 3, passed: true }, aggregate: { label: '汇总统计接口', p95_seconds: 5.583, target_seconds: 10, passed: true }, passed: true, note: 'Demo 工程验收记录' },
@@ -181,7 +181,7 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(evidence.container.querySelector('.alert-success')).toHaveTextContent('核对一致')
     cleanup()
     renderPage(<StudentReports />)
-    fireEvent.click(screen.getAllByText('诊断报告')[1])
+    fireEvent.click(screen.getByText('实训项目 · 2026-09-17 08:00 · 学生甲诊断报告'))
     fireEvent.click(screen.getByText('下载 Word'))
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/reports/report-1/download.doc', { responseType: 'blob' }))
   })
@@ -218,14 +218,14 @@ describe('all role workspaces render populated acceptance states', () => {
     renderPage(<AdminConfig />)
     expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()
     expect(screen.getByText('P95 1.826 秒')).toBeInTheDocument()
-    expect(screen.getByText(/先导入 CSV 暂存数据/)).toBeInTheDocument()
-    fireEvent.click(screen.getByText('下载数据'))
+    expect(screen.getByText(/模拟外部实训记录导入/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('下载演示数据'))
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }))
-    expect(screen.getByText('导入数据')).toBeInTheDocument()
-    expect(screen.getByText(/CSV 导入入口位于下方/)).toBeInTheDocument()
-    fireEvent.click(screen.getByText('保存同步计划'))
-    fireEvent.click(screen.getByText('立即生成数据库备份'))
-    fireEvent.click(screen.getByText('执行一次 Mock 同步'))
+    expect(screen.getByText('导入演示数据')).toBeInTheDocument()
+    expect(screen.getByText(/演示数据入口位于下方/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('保存更新计划'))
+    fireEvent.click(screen.getByText('立即生成数据备份'))
+    fireEvent.click(screen.getByText('执行导入验证'))
     expect(mutationSuccess).toHaveBeenCalled()
   })
 

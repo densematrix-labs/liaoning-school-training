@@ -11,11 +11,11 @@ export default function TeacherScores() {
   const importInput = useRef<HTMLInputElement>(null)
   const [searchParams] = useSearchParams()
   const [classId, setClassId] = useState(searchParams.get('class_id') || '')
-  const [studentId, setStudentId] = useState('')
+  const [studentId, setStudentId] = useState(searchParams.get('student_id') || '')
   const [projectId, setProjectId] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [selectedScore, setSelectedScore] = useState('')
+  const [selectedScore, setSelectedScore] = useState(searchParams.get('score_id') || '')
   const importFile = useMutation({
     mutationFn: async (file: File) => { const form = new FormData(); form.append('file', file); return (await api.post('/api/v1/admin/operations/sync-import', form)).data },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['class-scores'] }); queryClient.invalidateQueries({ queryKey: ['class-summary'] }); if (importInput.current) importInput.current.value = '' },
@@ -29,7 +29,13 @@ export default function TeacherScores() {
     enabled: Boolean(classId),
   })
   const summary = useQuery({ queryKey: ['class-summary', classId], queryFn: async () => (await api.get(`/api/v1/scores/class/${classId}/summary`)).data, enabled: Boolean(classId) })
-  useEffect(() => setStudentId(''), [classId])
+  useEffect(() => {
+    if (classId !== searchParams.get('class_id')) setStudentId('')
+  }, [classId, searchParams])
+  const selectedStudent = students.data?.find((item: any) => item.id === studentId)
+  const visiblePassRate = scores.data?.scores?.length
+    ? Math.round(scores.data.scores.filter((item: any) => item.percentage >= 60).length / scores.data.scores.length * 1000) / 10
+    : 0
 
   return <div className="space-y-6">
     <header><p className="eyebrow">CLASS SCORE EVIDENCE</p><h1 className="page-title">班级成绩总览</h1><p className="mt-2 text-sm text-text-muted">按班级、学生、项目和时间检索，并核对单次成绩汇总证据</p></header>
@@ -40,7 +46,7 @@ export default function TeacherScores() {
       <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
       <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
     </section>
-    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label="学生数" value={summary.data?.student_count ?? '—'} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label="班级平均" value={summary.data?.average_score ?? '—'} /><Metric label="及格率" value={`${summary.data?.pass_rate ?? '—'}%`} /></div>}
+    {classId && <div className="grid gap-3 sm:grid-cols-4"><Metric label={studentId ? '当前学生' : '学生数'} value={studentId ? (selectedStudent?.name || '已选择') : (summary.data?.student_count ?? '—')} /><Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label={studentId ? '个人平均' : '班级平均'} value={studentId ? (scores.data?.average_score ?? '—') : (summary.data?.average_score ?? '—')} /><Metric label={studentId ? '个人及格率' : '及格率'} value={`${studentId ? visiblePassRate : (summary.data?.pass_rate ?? '—')}%`} /></div>}
     <div className="flex flex-wrap items-center justify-end gap-3">{user?.role === 'admin' ? <><input ref={importInput} className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && importFile.mutate(e.target.files[0])} /><button className="railway-button" disabled={importFile.isPending} onClick={() => importInput.current?.click()}>{importFile.isPending ? '正在导入…' : '导入实训记录 CSV'}</button></> : <span className="text-xs text-text-muted">CSV 导入涉及全校数据写入，仅管理员可执行</span>}<button className="railway-button" disabled={!classId} onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出当前筛选 CSV</button></div>
     {importFile.data && <p className="alert-success rounded p-3 text-sm">CSV 导入完成：读取 {importFile.data.read_count} 条，新增 {importFile.data.success_count} 条，跳过 {importFile.data.skipped_count} 条，异常 {importFile.data.error_count} 条。</p>}
     {importFile.error && <p className="alert-warning rounded p-3 text-sm">{getErrorMessage(importFile.error, 'CSV 导入失败')}</p>}

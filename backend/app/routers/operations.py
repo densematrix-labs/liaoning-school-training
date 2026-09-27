@@ -18,7 +18,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.operations import AuditLog, BackupRecord, ReferenceImage, SystemSetting
 from app.models.user import User, UserRole
-from app.models.student import Class, Major, Student
+from app.models.student import Class, Major, Student, TeacherClassAssignment
 from app.models.training import TrainingProject
 from app.models.workflow import MockSyncTask
 from app.services.auth import AuthService
@@ -353,6 +353,8 @@ async def create_class(
         raise HTTPException(status_code=400, detail="教师账号不存在")
     item = Class(id=str(uuid.uuid4()), **payload.model_dump())
     db.add(item)
+    if payload.teacher_id:
+        db.add(TeacherClassAssignment(teacher_id=payload.teacher_id, class_id=item.id))
     await record_audit(db, actor_id=admin.id, actor_name=admin.name, action="create_class", object_type="class", object_id=item.id, after=payload.model_dump())
     await db.commit()
     return {"id": item.id, **payload.model_dump()}

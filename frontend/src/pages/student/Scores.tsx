@@ -1,14 +1,16 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import ScoreEvidenceModal from '../../components/ScoreEvidenceModal'
 
 export default function StudentScores() {
+  const [searchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   const [projectId, setProjectId] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [selectedScore, setSelectedScore] = useState('')
+  const [selectedScore, setSelectedScore] = useState(searchParams.get('score_id') || '')
   const projects = useQuery({ queryKey: ['score-projects'], queryFn: async () => (await api.get('/api/v1/scores/projects')).data })
   const scores = useQuery({
     queryKey: ['student-scores', page, projectId, dateFrom, dateTo],

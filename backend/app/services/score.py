@@ -13,6 +13,7 @@ from app.schemas.training import (
     StepScoreDetail,
     ClassScoreSummary,
 )
+from app.services.presentation import training_record_reference
 
 
 class ScoreService:
@@ -58,6 +59,18 @@ class ScoreService:
                 select(TrainingProject).where(TrainingProject.id == score.project_id)
             )
             project = project_result.scalar_one_or_none()
+            record = None
+            if score.record_id:
+                record = (await self.db.execute(
+                    select(TrainingRecord).where(TrainingRecord.id == score.record_id)
+                )).scalar_one_or_none()
+
+            failed_names = []
+            step_names = {str(item.get("id")): item.get("name", "相关操作步骤") for item in (project.steps or [])} if project else {}
+            for step_id, detail in (score.details or {}).items():
+                if not detail.get("passed", False):
+                    failed_names.append(step_names.get(str(step_id), "相关操作步骤"))
+            result_summary = "全部操作步骤通过" if not failed_names else f"待提升：{'、'.join(failed_names[:2])}"
             
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
             total_score_sum += percentage
@@ -71,6 +84,8 @@ class ScoreService:
                 max_score=score.max_score,
                 percentage=round(percentage, 1),
                 calculated_at=score.calculated_at,
+                training_completed_at=record.completed_at if record else score.calculated_at,
+                result_summary=result_summary,
             ))
         
         avg_score = total_score_sum / len(score_responses) if score_responses else None
@@ -160,7 +175,10 @@ class ScoreService:
             failed_abilities=score.failed_abilities or [],
             class_name=class_obj.name if class_obj else None,
             record_id=score.record_id,
-            source_record_id=record.external_id if record else None,
+            record_reference=training_record_reference(
+                record.completed_at if record else score.calculated_at,
+                record.id if record else score.id,
+            ),
             source_completed_at=record.completed_at if record else None,
             steps_total=round(sum(item.score for item in step_details), 2),
             reconciliation_ok=abs(sum(item.score for item in step_details) - score.total_score) < 0.01,
@@ -216,6 +234,18 @@ class ScoreService:
                 select(TrainingProject).where(TrainingProject.id == score.project_id)
             )
             project = project_result.scalar_one_or_none()
+            record = None
+            if score.record_id:
+                record = (await self.db.execute(
+                    select(TrainingRecord).where(TrainingRecord.id == score.record_id)
+                )).scalar_one_or_none()
+            step_names = {str(item.get("id")): item.get("name", "相关操作步骤") for item in (project.steps or [])} if project else {}
+            failed_names = [
+                step_names.get(str(step_id), "相关操作步骤")
+                for step_id, detail in (score.details or {}).items()
+                if not detail.get("passed", False)
+            ]
+            result_summary = "全部操作步骤通过" if not failed_names else f"待提升：{'、'.join(failed_names[:2])}"
             
             student = student_map.get(score.student_id)
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
@@ -231,6 +261,8 @@ class ScoreService:
                 max_score=score.max_score,
                 percentage=round(percentage, 1),
                 calculated_at=score.calculated_at,
+                training_completed_at=record.completed_at if record else score.calculated_at,
+                result_summary=result_summary,
             ))
         
         avg_score = total_score_sum / len(score_responses) if score_responses else None

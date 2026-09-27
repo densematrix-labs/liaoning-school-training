@@ -298,6 +298,7 @@ class _FakeResponse:
 
 class _FakeAsyncClient:
     content = ""
+    last_json = None
 
     def __init__(self, *args, **kwargs):
         pass
@@ -309,6 +310,7 @@ class _FakeAsyncClient:
         return None
 
     async def post(self, *args, **kwargs):
+        type(self).last_json = kwargs.get("json")
         return _FakeResponse(self.content)
 
 
@@ -334,12 +336,22 @@ async def test_real_model_workflows_are_structured_and_traceable(test_db, accept
         with pytest.raises(ValueError):
             await service.review_check("missing", ids["teacher"], type("Review", (), {"status": "confirmed", "reviewed_details": None, "reviewed_summary": None, "note": None})())
 
-    _FakeAsyncClient.content = "## 基本信息与成绩概况\n验收项目 50 分\n## 能力分析\n步骤执行需加强\n## 环境规范情况\n总体规范\n## 提升建议\n继续训练"
+    _FakeAsyncClient.content = "## 基本信息与成绩概况\n学员-udent：验收项目 50 分\n模型来源 bailian\n## 能力分析\nstep-2 与 accept-sub 需加强，sa-999 待复核\n## 环境规范情况\n总体规范\n## 提升建议\n继续训练"
     monkeypatch.setattr(report_module.httpx, "AsyncClient", _FakeAsyncClient)
     async with test_db() as db:
         service = ReportService(db)
         report = await service.generate_report(ids["student"], "single", ids["score"])
         assert "验收项目" in report.content
+        assert "验收学生" in report.content
+        assert "step-" not in report.content
+        assert "sa-" not in report.content
+        assert "accept-sub" not in report.content
+        assert "模型来源" not in report.content
+        assert "bailian" not in report.content.lower()
+        prompt = _FakeAsyncClient.last_json["messages"][0]["content"]
+        assert "验收学生" not in prompt
+        assert "step-1" not in prompt
+        assert "accept-sub" not in prompt
         with pytest.raises(ValueError):
             await service.generate_report(ids["student"], "invalid", ids["score"])
         assert await service.get_report("missing") is None

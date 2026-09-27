@@ -13,6 +13,7 @@ from app.models.training import TrainingRecord, Score, TrainingProject
 from app.models.ability import AbilityProfile, MajorAbility, SubAbility
 from app.models.report import DiagnosticReport
 from app.models.lab import EnvironmentCheck
+from app.services.report import ReportService
 from app.adapters.controllers.auth import get_current_student
 from app.schemas.student import (
     StudentProfileResponse,
@@ -223,20 +224,13 @@ async def get_reports(
     limit: int = Query(20, ge=1, le=100)
 ):
     """获取诊断报告列表"""
-    result = await db.execute(
-        select(DiagnosticReport)
-        .where(DiagnosticReport.student_id == student.id)
-        .order_by(DiagnosticReport.generated_at.desc())
-        .offset(skip)
-        .limit(limit)
-    )
-    reports = result.scalars().all()
+    reports = (await ReportService(db).get_student_reports(student.id, skip + limit))[skip:]
     
     return [
         ReportListResponse(
             id=report.id,
-            title=report.title or "诊断报告",
-            report_type=report.report_type.value,
+            title=report.title,
+            report_type=report.report_type,
             generated_at=report.generated_at.isoformat() if report.generated_at else None
         )
         for report in reports
@@ -250,20 +244,15 @@ async def get_report_detail(
     db: AsyncSession = Depends(get_db)
 ):
     """获取报告详情"""
-    result = await db.execute(
-        select(DiagnosticReport)
-        .where(DiagnosticReport.id == report_id)
-        .where(DiagnosticReport.student_id == student.id)
-    )
-    report = result.scalar_one_or_none()
+    report = await ReportService(db).get_report(report_id)
     
-    if not report:
+    if not report or report.student_id != student.id:
         raise HTTPException(status_code=404, detail="报告不存在")
     
     return ReportDetailResponse(
         id=report.id,
-        title=report.title or "诊断报告",
-        report_type=report.report_type.value,
+        title=report.title,
+        report_type=report.report_type,
         content=report.content,
         content_html=report.content_html,
         pdf_url=report.pdf_url,

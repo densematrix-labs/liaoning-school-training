@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Enum as SQLEnum
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -21,3 +22,9 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False, default=UserRole.STUDENT)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    classes = relationship(
+        "Class",
+        secondary="teacher_class_assignments",
+        back_populates="teachers",
+    )

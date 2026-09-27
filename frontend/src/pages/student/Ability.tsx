@@ -280,7 +280,7 @@ export default function StudentAbility() {
                       <div key={`${evidence.score_id}-${evidence.step_id}`} className="grid gap-2 rounded bg-railway-800/60 p-3 text-sm md:grid-cols-[1.2fr_1.4fr_auto]">
                         <div>
                           <p className="text-text-primary">{evidence.project_name}</p>
-                          <p className="text-xs text-text-muted">数据来源：{evidence.source_record_id}</p>
+                          <p className="text-xs text-text-muted">实训记录：{evidence.record_reference || '编号待确认'}</p>
                         </div>
                         <p className="text-text-secondary">{evidence.step_name} · {evidence.passed ? '通过' : '未通过'}</p>
                         <span className={evidence.passed ? 'text-status-success' : 'text-status-warning'}>{evidence.score}/{evidence.max_score}</span>

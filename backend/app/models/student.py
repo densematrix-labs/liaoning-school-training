@@ -30,7 +30,23 @@ class Class(Base):
     
     major = relationship("Major", back_populates="classes")
     students = relationship("Student", back_populates="class_")
-    teacher = relationship("User")
+    # teacher_id is retained as a legacy compatibility field. New
+    # authorization checks use teacher_class_assignments so one class can be
+    # shared by multiple teachers and one teacher can manage multiple classes.
+    teacher = relationship("User", foreign_keys=[teacher_id])
+    teachers = relationship(
+        "User",
+        secondary="teacher_class_assignments",
+        back_populates="classes",
+    )
+
+
+class TeacherClassAssignment(Base):
+    __tablename__ = "teacher_class_assignments"
+
+    teacher_id = Column(String(36), ForeignKey("users.id"), primary_key=True)
+    class_id = Column(String(36), ForeignKey("classes.id"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Student(Base):

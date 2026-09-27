@@ -1,5 +1,5 @@
 from app.models.user import User
-from app.models.student import Student, Class, Major
+from app.models.student import Student, Class, Major, TeacherClassAssignment
 from app.models.training import TrainingProject, TrainingRecord, Score
 from app.models.ability import MajorAbility, SubAbility, AbilityProfile
 from app.models.lab import Lab, EnvironmentCheck
@@ -12,6 +12,7 @@ __all__ = [
     "Student",
     "Class",
     "Major",
+    "TeacherClassAssignment",
     "TrainingProject",
     "TrainingRecord",
     "Score",

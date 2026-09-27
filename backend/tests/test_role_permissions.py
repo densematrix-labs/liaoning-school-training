@@ -64,6 +64,32 @@ async def test_admin_can_access_every_class(client, test_db, role_records):
 
 
 @pytest.mark.asyncio
+async def test_teacher_many_to_many_class_assignment_is_enforced_end_to_end(client, test_db, role_records):
+    async with test_db() as session:
+        session.add_all(role_records["users"])
+        session.add(role_records["major"])
+        session.add_all(role_records["classes"])
+        await session.commit()
+
+    admin = await login(client, "admin-a")
+    assigned = await client.put(
+        "/api/v1/admin/teachers/teacher-a/classes",
+        headers=admin,
+        json={"class_ids": ["class-a", "class-b"]},
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["class_ids"] == ["class-a", "class-b"]
+
+    teacher_a = await login(client, "teacher-a")
+    teacher_b = await login(client, "teacher-b")
+    classes = await client.get("/api/v1/students/classes", headers=teacher_a)
+    assert {item["id"] for item in classes.json()} == {"class-a", "class-b"}
+    assert (await client.get("/api/v1/students/classes/class-b/students", headers=teacher_a)).status_code == 200
+    # Existing legacy ownership is migrated instead of being overwritten.
+    assert (await client.get("/api/v1/students/classes/class-b/students", headers=teacher_b)).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_student_cannot_run_environment_check(client, student_headers):
     response = await client.post(
         "/api/v1/environment/check",

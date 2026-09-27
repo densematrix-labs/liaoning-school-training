@@ -17,6 +17,10 @@ class TeacherAssignmentRequest(BaseModel):
     teacher_id: str | None = None
 
 
+class TeacherClassesAssignmentRequest(BaseModel):
+    class_ids: list[str] = Field(default_factory=list)
+
+
 class SyncExceptionResponse(BaseModel):
     id: str
     row_number: int
@@ -35,4 +39,4 @@ class SyncTaskResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     exceptions: list[SyncExceptionResponse] = Field(default_factory=list)
-    message: str = "Mock 同步任务已完成"
+    message: str = "演示数据导入验证已完成"

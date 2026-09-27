@@ -23,8 +23,15 @@ class DiagnosticReportResponse(BaseModel):
     content_html: Optional[str] = None
     pdf_url: Optional[str] = None
     generated_at: Optional[datetime] = None
-    model: Optional[str] = None
-    source: str = "bailian"
+    report_reference: Optional[str] = None
+    project_name: Optional[str] = None
+    training_completed_at: Optional[datetime] = None
+    score_total: Optional[float] = None
+    score_max: Optional[float] = None
+    score_percentage: Optional[float] = None
+    class_id: Optional[str] = None
+    class_name: Optional[str] = None
+    record_reference: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -1,21 +1,49 @@
 from typing import Optional, List
 import json
 import httpx
+import re
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.config import settings
 from app.models.report import DiagnosticReport, ReportType
-from app.models.student import Student
-from app.models.training import Score, TrainingProject
-from app.models.ability import MajorAbility
+from app.models.student import Student, Class
+from app.models.training import Score, TrainingProject, TrainingRecord
+from app.models.ability import MajorAbility, SubAbility
 from app.models.lab import EnvironmentCheck
 from app.models.workflow import ReportTask, TaskStatus
 from app.database import AsyncSessionLocal
 from app.services.ability import AbilityService
 from app.schemas.report import DiagnosticReportResponse
 from app.schemas.report import ReportTaskResponse
+from app.services.presentation import report_reference, training_record_reference
+
+
+INTERNAL_CODE_PATTERN = re.compile(r"\b(?:step|sa|ma)-[a-z0-9-]+\b", re.IGNORECASE)
+UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b", re.IGNORECASE)
+
+
+def sanitize_report_content(
+    content: str,
+    *,
+    student_name: str,
+    step_names: dict[str, str],
+    ability_names: dict[str, str],
+) -> str:
+    """Remove internal identifiers and restore the real name locally."""
+    cleaned = (content or "").replace("```markdown", "").replace("```", "")
+    cleaned = re.sub(r"学员-[A-Za-z0-9_-]+", student_name, cleaned)
+    replacements = {**step_names, **ability_names}
+    for internal_id, human_name in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        cleaned = re.sub(re.escape(str(internal_id)), str(human_name), cleaned, flags=re.IGNORECASE)
+    cleaned = INTERNAL_CODE_PATTERN.sub("相关业务项", cleaned)
+    cleaned = UUID_PATTERN.sub("内部记录", cleaned)
+    cleaned = "\n".join(
+        line for line in cleaned.splitlines()
+        if not re.search(r"模型来源|model\s*(?:name|source|provider)|bailian|dashscope", line, re.IGNORECASE)
+    )
+    return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 
 class ReportService:
@@ -49,6 +77,8 @@ class ReportService:
         )
         abilities = abilities_result.scalars().all()
         ability_map = {a.id: a for a in abilities}
+        sub_abilities = list((await self.db.execute(select(SubAbility))).scalars().all())
+        sub_ability_names = {item.id: item.name for item in sub_abilities}
         
         # Get scores
         if report_type == "single":
@@ -73,6 +103,9 @@ class ReportService:
         
         # Build report data
         scores_data = []
+        selected_step_names: dict[str, str] = {}
+        selected_record: TrainingRecord | None = None
+        selected_project: TrainingProject | None = None
         for score in scores:
             if not score:
                 continue
@@ -80,18 +113,33 @@ class ReportService:
                 select(TrainingProject).where(TrainingProject.id == score.project_id)
             )
             project = project_result.scalar_one_or_none()
+            record = (await self.db.execute(
+                select(TrainingRecord).where(TrainingRecord.id == score.record_id)
+            )).scalar_one_or_none() if score.record_id else None
+            if selected_record is None:
+                selected_record = record
+            if selected_project is None:
+                selected_project = project
+            project_step_names = {
+                str(item.get("id")): item.get("name", "相关操作步骤")
+                for item in (project.steps or [])
+            } if project else {}
+            selected_step_names.update(project_step_names)
+            score_completed_at = record.completed_at if record and record.completed_at else score.calculated_at
             
             scores_data.append({
-                "score_id": score.id,
                 "project_name": project.name if project else "未知项目",
+                "completed_at": score_completed_at.isoformat() if score_completed_at else None,
                 "total_score": score.total_score,
                 "max_score": score.max_score,
                 "percentage": round(score.total_score / score.max_score * 100, 1) if score.max_score > 0 else 0,
-                "failed_abilities": score.failed_abilities or [],
+                "failed_abilities": [
+                    sub_ability_names.get(str(ability_id), "相关能力")
+                    for ability_id in (score.failed_abilities or [])
+                ],
                 "steps": [
                     {
-                        "step_id": step_id,
-                        "step_name": next((item.get("name") for item in (project.steps or []) if str(item.get("id")) == str(step_id)), step_id) if project else step_id,
+                        "step_name": project_step_names.get(str(step_id), "相关操作步骤"),
                         "passed": detail.get("passed", False),
                         "score": detail.get("score", 0),
                         "max_score": detail.get("max_score", 0),
@@ -110,7 +158,6 @@ class ReportService:
         )).scalars().all())
         environment_data = [
             {
-                "score_id": item.score_id,
                 "total_score": item.total_score,
                 "summary": item.summary,
                 "details": item.details,
@@ -141,9 +188,39 @@ class ReportService:
             graduation_ready=profile.graduation_ready if profile else False,
             environment_data=environment_data,
         )
+        content = sanitize_report_content(
+            content,
+            student_name=student.name,
+            step_names=selected_step_names,
+            ability_names=sub_ability_names,
+        )
+        class_obj = (await self.db.execute(
+            select(Class).where(Class.id == student.class_id)
+        )).scalar_one_or_none()
+        summary_lines = [
+            "## 学生与实训摘要",
+            f"- **学生：** {student.name}",
+            f"- **班级：** {class_obj.name if class_obj else '—'}",
+        ]
+        if report_type == "single" and scores:
+            completed_at = selected_record.completed_at if selected_record else scores[0].calculated_at
+            completed_label = completed_at.strftime("%Y-%m-%d %H:%M") if completed_at else "—"
+            summary_lines.extend([
+                f"- **实训项目：** {selected_project.name if selected_project else '未知项目'}",
+                f"- **完成时间：** {completed_label}",
+                f"- **实训成绩：** {scores[0].total_score:g}/{scores[0].max_score:g} 分",
+            ])
+        else:
+            summary_lines.append(f"- **覆盖范围：** 最近 {len(scores)} 次实训")
+        content = "\n".join(summary_lines) + "\n\n" + content
         
         # Save report
-        title = f"{'单次实训' if report_type == 'single' else '阶段性'}诊断报告 - {student.name}"
+        if report_type == "single":
+            completed_at = selected_record.completed_at if selected_record else scores[0].calculated_at
+            completed_label = completed_at.strftime("%Y-%m-%d %H:%M") if completed_at else "时间待确认"
+            title = f"{selected_project.name if selected_project else '单次实训'} · {completed_label} · {student.name}诊断报告"
+        else:
+            title = f"{student.name} · 阶段综合诊断报告"
         
         report = DiagnosticReport(
             id=str(uuid.uuid4()),
@@ -157,18 +234,7 @@ class ReportService:
         await self.db.commit()
         await self.db.refresh(report)
         
-        return DiagnosticReportResponse(
-            id=report.id,
-            student_id=student_id,
-            student_name=student.name,
-            report_type=report_type,
-            score_id=report.score_id,
-            title=title,
-            content=content,
-            generated_at=report.generated_at,
-            model=settings.LLM_MODEL,
-            source=settings.LLM_PROVIDER,
-        )
+        return await self._build_report_response(report, student)
     
     async def _generate_report_content(
         self,
@@ -184,8 +250,8 @@ class ReportService:
         prompt = f"""你是一位专业的职业教育指导老师。请根据以下数据为学生生成诊断报告。
 
 ## 学生信息
-- 姓名：{student_name}
-        - 专业：铁道机车运用与维护
+- 匿名称呼：{student_name}
+- 专业：铁道机车运用与维护
 - 报告类型：{"单次实训诊断" if report_type == "single" else "阶段性综合诊断"}
 
 ## 实训成绩数据
@@ -224,6 +290,8 @@ class ReportService:
 （用引用块给出是否达标、差距维度和 30-50 字结论）
 
 排版要求：不要输出连续的大段文字；单段不超过 120 字；关键分数和结论使用加粗；不要输出代码块。请用鼓励性但务实的语气撰写。直接输出 Markdown 内容，不要额外说明。"""
+
+        prompt += "\n数据中已经将所有内部步骤编码和能力编码替换为业务名称。不得猜测、复述或生成任何 step-、sa-、ma-、UUID、源记录编号、模型名称或模型来源。"
 
         if not settings.LLM_API_KEY:
             raise RuntimeError(f"{settings.LLM_PROVIDER} 未配置，无法生成真实诊断报告")
@@ -328,21 +396,7 @@ class ReportService:
         )
         student = student_result.scalar_one_or_none()
         
-        return [
-            DiagnosticReportResponse(
-                id=r.id,
-                student_id=r.student_id,
-                student_name=student.name if student else None,
-                report_type=r.report_type.value,
-                score_id=r.score_id,
-                title=r.title,
-                content=r.content,
-                generated_at=r.generated_at,
-                model=settings.LLM_MODEL,
-                source=settings.LLM_PROVIDER,
-            )
-            for r in reports
-        ]
+        return [await self._build_report_response(report, student) for report in reports]
     
     async def get_report(self, report_id: str) -> Optional[DiagnosticReportResponse]:
         result = await self.db.execute(
@@ -352,22 +406,116 @@ class ReportService:
         if not report:
             return None
         
-        student_result = await self.db.execute(
+        student = (await self.db.execute(
             select(Student).where(Student.id == report.student_id)
+        )).scalar_one_or_none()
+        return await self._build_report_response(report, student)
+
+    async def _build_report_response(
+        self,
+        report: DiagnosticReport,
+        student: Student | None = None,
+    ) -> DiagnosticReportResponse:
+        if student is None:
+            student = (await self.db.execute(
+                select(Student).where(Student.id == report.student_id)
+            )).scalar_one_or_none()
+
+        class_obj = None
+        if student:
+            class_obj = (await self.db.execute(
+                select(Class).where(Class.id == student.class_id)
+            )).scalar_one_or_none()
+
+        score = None
+        project = None
+        record = None
+        if report.score_id:
+            score = (await self.db.execute(
+                select(Score).where(Score.id == report.score_id)
+            )).scalar_one_or_none()
+        if score:
+            project = (await self.db.execute(
+                select(TrainingProject).where(TrainingProject.id == score.project_id)
+            )).scalar_one_or_none()
+            if score.record_id:
+                record = (await self.db.execute(
+                    select(TrainingRecord).where(TrainingRecord.id == score.record_id)
+                )).scalar_one_or_none()
+
+        projects = list((await self.db.execute(select(TrainingProject))).scalars().all())
+        step_names = {
+            str(step.get("id")): step.get("name", "相关操作步骤")
+            for item in projects
+            for step in (item.steps or [])
+            if step.get("id")
+        }
+        ability_names = {
+            item.id: item.name
+            for item in (await self.db.execute(select(SubAbility))).scalars().all()
+        }
+        student_name = student.name if student else "学生"
+        content = sanitize_report_content(
+            report.content or "",
+            student_name=student_name,
+            step_names=step_names,
+            ability_names=ability_names,
         )
-        student = student_result.scalar_one_or_none()
-        
+
+        completed_at = record.completed_at if record and record.completed_at else (score.calculated_at if score else None)
+        percentage = (
+            round(score.total_score / score.max_score * 100, 1)
+            if score and score.max_score
+            else None
+        )
+        if report.report_type == ReportType.SINGLE:
+            if score:
+                completed_label = completed_at.strftime("%Y-%m-%d %H:%M") if completed_at else "时间待确认"
+                title = f"{project.name if project else '单次实训'} · {completed_label} · {student_name}诊断报告"
+            else:
+                generated_label = report.generated_at.strftime("%Y-%m-%d %H:%M") if report.generated_at else "时间待确认"
+                title = f"单次实训诊断 · {generated_label} · {student_name}"
+        else:
+            generated_label = report.generated_at.strftime("%Y-%m-%d") if report.generated_at else ""
+            title = f"{student_name} · 阶段综合诊断报告{f' · {generated_label}' if generated_label else ''}"
+
+        if "## 学生与实训摘要" not in content:
+            summary = [
+                "## 学生与实训摘要",
+                f"- **学生：** {student_name}",
+                f"- **班级：** {class_obj.name if class_obj else '—'}",
+            ]
+            if score:
+                summary.extend([
+                    f"- **实训项目：** {project.name if project else '未知项目'}",
+                    f"- **完成时间：** {completed_at.strftime('%Y-%m-%d %H:%M') if completed_at else '—'}",
+                    f"- **实训成绩：** {score.total_score:g}/{score.max_score:g} 分（{percentage:g}%）",
+                ])
+            else:
+                summary.append("- **报告范围：** 阶段综合表现")
+            content = "\n".join(summary) + "\n\n" + content
+
         return DiagnosticReportResponse(
             id=report.id,
             student_id=report.student_id,
-            student_name=student.name if student else None,
+            student_name=student_name,
             report_type=report.report_type.value,
             score_id=report.score_id,
-            title=report.title,
-            content=report.content,
+            title=title,
+            content=content,
             generated_at=report.generated_at,
-            model=settings.LLM_MODEL,
-            source=settings.LLM_PROVIDER,
+            report_reference=report_reference(report.generated_at, report.id),
+            project_name=project.name if project else None,
+            training_completed_at=completed_at,
+            score_total=score.total_score if score else None,
+            score_max=score.max_score if score else None,
+            score_percentage=percentage,
+            class_id=student.class_id if student else None,
+            class_name=class_obj.name if class_obj else None,
+            record_reference=training_record_reference(
+                completed_at,
+                record.id if record else (score.id if score else report.id),
+            ) if score else None,
         )
 
 

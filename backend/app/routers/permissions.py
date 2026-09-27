@@ -1,10 +1,10 @@
 """Role and data-scope permission helpers."""
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.student import Class, Student
+from app.models.student import Class, Student, TeacherClassAssignment
 from app.schemas.auth import UserResponse
 
 
@@ -19,7 +19,16 @@ async def require_class_access(
         raise HTTPException(status_code=403, detail="无权访问")
 
     result = await db.execute(
-        select(Class.id).where(Class.id == class_id, Class.teacher_id == user.id)
+        select(Class.id)
+        .outerjoin(TeacherClassAssignment, TeacherClassAssignment.class_id == Class.id)
+        .where(
+            Class.id == class_id,
+            or_(
+                TeacherClassAssignment.teacher_id == user.id,
+                Class.teacher_id == user.id,
+            ),
+        )
+        .distinct()
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=403, detail="无权访问该班级")
@@ -42,7 +51,15 @@ async def require_student_access(
     result = await db.execute(
         select(Student.id)
         .join(Class, Student.class_id == Class.id)
-        .where(Student.id == student_id, Class.teacher_id == user.id)
+        .outerjoin(TeacherClassAssignment, TeacherClassAssignment.class_id == Class.id)
+        .where(
+            Student.id == student_id,
+            or_(
+                TeacherClassAssignment.teacher_id == user.id,
+                Class.teacher_id == user.id,
+            ),
+        )
+        .distinct()
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=403, detail="无权访问该学生")

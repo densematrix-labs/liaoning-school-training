@@ -13,6 +13,7 @@ from app.schemas.ability import (
     SubAbilityResponse,
     ClassAbilityDistribution,
 )
+from app.services.presentation import training_record_reference
 
 
 class AbilityService:
@@ -183,7 +184,7 @@ class AbilityService:
                 step = step_map.get(str(step_id), {})
                 item = {
                     "score_id": score.id,
-                    "source_record_id": record.external_id,
+                    "record_reference": training_record_reference(record.completed_at, record.id),
                     "project_name": project.name,
                     "step_id": str(step_id),
                     "step_name": step.get("name", str(step_id)),

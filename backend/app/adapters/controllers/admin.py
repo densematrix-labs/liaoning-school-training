@@ -20,7 +20,7 @@ from app.models.lab import EnvironmentCheck
 from app.models.operations import SystemSetting
 from app.models.report import DiagnosticReport
 from app.models.training import Score, TrainingProject, TrainingRecord
-from app.models.student import Student, Class
+from app.models.student import Student, Class, TeacherClassAssignment
 from app.models.workflow import (
     EnvironmentTask,
     MockSyncException,
@@ -39,6 +39,7 @@ from app.schemas.admin import (
     SyncExceptionResponse,
     SyncTaskResponse,
     TeacherAssignmentRequest,
+    TeacherClassesAssignmentRequest,
 )
 from app.schemas.ability import (
     MajorAbilityCreate,
@@ -94,15 +95,29 @@ async def get_access_control(
         select(User).where(User.role == UserRole.TEACHER).order_by(User.name)
     )).scalars().all())
     classes = list((await db.execute(
-        select(Class).options(selectinload(Class.teacher)).order_by(Class.year.desc(), Class.name)
+        select(Class)
+        .options(selectinload(Class.teacher), selectinload(Class.teachers))
+        .order_by(Class.year.desc(), Class.name)
     )).scalars().all())
+    teacher_class_map: dict[str, list[str]] = {item.id: [] for item in teachers}
+    for class_ in classes:
+        for teacher in class_.teachers:
+            teacher_class_map.setdefault(teacher.id, []).append(class_.id)
     return {
         "role_scopes": [
             {"role": "student", "label": "学生", "scope": "仅本人成绩、能力和诊断报告"},
             {"role": "teacher", "label": "教师", "scope": "仅已授权班级，可复核环境检查"},
             {"role": "admin", "label": "管理员", "scope": "全校数据与业务规则管理"},
         ],
-        "teachers": [{"id": item.id, "name": item.name, "username": item.username} for item in teachers],
+        "teachers": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "username": item.username,
+                "class_ids": sorted(teacher_class_map.get(item.id, [])),
+            }
+            for item in teachers
+        ],
         "classes": [
             {
                 "id": item.id,
@@ -110,6 +125,8 @@ async def get_access_control(
                 "year": item.year,
                 "teacher_id": item.teacher_id,
                 "teacher_name": item.teacher.name if item.teacher else None,
+                "teacher_ids": sorted(teacher.id for teacher in item.teachers),
+                "teacher_names": sorted(teacher.name for teacher in item.teachers),
             }
             for item in classes
         ],
@@ -133,8 +150,86 @@ async def assign_class_teacher(
         if not teacher:
             raise HTTPException(status_code=400, detail="指定账号不是教师")
     class_.teacher_id = data.teacher_id
+    await db.execute(delete(TeacherClassAssignment).where(TeacherClassAssignment.class_id == class_id))
+    if data.teacher_id:
+        db.add(TeacherClassAssignment(teacher_id=data.teacher_id, class_id=class_id))
     await db.commit()
     return {"message": "班级数据范围已更新", "class_id": class_.id, "teacher_id": class_.teacher_id}
+
+
+@router.put("/teachers/{teacher_id}/classes")
+async def assign_teacher_classes(
+    teacher_id: str,
+    data: TeacherClassesAssignmentRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    teacher = (await db.execute(
+        select(User).where(User.id == teacher_id, User.role == UserRole.TEACHER)
+    )).scalar_one_or_none()
+    if not teacher:
+        raise HTTPException(status_code=404, detail="教师账号不存在")
+
+    requested_ids = set(data.class_ids)
+    classes = list((await db.execute(
+        select(Class).where(Class.id.in_(requested_ids))
+    )).scalars().all()) if requested_ids else []
+    if len(classes) != len(requested_ids):
+        raise HTTPException(status_code=400, detail="包含不存在的班级")
+
+    legacy_rows = list((await db.execute(
+        select(Class.id, Class.teacher_id).where(Class.teacher_id.is_not(None))
+    )).all())
+    existing_pairs = set((await db.execute(
+        select(TeacherClassAssignment.teacher_id, TeacherClassAssignment.class_id)
+    )).all())
+    for class_id, legacy_teacher_id in legacy_rows:
+        if (legacy_teacher_id, class_id) not in existing_pairs:
+            db.add(TeacherClassAssignment(teacher_id=legacy_teacher_id, class_id=class_id))
+    await db.flush()
+
+    previous_ids = set((await db.execute(
+        select(TeacherClassAssignment.class_id).where(
+            TeacherClassAssignment.teacher_id == teacher_id
+        )
+    )).scalars().all())
+    await db.execute(delete(TeacherClassAssignment).where(
+        TeacherClassAssignment.teacher_id == teacher_id
+    ))
+    for class_id in sorted(requested_ids):
+        db.add(TeacherClassAssignment(teacher_id=teacher_id, class_id=class_id))
+    await db.flush()
+
+    affected_ids = previous_ids | requested_ids
+    for class_id in affected_ids:
+        class_ = (await db.execute(select(Class).where(Class.id == class_id))).scalar_one_or_none()
+        if not class_:
+            continue
+        remaining = list((await db.execute(
+            select(TeacherClassAssignment.teacher_id)
+            .where(TeacherClassAssignment.class_id == class_id)
+            .order_by(TeacherClassAssignment.created_at, TeacherClassAssignment.teacher_id)
+        )).scalars().all())
+        # Keep the legacy column synchronized for older integrations while
+        # authorization uses the complete many-to-many assignment set.
+        class_.teacher_id = remaining[0] if remaining else None
+
+    await record_audit(
+        db,
+        actor_id=admin.id,
+        actor_name=admin.name,
+        action="update_teacher_classes",
+        object_type="teacher_scope",
+        object_id=teacher_id,
+        before={"class_ids": sorted(previous_ids)},
+        after={"class_ids": sorted(requested_ids)},
+    )
+    await db.commit()
+    return {
+        "message": "教师班级授权已更新",
+        "teacher_id": teacher_id,
+        "class_ids": sorted(requested_ids),
+    }
 
 
 # ============ 能力管理 ============
@@ -505,11 +600,13 @@ async def list_training_projects(
     response = []
     for project in projects:
         sample_scores = list((await db.execute(
-            select(Score)
+            select(Score, Student, TrainingRecord)
+            .join(Student, Student.id == Score.student_id)
+            .outerjoin(TrainingRecord, TrainingRecord.id == Score.record_id)
             .where(Score.project_id == project.id)
             .order_by(Score.calculated_at.desc())
             .limit(8)
-        )).scalars().all())
+        )).all())
         response.append({
             "id": project.id,
             "name": project.name,
@@ -518,8 +615,18 @@ async def list_training_projects(
             "scoring_rules": project.scoring_rules or {},
             "ability_mapping": project.ability_mapping or {},
             "sample_scores": [
-                {"id": item.id, "student_id": item.student_id, "total_score": item.total_score, "calculated_at": item.calculated_at}
-                for item in sample_scores
+                {
+                    "id": score.id,
+                    "student_id": score.student_id,
+                    "student_name": student.name,
+                    "student_no": student.student_no,
+                    "project_name": project.name,
+                    "total_score": score.total_score,
+                    "max_score": score.max_score,
+                    "completed_at": record.completed_at if record else score.calculated_at,
+                    "calculated_at": score.calculated_at,
+                }
+                for score, student, record in sample_scores
             ],
         })
     return response

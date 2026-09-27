@@ -47,20 +47,20 @@ export default function TeacherReports() {
       <Field label="授权班级"><select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}><option value="">选择班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">选择学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="生成报告类型"><select className="input-field" value={reportType} onChange={(e) => setReportType(e.target.value as any)}><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
-      <Field label="生成依据记录"><select className="input-field" value={scoreId} disabled={reportType !== 'single' || !studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">选择记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{item.project_name} · {item.percentage}分</option>)}</select></Field>
+      <Field label="生成依据记录"><select className="input-field" value={scoreId} disabled={reportType !== 'single' || !studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">选择记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
       <button className="btn-primary" disabled={!studentId || (reportType === 'single' && !scoreId) || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: studentId, report_type: reportType, score_id: reportType === 'single' ? scoreId : undefined })}>{reportTask.create.isPending ? '正在生成…' : '生成诊断报告'}</button>
     </section>
     <ReportTaskStatus task={reportTask.task} onView={() => reportTask.task?.report && showReport(reportTask.task.report)} />
 
     {studentId && <section className="railway-card grid gap-4 p-4 sm:grid-cols-2">
       <Field label="筛选历史报告类型"><select className="input-field" value={historyType} onChange={(e) => setHistoryType(e.target.value as any)}><option value="all">全部报告</option><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
-      <Field label="筛选关联实训记录"><select className="input-field" value={historyScoreId} disabled={historyType !== 'single'} onChange={(e) => setHistoryScoreId(e.target.value)}><option value="">全部单次记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{item.project_name} · {item.percentage}分</option>)}</select></Field>
+      <Field label="筛选关联实训记录"><select className="input-field" value={historyScoreId} disabled={historyType !== 'single'} onChange={(e) => setHistoryScoreId(e.target.value)}><option value="">全部单次记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
     </section>}
 
     <div className="grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)_360px]">
       <section className="railway-card overflow-hidden xl:sticky xl:top-28">
         <div className="border-b border-railway-600/50 p-5"><p className="eyebrow">REPORT ARCHIVE</p><h2 className="section-heading">{selectedStudent ? `${selectedStudent.name}的报告` : '历史报告'}</h2><p className="mt-1 text-xs text-text-muted">当前筛选 {filteredReports.length} 条</p></div>
-        <div className="max-h-[620px] divide-y divide-railway-600/50 overflow-y-auto">{filteredReports.map((item: any) => <button key={item.id} className={`w-full p-4 text-left transition hover:bg-railway-700/50 ${activeReport?.id === item.id ? 'bg-accent-electric/10' : ''}`} onClick={() => showReport(item)}><span className={item.report_type === 'single' ? 'text-[10px] text-accent-cyan' : 'text-[10px] text-status-warning'}>{item.report_type === 'single' ? '单次诊断' : '阶段诊断'}</span><p className="mt-1 font-medium text-text-primary">{item.title}</p><p className="mt-2 font-mono text-[10px] text-text-muted">{new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{studentId && !filteredReports.length && <p className="p-5 text-sm text-text-muted">当前筛选条件下没有报告</p>}{!studentId && <p className="p-5 text-sm text-text-muted">选择班级和学生后载入报告档案</p>}</div>
+        <div className="max-h-[620px] divide-y divide-railway-600/50 overflow-y-auto">{filteredReports.map((item: any) => <button key={item.id} className={`w-full p-4 text-left transition hover:bg-railway-700/50 ${activeReport?.id === item.id ? 'bg-accent-electric/10' : ''}`} onClick={() => showReport(item)}><span className={item.report_type === 'single' ? 'text-[10px] text-accent-cyan' : 'text-[10px] text-status-warning'}>{item.report_type === 'single' ? '单次诊断' : '阶段诊断'}</span><p className="mt-1 font-medium text-text-primary">{item.title}</p><p className="mt-2 text-[10px] text-text-muted">{item.report_type === 'single' && item.score_percentage != null ? `${item.score_percentage} 分 · ` : ''}报告生成于 {new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{studentId && !filteredReports.length && <p className="p-5 text-sm text-text-muted">当前筛选条件下没有报告</p>}{!studentId && <p className="p-5 text-sm text-text-muted">选择班级和学生后载入报告档案</p>}</div>
       </section>
 
       <section ref={reportSectionRef} className="min-w-0 scroll-mt-28">
@@ -84,7 +84,13 @@ async function downloadReport(reportId: string) {
   const url = URL.createObjectURL(response.data)
   const link = document.createElement('a')
   link.href = url
-  link.download = `diagnostic-report-${reportId}.doc`
+  link.download = '诊断报告.doc'
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function formatScoreOption(item: any) {
+  const completedAt = item.training_completed_at || item.calculated_at
+  const time = completedAt ? new Date(completedAt).toLocaleString('zh-CN') : '时间待确认'
+  return `${item.project_name} · ${time} · ${item.total_score}/${item.max_score} 分 · ${item.result_summary || '结果已记录'}`
 }

@@ -23,7 +23,7 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
               <Metric label="班级" value={data.class_name || '—'} />
               <Metric label="实训项目" value={data.project_name || '—'} />
               <Metric label="总成绩" value={`${data.total_score}/${data.max_score}`} />
-              <Metric label="源记录" value={data.source_record_id || '—'} compact />
+              <Metric label="实训记录编号" value={data.record_reference || '—'} compact />
               <Metric label="实训时间" value={data.source_completed_at ? new Date(data.source_completed_at).toLocaleString('zh-CN') : '—'} compact />
             </div>
             <div className={data.reconciliation_ok ? 'alert-success rounded p-4 text-sm' : 'alert-warning rounded p-4 text-sm'}>
@@ -33,7 +33,7 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
               {data.details.map((step: any, index: number) => (
                 <article key={step.step_id} className="rounded-lg border border-railway-600/60 bg-railway-800/55 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="text-xs text-text-muted">步骤 {index + 1} · {step.step_id}</p><h3 className="mt-1 font-semibold text-text-primary">{step.step_name}</h3></div>
+                    <div><p className="text-xs text-text-muted">步骤 {index + 1}</p><h3 className="mt-1 font-semibold text-text-primary">{step.step_name}</h3></div>
                     <div className="text-right"><span className={step.passed ? 'text-status-success' : 'text-status-danger'}>{step.source_status}</span><p className="font-mono text-lg text-accent-cyan">{step.score}/{step.max_score}</p></div>
                   </div>
                   <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">

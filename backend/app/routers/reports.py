@@ -114,5 +114,5 @@ async def download_report(
     return Response(
         body.encode("utf-8"),
         media_type="application/msword",
-        headers={"Content-Disposition": f'attachment; filename="report-{report_id}.doc"'},
+        headers={"Content-Disposition": f'attachment; filename="{result.report_reference or "diagnostic-report"}.doc"'},
     )

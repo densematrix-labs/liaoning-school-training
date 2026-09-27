@@ -3,12 +3,12 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from fastapi import HTTPException, status
 
 from app.config import settings
 from app.models.user import User, UserRole
-from app.models.student import Student, Class
+from app.models.student import Student, Class, TeacherClassAssignment
 from app.schemas.auth import Token, TokenData, UserResponse
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
@@ -130,7 +130,14 @@ class AuthService:
         # Add teacher-specific info
         elif user.role == UserRole.TEACHER:
             classes_result = await self.db.execute(
-                select(Class).where(Class.teacher_id == user.id)
+                select(Class)
+                .outerjoin(TeacherClassAssignment, TeacherClassAssignment.class_id == Class.id)
+                .where(or_(
+                    TeacherClassAssignment.teacher_id == user.id,
+                    Class.teacher_id == user.id,
+                ))
+                .distinct()
+                .order_by(Class.year.desc(), Class.name)
             )
             classes = classes_result.scalars().all()
             response.classes = [{"id": c.id, "name": c.name} for c in classes]

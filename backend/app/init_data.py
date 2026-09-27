@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
 from app.models.user import User, UserRole
-from app.models.student import Major, Class, Student
+from app.models.student import Major, Class, Student, TeacherClassAssignment
 from app.models.ability import MajorAbility, SubAbility
 from app.models.lab import Lab, LabStatus
 from app.models.training import TrainingProject, TrainingRecord, Score
@@ -110,14 +110,17 @@ async def init_mock_data():
         
         # Then create classes
         for cls_data in users_data.get("classes", []):
+            teacher_id = teacher_id_map.get(cls_data.get("teacher_id"))
             cls = Class(
                 id=cls_data["id"],
                 name=cls_data["name"],
                 major_id=major.id,
-                teacher_id=teacher_id_map.get(cls_data.get("teacher_id")),
+                teacher_id=teacher_id,
                 year=cls_data.get("grade", 2023),
             )
             db.add(cls)
+            if teacher_id:
+                db.add(TeacherClassAssignment(teacher_id=teacher_id, class_id=cls.id))
             class_id_map[cls_data["id"]] = cls.id
         
         await db.flush()
@@ -371,8 +374,20 @@ async def init_mock_data():
 
 async def upgrade_demo_data(db):
     """Backfill traceable rule and mapping metadata for existing demo databases."""
+    legacy_assignments = list((await db.execute(
+        select(Class.id, Class.teacher_id).where(Class.teacher_id.is_not(None))
+    )).all())
+    existing_assignments = set((await db.execute(
+        select(TeacherClassAssignment.teacher_id, TeacherClassAssignment.class_id)
+    )).all())
+    assignment_changed = False
+    for class_id, teacher_id in legacy_assignments:
+        if (teacher_id, class_id) not in existing_assignments:
+            db.add(TeacherClassAssignment(teacher_id=teacher_id, class_id=class_id))
+            assignment_changed = True
+
     projects = list((await db.execute(select(TrainingProject))).scalars().all())
-    changed = False
+    changed = assignment_changed
     for project in projects:
         steps = []
         for item in project.steps or []:

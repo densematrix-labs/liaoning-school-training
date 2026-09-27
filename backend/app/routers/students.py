@@ -1,13 +1,13 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from collections import Counter, defaultdict
 from typing import List
 
 from app.database import get_db
 from app.routers.auth import get_current_user
-from app.models.student import Student, Class, Major
+from app.models.student import Student, Class, Major, TeacherClassAssignment
 from app.models.training import Score, TrainingProject
 from app.models.ability import AbilityProfile, MajorAbility, SubAbility
 from app.models.report import DiagnosticReport
@@ -49,7 +49,14 @@ async def get_classes(
     if current_user.role == "teacher":
         # Get teacher's classes
         result = await db.execute(
-            select(Class).where(Class.teacher_id == current_user.id)
+            select(Class)
+            .outerjoin(TeacherClassAssignment, TeacherClassAssignment.class_id == Class.id)
+            .where(or_(
+                TeacherClassAssignment.teacher_id == current_user.id,
+                Class.teacher_id == current_user.id,
+            ))
+            .distinct()
+            .order_by(Class.year.desc(), Class.name)
         )
     elif current_user.role == "admin":
         result = await db.execute(select(Class))
