@@ -357,6 +357,29 @@ async def test_real_model_workflows_are_structured_and_traceable(test_db, accept
         assert await service.get_report("missing") is None
         assert await service.get_task("missing") is None
 
+        db.add_all([
+            DiagnosticReport(
+                id="historic-single-without-score",
+                student_id=ids["student"],
+                report_type=ReportType.SINGLE,
+                content="# 旧版单次报告\n模型来源 bailian\nstep-legacy 与 sa-legacy",
+            ),
+            DiagnosticReport(
+                id="historic-periodic-without-score",
+                student_id=ids["student"],
+                report_type=ReportType.PERIODIC,
+                content="# 旧版阶段报告\n学员-legacy 需要继续训练",
+            ),
+        ])
+        await db.commit()
+        historic_single = await service.get_report("historic-single-without-score")
+        historic_periodic = await service.get_report("historic-periodic-without-score")
+        assert historic_single.title.startswith("单次实训诊断")
+        assert "模型来源" not in historic_single.content
+        assert "step-" not in historic_single.content
+        assert historic_periodic.title.startswith("验收学生 · 阶段综合诊断报告")
+        assert "验收学生" in historic_periodic.content
+
 
 @pytest.mark.asyncio
 async def test_background_tasks_record_success_and_failure(test_db, acceptance_data, monkeypatch):
