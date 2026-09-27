@@ -327,6 +327,14 @@ async def test_admin_configuration_and_operations(client, auth_headers, acceptan
         response = await client.get(path, headers=auth_headers)
         assert response.status_code == 200, (path, response.text)
 
+    performance = (await client.get("/api/v1/admin/operations/performance-report", headers=auth_headers)).json()
+    assert performance["request_method"] == "GET only"
+    assert performance["total_requests"] == 910
+    assert performance["failed_requests"] == 0
+    assert performance["basic"]["p95_seconds"] == 1.617
+    assert performance["aggregate"]["p95_seconds"] == 4.124
+    assert "不替代正式验收" in performance["note"]
+
     schedule = await client.put("/api/v1/admin/operations/sync-schedule", headers=auth_headers, json={"enabled": True, "frequency_hours": 12, "hour": 3})
     assert schedule.json()["frequency_hours"] == 12
 

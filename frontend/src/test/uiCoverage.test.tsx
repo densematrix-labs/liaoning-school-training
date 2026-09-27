@@ -106,7 +106,6 @@ function queryData(key: readonly unknown[]) {
     'admin-access': { role_scopes: [{ role: 'student', label: '学生', scope: '本人' }], teachers: [{ id: 'teacher-1', name: '教师甲', username: 'T1', class_ids: ['class-1'] }], classes: [{ id: 'class-1', name: '机车一班', year: 2023, teacher_ids: ['teacher-1'], teacher_names: ['教师甲'] }] },
     'admin-sync-history': [{ id: 'sync-1', started_at: '2026-09-17T08:00:00', read_count: 1000, success_count: 990, skipped_count: 5, error_count: 5, status: 'completed' }],
     'operations-status': { application: { status: 'healthy' }, database: { status: 'healthy' }, sync: { status: 'completed' }, ai: { status: 'configured' } },
-    'performance-report': { id: 'public-demo-20260917', environment: '公网 Demo', verified_at: '2026-09-17T08:46:31', source_commit: 'd637446', concurrent_users: 50, duration_seconds: 60, total_requests: 1784, success_rate: 100, basic: { label: '常规查询接口', p95_seconds: 1.826, target_seconds: 3, passed: true }, aggregate: { label: '汇总统计接口', p95_seconds: 5.583, target_seconds: 10, passed: true }, passed: true, note: 'Demo 工程验收记录' },
     'sync-schedule': { enabled: true, frequency_hours: 24, hour: 2 },
     backups: [{ id: 'backup-1' }],
     'audit-logs': [{ id: 'log-1', created_at: '2026-09-17T08:00:00', actor_name: '管理员', action: 'update', object_type: 'project', result: 'success' }],
@@ -141,6 +140,7 @@ import ScoreEvidenceModal from '../components/ScoreEvidenceModal'
 import ReportDocument from '../components/ReportDocument'
 import { useAuthStore } from '../store/auth'
 import App from '../App'
+import PerformanceReplay from '../pages/PerformanceReplay'
 import { api } from '../lib/api'
 import { ReportTaskStatus } from '../lib/useReportTask'
 
@@ -308,8 +308,7 @@ describe('all role workspaces render populated acceptance states', () => {
     expect(screen.getByText('source_record_id')).toBeInTheDocument()
     cleanup()
     renderPage(<AdminConfig />)
-    expect(screen.getByText('50 并发性能验收')).toBeInTheDocument()
-    expect(screen.getByText('P95 1.826 秒')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/性能测试|50\s*并发(?:性能)?(?:测试|验收)/)
     expect(screen.getByText(/模拟外部实训记录导入/)).toBeInTheDocument()
     expect(screen.getByLabelText('样例成绩')).toHaveTextContent('学生甲（2023001） · 机车一班 · 实训项目 · 2026/9/17 08:00:00 · 80/100 分')
     fireEvent.click(screen.getByText('下载演示数据'))
@@ -320,6 +319,23 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.click(screen.getByText('立即生成数据备份'))
     fireEvent.click(screen.getByText('执行导入验证'))
     expect(mutationSuccess).toHaveBeenCalled()
+  })
+
+  it('keeps performance controls out of product UI and exposes only an isolated read-only replay', () => {
+    const productPages = [<StudentHome />, <TeacherHome />, <AdminConfig />, <Layout />]
+    for (const page of productPages) {
+      renderPage(page)
+      expect(document.body.textContent).not.toMatch(/性能测试|50\s*并发(?:性能)?(?:测试|验收)/)
+      expect(screen.queryByRole('link', { name: /性能|并发/ })).not.toBeInTheDocument()
+      cleanup()
+    }
+    renderPage(<PerformanceReplay />, '/performance-terminal')
+    expect(screen.getByText(/只读终端记录/)).toBeInTheDocument()
+    expect(screen.getByText(/非实时 Shell/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '暂停' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新播放' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '全屏' })).toBeInTheDocument()
   })
 
   it('sanitizes legacy report content again in the presentation layer', () => {

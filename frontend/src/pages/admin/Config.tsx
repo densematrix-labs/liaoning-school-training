@@ -42,7 +42,6 @@ function OperationsPanel() {
   const schedule = useQuery({ queryKey: ['sync-schedule'], queryFn: async () => (await api.get('/api/v1/admin/operations/sync-schedule')).data })
   const backups = useQuery({ queryKey: ['backups'], queryFn: async () => (await api.get('/api/v1/admin/operations/backups')).data })
   const logs = useQuery({ queryKey: ['audit-logs'], queryFn: async () => (await api.get('/api/v1/admin/operations/audit-logs', { params: { limit: 20 } })).data })
-  const performance = useQuery({ queryKey: ['performance-report'], queryFn: async () => (await api.get('/api/v1/admin/operations/performance-report')).data })
   const [enabled, setEnabled] = useState(true)
   const [frequency, setFrequency] = useState(24)
   const [hour, setHour] = useState(2)
@@ -56,34 +55,10 @@ function OperationsPanel() {
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">数据备份</h3><button className="railway-button w-full" onClick={() => backup.mutate()}>立即生成数据备份</button><p className="text-xs text-text-muted">演示数据入口位于下方「演示数据导入与验证」。已留存 {backups.data?.length || 0} 个备份；恢复校验使用临时副本，不覆盖线上数据。</p></div>
       <div className="space-y-3"><h3 className="font-semibold text-text-primary">服务状态</h3>{status.data && <><StatusLine name="平台服务" value={status.data.application.status} /><StatusLine name="业务数据" value={status.data.database.status} /><StatusLine name="最近更新" value={status.data.sync.status} /><StatusLine name="智能分析" value={status.data.ai.status} /></>}</div>
     </div>
-    {performance.data && <PerformanceReport data={performance.data} />}
     <div className="border-t border-railway-600/50 p-5"><h3 className="font-semibold text-text-primary">近期操作记录</h3><div className="mt-3 space-y-2">{logs.data?.map((item: any) => <div key={item.id} className="grid gap-2 rounded bg-railway-800/50 p-3 text-xs md:grid-cols-[150px_1fr_1fr_auto]"><span>{new Date(item.created_at).toLocaleString('zh-CN')}</span><span>{item.actor_name || '系统'}</span><span>{auditLabel(item.action)} · {objectLabel(item.object_type)}</span><span className="text-status-success">{statusLabel(item.result)}</span></div>)}</div></div>
     {(save.error || backup.error) && <ErrorBox error={save.error || backup.error} />}
   </section>
 }
-
-function PerformanceReport({ data }: { data: any }) {
-  return <div className="border-t border-railway-600/50 p-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="eyebrow">性能验收记录</p><h3 className="section-heading">50 并发性能验收</h3><p className="mt-1 text-xs text-text-muted">{data.environment} · {new Date(data.verified_at).toLocaleString('zh-CN')}</p></div>
-      <span className={data.passed ? 'rounded border border-status-success/40 bg-status-success/10 px-3 py-1 text-sm text-status-success' : 'rounded border border-status-warning/40 bg-status-warning/10 px-3 py-1 text-sm text-status-warning'}>{data.passed ? '验收通过' : '未通过'}</span>
-    </div>
-    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-      <Metric label="并发用户" value={data.concurrent_users} />
-      <Metric label="持续时间" value={`${data.duration_seconds} 秒`} />
-      <Metric label="请求总量" value={data.total_requests} />
-      <Metric label="请求成功率" value={`${data.success_rate}%`} />
-      <Metric label="测试版本" value={data.source_commit} />
-    </div>
-    <div className="mt-4 grid gap-3 md:grid-cols-2">
-      <PerformanceLine item={data.basic} />
-      <PerformanceLine item={data.aggregate} />
-    </div>
-    <p className="mt-3 text-xs text-text-muted">{data.note}</p>
-  </div>
-}
-
-function PerformanceLine({ item }: { item: any }) { return <div className="rounded border border-railway-600/60 bg-railway-800/45 p-4"><div className="flex items-center justify-between gap-3"><span className="text-sm text-text-secondary">{item.label}</span><span className={item.passed ? 'text-status-success' : 'text-status-warning'}>{item.passed ? '通过' : '未通过'}</span></div><p className="mt-2 font-mono text-2xl text-accent-cyan">P95 {item.p95_seconds} 秒</p><p className="mt-1 text-xs text-text-muted">目标 ≤ {item.target_seconds} 秒</p></div> }
 
 function StatusLine({ name, value }: { name: string; value: string }) { return <div className="flex justify-between border-b border-railway-600/50 pb-2 text-sm"><span className="text-text-muted">{name}</span><span className="text-status-success">● {statusLabel(value)}</span></div> }
 

@@ -15,6 +15,7 @@ import TeacherScores from './pages/teacher/Scores'
 import TeacherReports from './pages/teacher/Reports'
 import AdminHome from './pages/admin/Home'
 import AdminConfig from './pages/admin/Config'
+import PerformanceReplay from './pages/PerformanceReplay'
 import { canAccess, roleDestinations, type Role } from './lib/roleAccess'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/performance-terminal" element={<PerformanceReplay />} />
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<RoleIndex />} />
 

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "test_id": "liaogui-readonly-20260926T214959-0700",
+  "tested_at": "2026-09-26T21:49:59-07:00",
+  "timezone": "America/Los_Angeles",
+  "environment": "公网 Demo（HTTPS）",
+  "source_commit": "ca22cde",
+  "method": "50 个并发虚拟用户持续轮询已授权 GET 只读业务接口",
+  "concurrency": 50,
+  "configured_duration_seconds": 30,
+  "actual_duration_seconds": 34.264,
+  "total_requests": 910,
+  "success": 910,
+  "failed": 0,
+  "success_rate": 100.0,
+  "throughput_rps": 26.558,
+  "groups": {
+    "regular": {
+      "label": "常规查询",
+      "requests": 632,
+      "success": 632,
+      "failed": 0,
+      "throughput_rps": 18.445,
+      "p50_seconds": 0.531,
+      "p95_seconds": 1.617,
+      "p99_seconds": 3.158,
+      "target_p95_seconds": 3.0,
+      "passed": true
+    },
+    "aggregate": {
+      "label": "班级统计 / 能力汇总",
+      "requests": 278,
+      "success": 278,
+      "failed": 0,
+      "throughput_rps": 8.113,
+      "p50_seconds": 2.219,
+      "p95_seconds": 4.124,
+      "p99_seconds": 5.221,
+      "target_p95_seconds": 10.0,
+      "passed": true
+    }
+  },
+  "passed": true,
+  "request_method": "GET only",
+  "credentials_logged": false,
+  "identifiers_logged": false,
+  "disclaimer": "Demo 工程验证，不替代正式验收。正式验收须由双方确认测试环境、标准业务脚本、原始日志和汇总报告。"
+}

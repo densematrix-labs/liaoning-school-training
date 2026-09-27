@@ -407,31 +407,41 @@ async def get_runtime_status(
 async def get_performance_report(
     admin: User = Depends(get_current_admin),
 ):
-    """返回最近一次经公网复测确认的 50 并发验收结果。"""
+    """返回最近一次脱敏的 50 并发只读工程验证结果（不在产品 UI 展示）。"""
     return {
-        "id": "public-demo-20260917",
-        "title": "50 并发公网性能验收",
-        "environment": "公网 Demo · shixun.demo.densematrix.ai",
-        "verified_at": datetime(2026, 9, 17, 8, 46, 31),
-        "source_commit": "d637446",
+        "id": "public-demo-readonly-20260926",
+        "title": "50 并发只读工程验证",
+        "environment": "公网 Demo（HTTPS）",
+        "verified_at": datetime.fromisoformat("2026-09-26T21:49:59-07:00"),
+        "source_commit": "ca22cde",
         "concurrent_users": 50,
-        "duration_seconds": 60,
-        "total_requests": 1784,
+        "duration_seconds": 34.264,
+        "total_requests": 910,
+        "successful_requests": 910,
+        "failed_requests": 0,
         "success_rate": 100.0,
+        "throughput_rps": 26.558,
+        "request_method": "GET only",
         "basic": {
-            "label": "常规查询接口",
-            "p95_seconds": 1.826,
+            "label": "常规查询",
+            "requests": 632,
+            "p50_seconds": 0.531,
+            "p95_seconds": 1.617,
+            "p99_seconds": 3.158,
             "target_seconds": 3.0,
             "passed": True,
         },
         "aggregate": {
-            "label": "汇总统计接口",
-            "p95_seconds": 5.583,
+            "label": "班级统计 / 能力汇总",
+            "requests": 278,
+            "p50_seconds": 2.219,
+            "p95_seconds": 4.124,
+            "p99_seconds": 5.221,
             "target_seconds": 10.0,
             "passed": True,
         },
         "passed": True,
-        "note": "该结果为 Demo 公网工程验收记录；正式交付时需在采购人确认的服务器、网络、数据量和业务脚本下复测。",
+        "note": "Demo 工程验证，不替代正式验收。正式验收须由双方确认测试环境、标准业务脚本、原始日志和汇总报告。",
     }
 
 
