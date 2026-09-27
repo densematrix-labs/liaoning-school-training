@@ -186,6 +186,18 @@ describe('all role workspaces render populated acceptance states', () => {
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/reports/report-1/download.doc', { responseType: 'blob' }))
   })
 
+  it('uses a compact explicit empty state when the seven-day trend has no data', () => {
+    const populatedTrend = dashboard.trend
+    try {
+      dashboard.trend = populatedTrend.map(item => ({ ...item, training_count: 0, average_score: 0, pass_rate: 0 }))
+      const view = renderPage(<Dashboard />)
+      expect(screen.getByText('近七日暂无实训记录')).toBeInTheDocument()
+      expect(view.container.querySelector('.dashboard-dual-chart--trend-empty')).toBeInTheDocument()
+    } finally {
+      dashboard.trend = populatedTrend
+    }
+  })
+
   it('renders teacher workflows and drills into populated records', () => {
     useAuthStore.setState({ user: { id: 'teacher-1', username: 'T1', name: '教师甲', role: 'teacher' } as any })
     const pages = [<TeacherHome />, <TeacherClasses />, <TeacherScores />, <TeacherReports />, <EnvironmentCheckPage />]

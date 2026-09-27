@@ -200,6 +200,7 @@ export default function Dashboard() {
     threshold: item.threshold,
   })) || []
   const trendData = data?.trend.slice(-7).map(item => ({ date: item.date.slice(5), score: item.average_score, count: item.training_count })) || []
+  const hasTrendData = trendData.some(item => item.count > 0 || item.score > 0)
   const scoreDistribution = data?.score_distribution || []
   const labs = data?.lab_status || []
   const inUseLabs = labs.filter(lab => lab.status === 'in_use').length
@@ -274,7 +275,7 @@ export default function Dashboard() {
         </div>
 
         <div className="dashboard-column dashboard-column-center">
-          <section className="dashboard-panel">
+          <section className="dashboard-panel dashboard-ranking-panel">
             <PanelTitle code="CLASS" title="班级对比" meta="平均成绩 / 累计实训" />
             <div className="dashboard-ranking">
               {ranking.map((item, index) => <div key={item.class_id} className="dashboard-rank-row"><span className={`rank-number rank-${index + 1}`}>{item.rank}</span><div><p><strong>{item.class_name}</strong><small>{item.training_count} 次实训</small><em>{item.average_score}</em></p><i><b style={{ width: `${item.average_score / maxRankingScore * 100}%` }} /></i></div></div>)}
@@ -283,9 +284,9 @@ export default function Dashboard() {
 
           <section className="dashboard-panel dashboard-analysis-panel">
             <PanelTitle code="SCORE" title="成绩分布与近七日趋势" meta="全量成绩 / 日均分" />
-            <div className="dashboard-dual-chart">
+            <div className={`dashboard-dual-chart${hasTrendData ? '' : ' dashboard-dual-chart--trend-empty'}`}>
               <div><h3>成绩分布</h3><ResponsiveContainer width="100%" height="100%"><BarChart data={scoreDistribution} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}><CartesianGrid stroke="rgba(100,236,255,.12)" vertical={false} /><XAxis dataKey="label" tick={{ fill: '#9bc7ed', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#86aed2', fontSize: 9 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /><Bar dataKey="count" radius={[3, 3, 0, 0]}>{scoreDistribution.map((entry, index) => <Cell key={entry.label} fill={scoreColors[index] || '#64ecff'} />)}</Bar></BarChart></ResponsiveContainer></div>
-              <div><h3>近七日平均分</h3><ResponsiveContainer width="100%" height="100%"><AreaChart data={trendData} margin={{ top: 8, right: 5, left: -25, bottom: 0 }}><defs><linearGradient id="dashboardScoreGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#64ecff" stopOpacity={.4} /><stop offset="95%" stopColor="#00c8ff" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="rgba(100,236,255,.12)" vertical={false} /><XAxis dataKey="date" tick={{ fill: '#9bc7ed', fontSize: 9 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 9 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /><Area type="monotone" dataKey="score" stroke="#64ecff" strokeWidth={2} fill="url(#dashboardScoreGradient)" /></AreaChart></ResponsiveContainer></div>
+              <div className="dashboard-trend-card"><h3>近七日平均分</h3>{hasTrendData ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={trendData} margin={{ top: 8, right: 5, left: -25, bottom: 0 }}><defs><linearGradient id="dashboardScoreGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#64ecff" stopOpacity={.4} /><stop offset="95%" stopColor="#00c8ff" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="rgba(100,236,255,.12)" vertical={false} /><XAxis dataKey="date" tick={{ fill: '#9bc7ed', fontSize: 9 }} axisLine={false} tickLine={false} /><YAxis domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 9 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100,236,255,.5)', borderRadius: 4 }} /><Area type="monotone" dataKey="score" stroke="#64ecff" strokeWidth={2} fill="url(#dashboardScoreGradient)" /></AreaChart></ResponsiveContainer> : <div className="dashboard-chart-empty"><span>NO DATA</span><p>近七日暂无实训记录</p></div>}</div>
             </div>
           </section>
         </div>
