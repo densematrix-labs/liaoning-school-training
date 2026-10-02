@@ -2678,6 +2678,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Mapping"
               }
             }
@@ -4638,6 +4639,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Data"
               }
             }
@@ -4703,6 +4705,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Data"
               }
             }
@@ -5031,7 +5034,8 @@
               "schema": {
                 "anyOf": [
                   {
-                    "type": "object"
+                    "type": "object",
+                    "additionalProperties": true
                   },
                   {
                     "type": "null"
@@ -5440,6 +5444,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": true,
                 "title": "Data"
               }
             }
@@ -5696,6 +5701,7 @@
         "properties": {
           "radar_data": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -5707,6 +5713,7 @@
           },
           "weak_abilities": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -5744,6 +5751,7 @@
             "title": "Project Name"
           },
           "step_mappings": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Step Mappings"
           }
@@ -5879,6 +5887,7 @@
           },
           "weak_abilities": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -5886,6 +5895,7 @@
           },
           "sub_ability_details": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -5989,7 +5999,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6003,7 +6013,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6017,7 +6027,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6033,7 +6043,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "password"
+                "pattern": "^password$"
               },
               {
                 "type": "null"
@@ -6047,6 +6057,7 @@
           },
           "password": {
             "type": "string",
+            "format": "password",
             "title": "Password"
           },
           "scope": {
@@ -6074,6 +6085,7 @@
                 "type": "null"
               }
             ],
+            "format": "password",
             "title": "Client Secret"
           }
         },
@@ -6088,7 +6100,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6102,7 +6114,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -6123,6 +6135,7 @@
             "title": "Class Name"
           },
           "abilities": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Abilities"
           },
@@ -6735,6 +6748,7 @@
             "default": 100
           },
           "details": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Details"
           },
@@ -6797,6 +6811,7 @@
           "reviewed_details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -6890,6 +6905,7 @@
           "reviewed_details": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -7124,6 +7140,7 @@
           },
           "ability_progress": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -7775,6 +7792,7 @@
         "properties": {
           "steps": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -8650,6 +8668,7 @@
             "title": "Source Status"
           },
           "applied_rule": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Applied Rule"
           }
@@ -8907,6 +8926,7 @@
           "raw_data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9107,6 +9127,7 @@
           },
           "steps": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -9129,6 +9150,7 @@
           "env_check": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9393,6 +9415,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

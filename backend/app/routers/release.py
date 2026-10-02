@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.adapters.controllers.auth import get_current_admin
@@ -77,6 +77,9 @@ async def import_catalog(kind:str,file:UploadFile=File(...),preview:bool=False,a
         rows=parse_upload(file.filename or "",await file.read(20*1024*1024+1))
     except (ValueError,UnicodeError,StopIteration) as exc:
         raise HTTPException(400,str(exc)) from exc
+    if db.bind.dialect.name=="sqlite":
+        await db.commit()
+        await db.execute(text("BEGIN IMMEDIATE"))
     results=[]
     for index,row in enumerate(rows,2):
         row={key:value for key,value in row.items() if value is not None and value!=""}

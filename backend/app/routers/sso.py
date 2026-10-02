@@ -9,7 +9,7 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse, JSONResponse
-from jose import jwt
+import jwt
 from sqlalchemy import select, delete
 
 from app.database import get_db
@@ -85,11 +85,19 @@ async def callback(request: Request, code: str, state: str, db=Depends(get_db)):
             response.raise_for_status()
             keys = await client.get(metadata["jwks_uri"])
             keys.raise_for_status()
-            claims = jwt.decode(response.json()["id_token"], keys.json(), algorithms=["RS256"], audience=cfg["client_id"], issuer=cfg["issuer"],
-                                options={"require_exp":True,"require_iat":True,"require_sub":True})
+            encoded=response.json()["id_token"]
+            header=jwt.get_unverified_header(encoded)
+            if header.get("alg")!="RS256":
+                raise ValueError("unsupported signing algorithm")
+            keyset=jwt.PyJWKSet.from_dict(keys.json())
+            matches=[key for key in keyset.keys if key.key_id==header.get("kid") and key.algorithm_name=="RS256"]
+            if len(matches)!=1:
+                raise ValueError("missing or ambiguous signing key")
+            claims = jwt.decode(encoded,matches[0].key,algorithms=["RS256"],audience=cfg["client_id"],issuer=cfg["issuer"],
+                                options={"require":["exp","iat","sub"]})
         if claims.get("nonce") != saved["nonce"] or claims.get("azp",cfg["client_id"]) != cfg["client_id"]:
             raise ValueError("nonce/authorized party mismatch")
-    except (httpx.HTTPError, ValueError, KeyError, jwt.JWTError) as exc:
+    except (httpx.HTTPError, ValueError, KeyError, jwt.PyJWTError) as exc:
         raise HTTPException(401, "统一认证签名或身份校验失败") from exc
     identity_key = "oidc_identity:" + hashlib.sha256(f'{cfg["issuer"]}|{claims["sub"]}'.encode()).hexdigest()
     identity = await setting(db, identity_key)

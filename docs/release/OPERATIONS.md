@@ -33,7 +33,7 @@
 2. AI 使用 OpenAI-compatible HTTPS 接口：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`、`VLM_MODEL`。默认模型名只是历史默认值，不构成百万上下文合格证明；须选择已核验型号并完成真实样例测试。`AI_FALLBACK_ROUTES` 支持实施人员提供的后备配置；不能在网页暴露 Key。
 3. 校园 SSO：确认 OIDC 后配置 `OIDC_ISSUER/CLIENT_ID/CLIENT_SECRET/REDIRECT_URI`，回调须 HTTPS；账号页面绑定 issuer+subject。默认拒绝未绑定身份，也不相信远端随意声明的本地管理员角色。
 4. 摄像头抓拍只允许 `CAMERA_ALLOWED_HOSTS` 列出的主机；不跟随重定向。设备厂商自有 SDK/认证/事件关联需根据资料联调。没摄像头先用网页图片上传。
-5. 修改 env 后 `bash stop.sh` 再按原绑定参数 `bash start.sh`。数据库内对象配置不需重启。
+5. 修改 env 后 `bash stop.sh` 再按原绑定参数 `bash start.sh`。数据库内对象配置不需重启。校方反向代理对批量导入接口的读取超时建议设为至少 300 秒；普通查询与 AI 任务提交仍使用短请求。
 
 ## 备份
 

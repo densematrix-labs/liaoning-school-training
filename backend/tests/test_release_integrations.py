@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 from urllib.parse import urlparse,parse_qs
 import httpx
 import pytest
-from jose import jwt
+import jwt
 from sqlalchemy import select,delete
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
@@ -414,3 +414,12 @@ async def test_score_page_has_bounded_query_count(test_db,acceptance_data):
             assert page.total==1 and page.scores[0].project_name=='验收实训项目'
             assert len(statements)==2,statements
         finally:event.remove(engine,'before_cursor_execute',capture)
+
+async def test_real_ingest_crosses_transaction_checkpoints(test_db,acceptance_data,release_mode):
+    from app.services.production_data import ProductionIngest
+    async with test_db() as db:
+        rows=[row('checkpoint-'+str(i)) for i in range(205)]
+        result=await ProductionIngest(db).run(rows,actor_id=acceptance_data['teacher'])
+        assert (result.success_count,result.error_count)==(205,0)
+        repeated=await ProductionIngest(db).run(rows,actor_id=acceptance_data['teacher'])
+        assert (repeated.success_count,repeated.skipped_count)==(0,205)

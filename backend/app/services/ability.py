@@ -225,7 +225,7 @@ class AbilityService:
         for score, project in score_rows:
             if score.details:
                 for step_id, detail in score.details.items():
-                    abilities = detail.get("related_abilities") or (project.ability_mapping or {}).get(str(step_id), [])
+                    abilities = detail.get("related_abilities", (project.ability_mapping or {}).get(str(step_id), []))
                     step_score = detail.get("score", 0)
                     max_score = detail.get("max_score", 10)
                     normalized = step_score / max_score if max_score > 0 else 0

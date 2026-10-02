@@ -60,7 +60,7 @@ class ScoreService:
             step_names = {str(item.get("id")): item.get("name", "相关操作步骤") for item in (project.steps or [])} if project else {}
             for step_id, detail in (score.details or {}).items():
                 if not detail.get("passed", False):
-                    failed_names.append(step_names.get(str(step_id), "相关操作步骤"))
+                    failed_names.append(detail.get("step_name") or step_names.get(str(step_id), "相关操作步骤"))
             result_summary = "全部操作步骤通过" if not failed_names else f"待提升：{'、'.join(failed_names[:2])}"
             
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
@@ -129,7 +129,7 @@ class ScoreService:
             steps_map = {s["id"]: s for s in project.steps}
             for step_id, detail in score.details.items():
                 step_info = steps_map.get(step_id, {})
-                related_abilities = detail.get("related_abilities") or (project.ability_mapping or {}).get(str(step_id)) or step_info.get("abilities", [])
+                related_abilities = detail.get("related_abilities", (project.ability_mapping or {}).get(str(step_id)) or step_info.get("abilities", []))
                 step_details.append(StepScoreDetail(
                     step_id=step_id,
                     step_name=detail.get("step_name") or step_info.get("name", step_id),

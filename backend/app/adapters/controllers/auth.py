@@ -1,6 +1,6 @@
 """Shared role dependencies for the detailed student/admin controllers."""
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,
 ) -> User:
+    if request is not None and hasattr(request.state,"verified_user_model"):
+        return request.state.verified_user_model
     from app.services.auth import AuthService
 
     token_data = AuthService.decode_token(token)

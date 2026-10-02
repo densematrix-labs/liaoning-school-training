@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: pip install -r backend/requirements.txt
+      - run: pip install -r backend/requirements-dev.txt
       - run: pytest --cov=app --cov-fail-under=95 -q
         working-directory: backend
       - run: npm ci --no-audit --no-fund && npm run test:coverage && npm run build
@@ -44,3 +44,15 @@ jobs:
           CONTAINER_NAME=installer-check bash stop.sh
           DOCKER_NETWORK=none CONTAINER_NAME=installer-check bash start.sh
           docker exec installer-check python -c "import sqlite3; c=sqlite3.connect('/data/training.db'); assert c.execute('select count(*) from users').fetchone()[0]==1"
+      - name: Synthetic 140-student integration and 50-user load
+        run: docker exec -e RELEASE_SMOKE_ALLOWED=true -e SMOKE_LOAD_SECONDS=60 -i installer-check python - < scripts/release_smoke.py
+      - name: Save reproducible measurements
+        if: always()
+        run: |
+          mkdir -p artifacts/ci
+          docker cp installer-check:/data/release-smoke-result.json artifacts/ci/ || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-release-verification
+          path: artifacts/ci/

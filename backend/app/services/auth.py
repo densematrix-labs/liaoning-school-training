@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 import uuid
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
@@ -99,6 +100,7 @@ class AuthService:
             raise HTTPException(status_code=404, detail="用户不存在")
         from app.services.account_security import validate_account
         await validate_account(self.db, user, version)
+        self.verified_user=user
         
         response = UserResponse(
             id=user.id,

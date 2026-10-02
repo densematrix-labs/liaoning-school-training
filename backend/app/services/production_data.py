@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.training import TrainingProject, TrainingRecord, Score
@@ -98,6 +98,11 @@ class ProductionIngest:
 
     async def run(self, rows, *, actor_id, source="school", actor_name=None):
         rows = list(rows)
+        # SAVEPOINT without an outer write transaction creates a deferred
+        # snapshot: a concurrent heartbeat can then make its write upgrade fail.
+        if self.db.bind.dialect.name == "sqlite":
+            await self.db.commit()
+            await self.db.execute(text("BEGIN IMMEDIATE"))
         task = MockSyncTask(id=str(uuid.uuid4()), status=TaskStatus.RUNNING, read_count=len(rows),
                             success_count=0, skipped_count=0, error_count=0, created_by=actor_id,
                             started_at=datetime.utcnow(), completed_at=None)
@@ -161,6 +166,8 @@ class ProductionIngest:
             # if a process is interrupted and the source page is replayed.
             if (index-1) % 100 == 0:
                 await self.db.commit()
+                if self.db.bind.dialect.name == "sqlite":
+                    await self.db.execute(text("BEGIN IMMEDIATE"))
         task.status, task.completed_at = TaskStatus.COMPLETED, datetime.utcnow()
         await record_audit(self.db, actor_id=actor_id, actor_name=actor_name, action="real_data_sync", object_type="sync_task", object_id=task.id,
                            after={"source":source,"read":task.read_count,"success":task.success_count,"skipped":task.skipped_count,"errors":task.error_count})

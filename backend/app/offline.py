@@ -106,11 +106,18 @@ class PilotBoundary:
                     raise HTTPException(401,"请先登录")
                 data = AuthService.decode_token(token[7:], token_type="refresh" if path=="/api/v1/auth/refresh" else "access")
                 async with AsyncSessionLocal() as db:
-                    user = await db.get(User,data.user_id)
-                    if not user:
-                        raise HTTPException(401,"账号不存在")
-                    await validate_account(db,user,data.version)
-                    if path.startswith("/api/v1/dashboard") and user.role != UserRole.ADMIN:
+                    service=AuthService(db)
+                    try:
+                        current=await service.get_current_user(data.user_id,data.version)
+                    except HTTPException as exc:
+                        if exc.status_code==404:
+                            raise HTTPException(401,"账号不存在") from exc
+                        raise
+                    # Request-local reuse only: every new request checks revocation
+                    # against the database, without duplicating that query in routers.
+                    scope.setdefault("state",{})["verified_user_response"]=current
+                    scope["state"]["verified_user_model"]=service.verified_user
+                    if path.startswith("/api/v1/dashboard") and current.role != "admin":
                         raise HTTPException(403,"校内大屏仅限管理员，学生和教师请使用各自统计页面")
             except HTTPException as exc:
                 await JSONResponse(status_code=exc.status_code,content={"detail":exc.detail})(scope,receive,send)
@@ -127,7 +134,7 @@ class PilotBoundary:
 
 # Register API routes without invoking the demo application's lifespan.
 for route in api.routes:
-    if route.path not in {"/", "/health", "/docs", "/redoc", "/docs/oauth2-redirect"}:
+    if getattr(route,"path",None) not in {"/", "/health", "/docs", "/redoc", "/docs/oauth2-redirect"}:
         site.router.routes.append(route)
 
 

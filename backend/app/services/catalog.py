@@ -105,9 +105,9 @@ async def save_item(db, kind, data, actor, item_id=None):
             for sub_id in refs:
                 if not await db.get(SubAbility,sub_id):
                     raise ValueError("映射引用不存在的子能力")
-        if steps:
+        if any(step.get("enabled",True) for step in steps):
             from app.services.production_data import score_steps
-            temporary = TrainingProject(steps=steps,ability_mapping=merged["ability_mapping"],scoring_rules=merged["scoring_rules"])
+            temporary = TrainingProject(steps=steps,ability_mapping=merged["ability_mapping"],scoring_rules={**merged["scoring_rules"],"enabled":True})
             _,_,maximum,_ = score_steps(temporary,{str(s["id"]):True for s in steps if s.get("enabled",True)})
             values["max_score"] = maximum
         rules = dict(merged["scoring_rules"])

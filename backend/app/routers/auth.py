@@ -14,7 +14,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,
 ) -> UserResponse:
+    if request is not None and hasattr(request.state,"verified_user_response"):
+        return request.state.verified_user_response
     auth_service = AuthService(db)
     token_data = auth_service.decode_token(token)
     return await auth_service.get_current_user(token_data.user_id, token_data.version)
