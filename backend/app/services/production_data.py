@@ -167,6 +167,10 @@ class ProductionIngest:
             if (index-1) % 100 == 0:
                 await self.db.commit()
                 if self.db.bind.dialect.name == "sqlite":
+                    # sqlite busy handlers retry with intervals up to 100 ms.
+                    # Immediate reacquisition can starve heartbeat/audit writers
+                    # for the entire import despite committed checkpoints.
+                    await asyncio.sleep(0.2)
                     await self.db.execute(text("BEGIN IMMEDIATE"))
         task.status, task.completed_at = TaskStatus.COMPLETED, datetime.utcnow()
         await record_audit(self.db, actor_id=actor_id, actor_name=actor_name, action="real_data_sync", object_type="sync_task", object_id=task.id,
