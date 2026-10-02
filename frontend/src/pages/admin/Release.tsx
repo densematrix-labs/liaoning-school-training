@@ -34,7 +34,7 @@ export default function Release() {
   const run=async(task:()=>Promise<any>)=>{setBusy(true);setError('');try { const value=await task();setResult(value??{saved:true}) } catch(e) {setError(getErrorMessage(e))} finally {setBusy(false)} }
   useEffect(()=>{setForm({});setSelected('');run(load)},[kind])
   useEffect(()=>{if(tab==='source')run(async()=>{const data=(await api.get('/api/v1/release/source')).data;if(data.config.fields)setSource(data.config);return data});if(tab==='runtime')run(async()=>{const data=(await api.get('/api/v1/release/status')).data;setStatus(data);return data})},[tab])
-  const upload=async(path:string,preview=false)=>{if(!file)throw new Error('请选择文件');const data=new FormData();data.append('file',file);return (await api.post(path,data,{params:{preview},headers:{'Content-Type':'multipart/form-data'}})).data}
+  const upload=async(path:string,preview=false)=>{if(!file)throw new Error('请选择文件');const data=new FormData();data.append('file',file);return (await api.post(path,data,{params:{preview},timeout:300000,headers:{'Content-Type':'multipart/form-data'}})).data}
   const save=async()=>{const data=Object.fromEntries(Object.entries(form).filter(([,v])=>v!==''));for(const key of ['steps','scoring_rules','ability_mapping'])if(typeof data[key]==='string')data[key]=JSON.parse(data[key]);const response=selected?await api.put(`/api/v1/release/catalog/${kind}/${selected}`,data):await api.post(`/api/v1/release/catalog/${kind}`,data);await load();return response.data}
   return <div className="space-y-6">
     <header><p className="eyebrow">校内运行管理</p><h1 className="page-title">上线管理</h1><p className="mt-2 text-sm text-text-muted">先导入专业、账号和班级，再导入学生、能力体系与项目规则。停用保留全部历史记录。</p></header>

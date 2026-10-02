@@ -7,8 +7,12 @@ from app.services.audit import record_audit
 
 
 async def validate_account(db, user, version=None):
-    state = await setting(db, f"security:{user.id}", {})
-    object_state = await setting(db, f"state:accounts:{user.id}", {})
+    from sqlalchemy import select
+    from app.models.operations import SystemSetting
+    rows=(await db.execute(select(SystemSetting).where(SystemSetting.key.in_([f"security:{user.id}",f"state:accounts:{user.id}"])))).scalars().all()
+    values={row.key:row.value for row in rows}
+    state=values.get(f"security:{user.id}",{})
+    object_state=values.get(f"state:accounts:{user.id}",{})
     if not state.get("enabled", True) or not object_state.get("enabled", True):
         raise HTTPException(401, "账号已停用")
     if version is not None and version != state.get("version", 0):

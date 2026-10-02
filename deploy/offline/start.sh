@@ -8,7 +8,7 @@ if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
   echo "容器 $CONTAINER_NAME 已存在。配置变更或升级请先 stop.sh；不会自动删除现有容器。" >&2; exit 1
 fi
 docker run -d --name "$CONTAINER_NAME" --restart unless-stopped --pull never \
-  --read-only --cap-drop ALL --security-opt no-new-privileges \
+  --network "${DOCKER_NETWORK:-bridge}" --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /tmp:rw,nosuid,noexec,size=256m \
   --log-driver json-file --log-opt max-size=20m --log-opt max-file=5 \
   --env-file "$ENV_FILE" -v "$DATA_DIR:/data" -v "$BACKUP_DIR:/backups" \

@@ -110,31 +110,15 @@ class AuthService:
         
         # Add student-specific info
         if user.role == UserRole.STUDENT:
-            student_result = await self.db.execute(
-                select(Student).where(Student.user_id == user.id)
-            )
-            student = student_result.scalar_one_or_none()
-            if student:
-                response.student_id = student.id
-                response.student_no = student.student_no
-                
-                # Get class name
-                class_result = await self.db.execute(
-                    select(Class).where(Class.id == student.class_id)
-                )
-                class_obj = class_result.scalar_one_or_none()
-                if class_obj:
-                    response.class_name = class_obj.name
-                    
-                    # Get major name
-                    from app.models.student import Major
-                    major_result = await self.db.execute(
-                        select(Major).where(Major.id == student.major_id)
-                    )
-                    major = major_result.scalar_one_or_none()
-                    if major:
-                        response.major_name = major.name
-        
+            from app.models.student import Major
+            row=(await self.db.execute(select(Student,Class.name,Major.name).outerjoin(Class,Class.id==Student.class_id).outerjoin(Major,Major.id==Student.major_id).where(Student.user_id==user.id))).first()
+            if row:
+                student,class_name,major_name=row
+                response.student_id=student.id
+                response.student_no=student.student_no
+                response.class_name=class_name
+                response.major_name=major_name
+
         # Add teacher-specific info
         elif user.role == UserRole.TEACHER:
             classes_result = await self.db.execute(

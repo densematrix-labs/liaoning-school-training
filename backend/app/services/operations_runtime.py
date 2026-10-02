@@ -18,7 +18,7 @@ from sqlalchemy import select, delete
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.operations import AuditLog, SystemSetting
-from app.models.workflow import ReportTask, EnvironmentTask, TaskStatus
+from app.models.workflow import ReportTask, EnvironmentTask, TaskStatus, MockSyncTask, MockSyncException
 from app.models.user import User, UserRole
 from app.services.production_data import setting, put_setting, ProductionIngest, read_mysql
 
@@ -147,11 +147,14 @@ class ReleaseWorker:
         # Single worker process. Interrupted work becomes explicitly retryable,
         # never silently reported as completed.
         async with AsyncSessionLocal() as db:
-            for model in (ReportTask,EnvironmentTask):
+            for model in (ReportTask,EnvironmentTask,MockSyncTask):
                 rows=(await db.execute(select(model).where(model.status==TaskStatus.RUNNING))).scalars().all()
                 for row in rows:
                     row.status=TaskStatus.FAILED
-                    row.error_message="服务重启中断；请重新提交任务"
+                    if model is MockSyncTask:
+                        db.add(MockSyncException(task_id=row.id,row_number=0,source_record_id=None,reason="服务重启中断；已提交行保留，重新同步会自动去重",raw_data={}))
+                    else:
+                        row.error_message="服务重启中断；请重新提交任务"
                     row.completed_at=datetime.utcnow()
             await db.commit()
         self.task=asyncio.create_task(self.run())

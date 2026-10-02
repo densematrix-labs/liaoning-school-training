@@ -31,3 +31,16 @@ jobs:
           done
           docker logs offline-test
           exit 1
+      - name: Offline installer and restart persistence
+        run: |
+          mkdir -p "$RUNNER_TEMP/install-bundle"
+          cp deploy/offline/* "$RUNNER_TEMP/install-bundle/"
+          printf '%s\n' liaogui-release-test > "$RUNNER_TEMP/install-bundle/IMAGE"
+          docker save liaogui-release-test | gzip -1 > "$RUNNER_TEMP/install-bundle/image.tar.gz"
+          cd "$RUNNER_TEMP/install-bundle"
+          sha256sum image.tar.gz > SHA256SUMS
+          DOCKER_NETWORK=none CONTAINER_NAME=installer-check bash install.sh
+          CONTAINER_NAME=installer-check bash backup.sh
+          CONTAINER_NAME=installer-check bash stop.sh
+          DOCKER_NETWORK=none CONTAINER_NAME=installer-check bash start.sh
+          docker exec installer-check python -c "import sqlite3; c=sqlite3.connect('/data/training.db'); assert c.execute('select count(*) from users').fetchone()[0]==1"

@@ -1,12 +1,14 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import event
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 from app.config import settings
 
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    future=True
+    future=True,
+    **({"poolclass":AsyncAdaptedQueuePool,"pool_size":10,"max_overflow":10,"pool_timeout":30} if settings.DATABASE_URL.startswith("sqlite") and ":memory:" not in settings.DATABASE_URL else {})
 )
 
 if settings.DATABASE_URL.startswith("sqlite"):

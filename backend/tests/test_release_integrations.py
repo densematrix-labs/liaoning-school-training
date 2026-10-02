@@ -401,3 +401,16 @@ async def test_runtime_network_probes_and_sqlite_pragmas(client,test_db,auth_hea
         assert not result['ai']['reachable'] and not result['school_database']['reachable']
     from app.services.time_utils import utc_boundary
     assert utc_boundary(None) is None
+
+async def test_score_page_has_bounded_query_count(test_db,acceptance_data):
+    from app.services.score import ScoreService
+    from sqlalchemy import event
+    async with test_db() as db:
+        statements=[]
+        def capture(conn,cursor,statement,parameters,context,executemany):statements.append(statement)
+        engine=db.bind.sync_engine;event.listen(engine,'before_cursor_execute',capture)
+        try:
+            page=await ScoreService(db).get_student_scores(acceptance_data['student'])
+            assert page.total==1 and page.scores[0].project_name=='验收实训项目'
+            assert len(statements)==2,statements
+        finally:event.remove(engine,'before_cursor_execute',capture)

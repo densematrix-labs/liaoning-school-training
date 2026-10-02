@@ -44,28 +44,18 @@ class ScoreService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
         
-        # Get paginated results
+        # Fetch related project/record in the same page query, not 2N round trips.
+        query = query.add_columns(TrainingProject,TrainingRecord).outerjoin(TrainingProject,TrainingProject.id==Score.project_id).outerjoin(TrainingRecord,TrainingRecord.id==Score.record_id)
         query = query.order_by(Score.calculated_at.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await self.db.execute(query)
-        scores = result.scalars().all()
+        scores = result.all()
         
         # Build response
         score_responses = []
         total_score_sum = 0
         
-        for score in scores:
-            # Get project name
-            project_result = await self.db.execute(
-                select(TrainingProject).where(TrainingProject.id == score.project_id)
-            )
-            project = project_result.scalar_one_or_none()
-            record = None
-            if score.record_id:
-                record = (await self.db.execute(
-                    select(TrainingRecord).where(TrainingRecord.id == score.record_id)
-                )).scalar_one_or_none()
-
+        for score,project,record in scores:
             failed_names = []
             step_names = {str(item.get("id")): item.get("name", "相关操作步骤") for item in (project.steps or [])} if project else {}
             for step_id, detail in (score.details or {}).items():
@@ -96,7 +86,7 @@ class ScoreService:
             total=total,
             page=page,
             page_size=page_size,
-            average_score=round(avg_score, 1) if avg_score else None,
+            average_score=round(avg_score, 1) if avg_score is not None else None,
         )
     
     async def get_score_detail(self, score_id: str) -> ScoreDetailResponse:

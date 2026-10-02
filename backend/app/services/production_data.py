@@ -157,6 +157,10 @@ class ProductionIngest:
                 self.db.add(MockSyncException(task_id=task.id, row_number=index, source_record_id=str(raw.get("source_record_id", ""))[:100],
                                              reason=str(exc)[:400] if not isinstance(exc, IntegrityError) else "唯一性或关联校验失败",
                                              raw_data=raw))
+            # Bound SQLite writer lock duration; committed pages remain idempotent
+            # if a process is interrupted and the source page is replayed.
+            if (index-1) % 100 == 0:
+                await self.db.commit()
         task.status, task.completed_at = TaskStatus.COMPLETED, datetime.utcnow()
         await record_audit(self.db, actor_id=actor_id, actor_name=actor_name, action="real_data_sync", object_type="sync_task", object_id=task.id,
                            after={"source":source,"read":task.read_count,"success":task.success_count,"skipped":task.skipped_count,"errors":task.error_count})
