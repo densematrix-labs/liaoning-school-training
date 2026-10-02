@@ -1,5 +1,5 @@
 /* Gearbox-inspired industrial control-room visual system. */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');
+/* System font fallbacks keep browser startup independent of external CDNs. */
 
 @tailwind base;
 @tailwind components;

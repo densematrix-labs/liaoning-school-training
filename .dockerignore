@@ -1,0 +1,16 @@
+.git
+.env*
+**/.env*
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/*.db
+**/*.db-*
+**/.venv
+**/dist
+artifacts
+docs
+deploy
+*.docx
+*.zip
+*.tar*

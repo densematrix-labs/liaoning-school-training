@@ -12,6 +12,7 @@ const demoAccounts = [
 ]
 
 export default function Login() {
+  const demoMode = (window as Window & { __SHIXUN_DEMO__?: boolean }).__SHIXUN_DEMO__ !== false
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { login } = useAuthStore()
@@ -67,14 +68,14 @@ export default function Login() {
             <button type="submit" disabled={loading} className="btn-primary w-full !py-3">{loading ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />登录中...</span> : t('login')}</button>
           </form>
 
-          <div className="mt-8 border-t border-accent-cyan/20 pt-6">
+          {demoMode && <div className="mt-8 border-t border-accent-cyan/20 pt-6">
             <div className="flex items-center justify-between"><p className="text-xs text-text-muted">演示账号 · 密码均为 123456</p><span className="font-mono text-[9px] text-status-success">● READY</span></div>
             <div className="mt-3 grid min-w-0 grid-cols-3 gap-2">
               {demoAccounts.map((account) => <button key={account.code} type="button" aria-label={account.label} onClick={() => { setUsername(account.username); setPassword('123456') }} className="group min-w-0 overflow-hidden rounded border border-accent-cyan/20 bg-accent-cyan/5 px-2 py-3 text-left transition hover:border-accent-cyan/60 hover:bg-accent-cyan/10"><span className="block truncate text-sm font-semibold text-text-primary">{account.label}</span><span className="mt-1 hidden truncate text-[9px] text-text-muted sm:block">{account.description}</span></button>)}
             </div>
-          </div>
+          </div>}
 
-          <a href="/dashboard" className="mt-7 flex items-center justify-between rounded border border-accent-cyan/25 bg-railway-900/30 px-4 py-3 text-sm text-text-secondary transition hover:border-accent-cyan/60 hover:text-accent-cyan"><span>无需登录，进入公共数据大屏</span><span aria-hidden="true">→</span></a>
+          {demoMode && <a href="/dashboard" className="mt-7 flex items-center justify-between rounded border border-accent-cyan/25 bg-railway-900/30 px-4 py-3 text-sm text-text-secondary transition hover:border-accent-cyan/60 hover:text-accent-cyan"><span>无需登录，进入公共数据大屏</span><span aria-hidden="true">→</span></a>}
         </section>
       </motion.main>
     </div>
