@@ -1,3 +1,4 @@
+import EnvironmentUpload from '../../components/EnvironmentUpload'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
@@ -54,7 +55,7 @@ export default function EnvironmentCheckPage() {
 
   return <div className="space-y-6">
     <header className="role-intro teacher-intro">
-      <div><p className="eyebrow">AUTOMATED ENVIRONMENT REVIEW</p><h1 className="page-title">实训环境自动检测</h1><p>实训结束 → 摄像头抓拍 → AI 对比标准状态 → 教师复核；教师端不再手动发起检测</p></div>
+      <div><p className="eyebrow">AUTOMATED ENVIRONMENT REVIEW</p><h1 className="page-title">实训环境自动检测</h1><p>实训现场图片上传或设备抓拍 → AI 对比标准状态 → 教师复核</p></div>
       <div className="flex gap-6 text-right"><HeaderMetric label="检测记录" value={studentId ? history.data?.length || 0 : '—'} /><HeaderMetric label="待复核" value={studentId ? pendingCount : '—'} warn={pendingCount > 0} /></div>
     </header>
 
@@ -62,20 +63,21 @@ export default function EnvironmentCheckPage() {
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_1.4fr] md:items-end">
         <Field label="授权班级"><select className="input-field" value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId(''); setResult(null) }}><option value="">选择班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
         <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => { setStudentId(e.target.value); setResult(null) }}><option value="">选择学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-        <div className="rounded border border-accent-blue/25 bg-accent-electric/5 px-4 py-3 text-xs text-text-secondary"><span className="text-accent-cyan">自动触发规则：</span>每条实训完成记录携带现场抓拍后，系统自动创建检测任务并关联实训成绩；本页只处理查看与复核。</div>
+        <div className="rounded border border-accent-blue/25 bg-accent-electric/5 px-4 py-3 text-xs text-text-secondary"><span className="text-accent-cyan">自动触发规则：</span>每条实训完成记录携带现场抓拍后，系统自动创建检测任务并关联实训成绩；也可在本页上传现场图片。</div>
       </div>
     </section>
 
-    {!studentId && <section className="railway-card p-12 text-center"><div className="mx-auto grid h-16 w-16 place-content-center rounded-full border border-accent-blue/30 bg-accent-electric/10 font-mono text-xl text-accent-cyan">AUTO</div><h2 className="mt-5 section-heading">选择班级和学生查看自动检测记录</h2><p className="mt-2 text-sm text-text-muted">无需上传图片或点击生成，检测结果由实训完成事件自动写入。</p></section>}
+    {studentId && <EnvironmentUpload studentId={studentId} />}
+    {!studentId && <section className="railway-card p-12 text-center"><div className="mx-auto grid h-16 w-16 place-content-center rounded-full border border-accent-blue/30 bg-accent-electric/10 font-mono text-xl text-accent-cyan">AUTO</div><h2 className="mt-5 section-heading">选择班级和学生查看自动检测记录</h2><p className="mt-2 text-sm text-text-muted">可上传现场图片；已接通抓拍的实训也可自动写入检测任务。</p></section>}
 
     {studentId && <div className="grid items-start gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
       <section className="railway-card overflow-hidden xl:sticky xl:top-28">
         <div className="border-b border-railway-600/50 p-5"><p className="eyebrow">AUTO CHECK ARCHIVE</p><h2 className="section-heading">{selectedStudent?.name || '学生'} · 检测记录</h2><p className="mt-1 text-xs text-text-muted">按实训结束时间倒序生成</p></div>
-        <div className="max-h-[690px] divide-y divide-railway-600/50 overflow-y-auto">{history.data?.map((item: any) => <button key={item.id} onClick={() => setResult(item)} className={`w-full p-4 text-left transition hover:bg-railway-700/50 ${result?.id === item.id ? 'bg-accent-electric/10' : ''}`}><div className="flex items-start justify-between gap-3"><div><p className="font-medium text-text-primary">{item.lab_name}</p><p className="mt-1 font-mono text-[10px] text-text-muted">{new Date(item.checked_at).toLocaleString('zh-CN')}</p></div><span className={item.review_status ? 'text-xs text-status-success' : 'text-xs text-status-warning'}>{reviewLabel(item.review_status)}</span></div><div className="mt-3 flex items-end justify-between"><span className="text-xs text-text-muted">{item.review_status ? '教师最终分' : 'AI 原始分'}</span><span className="font-mono text-2xl text-accent-cyan">{item.final_score ?? item.total_score}</span></div></button>)}{!history.isLoading && !history.data?.length && <p className="p-5 text-sm text-text-muted">该学生暂无自动检测记录；请确认实训完成数据已携带现场抓拍。</p>}</div>
+        <div className="max-h-[690px] divide-y divide-railway-600/50 overflow-y-auto">{history.data?.map((item: any) => <button key={item.id} onClick={() => setResult(item)} className={`w-full p-4 text-left transition hover:bg-railway-700/50 ${result?.id === item.id ? 'bg-accent-electric/10' : ''}`}><div className="flex items-start justify-between gap-3"><div><p className="font-medium text-text-primary">{item.lab_name}</p><p className="mt-1 font-mono text-[10px] text-text-muted">{new Date(item.checked_at).toLocaleString('zh-CN')}</p></div><span className={item.review_status ? 'text-xs text-status-success' : 'text-xs text-status-warning'}>{reviewLabel(item.review_status)}</span></div><div className="mt-3 flex items-end justify-between"><span className="text-xs text-text-muted">{['confirmed','modified'].includes(item.review_status) ? '教师最终分' : 'AI 原始分'}</span><span className="font-mono text-2xl text-accent-cyan">{item.final_score ?? item.total_score}</span></div></button>)}{!history.isLoading && !history.data?.length && <p className="p-5 text-sm text-text-muted">该学生暂无自动检测记录；请确认实训完成数据已携带现场抓拍。</p>}</div>
       </section>
 
       {result ? <div className="space-y-5">
-        <section className="railway-card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-railway-600/50 p-5"><div><p className="eyebrow">AUTOMATED CHECK · {String(result.id).slice(-8)}</p><h2 className="section-heading">AI 检测结果与教师复核</h2><p className="mt-1 text-xs text-text-muted">{result.lab_name} · 自动生成于 {new Date(result.checked_at).toLocaleString('zh-CN')}</p></div><div className="text-right"><span className="font-mono text-4xl text-accent-cyan">{result.review_status ? (result.final_score ?? manualScore) : result.total_score}</span><p className="text-[10px] text-text-muted">{result.review_status ? '教师最终分' : 'AI 原始分'} / 100</p></div></div><div className="grid gap-px bg-railway-600/40 md:grid-cols-4">{Object.entries(result.details || {}).map(([key, value]: any) => <ResultMetric key={key} name={categoryNames[key] || key} value={value} />)}</div></section>
+        <section className="railway-card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-4 border-b border-railway-600/50 p-5"><div><p className="eyebrow">AUTOMATED CHECK · {String(result.id).slice(-8)}</p><h2 className="section-heading">AI 检测结果与教师复核</h2><p className="mt-1 text-xs text-text-muted">{result.lab_name} · 自动生成于 {new Date(result.checked_at).toLocaleString('zh-CN')}</p></div><div className="text-right"><span className="font-mono text-4xl text-accent-cyan">{['confirmed','modified'].includes(result.review_status) ? (result.final_score ?? manualScore) : result.total_score}</span><p className="text-[10px] text-text-muted">{['confirmed','modified'].includes(result.review_status) ? '教师最终分' : 'AI 原始分'} / 100</p></div></div><div className="grid gap-px bg-railway-600/40 md:grid-cols-4">{Object.entries(result.details || {}).map(([key, value]: any) => <ResultMetric key={key} name={categoryNames[key] || key} value={value} />)}</div></section>
 
         <div className="grid gap-5 lg:grid-cols-2"><ImageEvidence title="标准状态" src={result.reference_image_url} badge="REFERENCE" /><ImageEvidence title="实训结束抓拍" src={result.uploaded_image_url} badge="AUTO CAPTURE" /></div>
 

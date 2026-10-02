@@ -48,7 +48,8 @@ class EnvironmentCheckService:
                 raise ValueError("环境检查与学生、实训记录或实训室不匹配")
             image_base64 = await image_data_url(image_base64)
             refs = list((await self.db.execute(select(ReferenceImage).where(ReferenceImage.lab_id == lab_id, ReferenceImage.enabled == True))).scalars())
-            self.reference_images = [item.image_url for item in refs] or ([lab.reference_image_url] if lab.reference_image_url else [])
+            all_refs=(await self.db.execute(select(ReferenceImage.id).where(ReferenceImage.lab_id==lab_id))).scalars().all()
+            self.reference_images = [item.image_url for item in refs] or ([lab.reference_image_url] if lab.reference_image_url and not all_refs else [])
             if not self.reference_images:
                 raise ValueError("请先上传该实训室经教师确认的标准图片")
 
@@ -105,6 +106,14 @@ class EnvironmentCheckService:
         student = (await self.db.execute(select(Student.id).where(Student.id == student_id))).scalar_one_or_none()
         if not student:
             raise ValueError("学生不存在")
+        if settings.RELEASE_MODE:
+            from app.models.training import Score, TrainingProject
+            from app.services.images import image_data_url
+            score = await self.db.get(Score, score_id) if score_id else None
+            project = await self.db.get(TrainingProject,score.project_id) if score else None
+            if not score or score.student_id!=student_id or not project or project.lab_id!=lab_id:
+                raise ValueError("图片必须关联该学生在对应实训室的真实成绩")
+            image_base64 = await image_data_url(image_base64)
         task = EnvironmentTask(
             id=str(uuid.uuid4()),
             student_id=student_id,
@@ -413,7 +422,7 @@ class EnvironmentCheckService:
             lab_id=check.lab_id,
             lab_name=lab.name if lab else None,
             total_score=check.total_score,
-            final_score=final_score,
+            final_score=None if settings.RELEASE_MODE and review and review.status=="rejected" else final_score,
             max_score=100,
             details={k: CategoryScore(**v) for k, v in (check.details or {}).items() if k != "__suggestions__"},
             summary=check.summary or "",

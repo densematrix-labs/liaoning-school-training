@@ -22,7 +22,7 @@ async def create_environment_task(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.role not in ["teacher", "admin"]:
+    if current_user.role not in (["student", "teacher", "admin"] if settings.RELEASE_MODE else ["teacher", "admin"]):
         raise HTTPException(status_code=403, detail="仅教师和管理员可执行环境检查")
     await require_student_access(current_user, request.student_id, db)
     try:
@@ -46,7 +46,7 @@ async def get_environment_task(
     current_user: UserResponse = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.role not in ["teacher", "admin"]:
+    if current_user.role not in (["student", "teacher", "admin"] if settings.RELEASE_MODE else ["teacher", "admin"]):
         raise HTTPException(status_code=403, detail="仅教师和管理员可访问")
     task = await EnvironmentCheckService(db).get_task(task_id)
     if not task:

@@ -47,3 +47,5 @@ Thumbs.db
 
 # Local release artifacts and private runtime config
 artifacts/
+# Internal procurement review is delivered privately, not to this public repo.
+docs/release/internal/

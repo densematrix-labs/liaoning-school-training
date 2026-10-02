@@ -6,6 +6,7 @@ import math
 import re
 import uuid
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +29,8 @@ def truth(value):
 
 
 def score_steps(project, raw):
+    if (project.scoring_rules or {}).get("enabled", True) is False:
+        raise ValueError("评分规则已停用")
     if isinstance(raw, str):
         raw = json.loads(raw)
     if isinstance(raw, list):
@@ -100,6 +103,7 @@ class ProductionIngest:
                             started_at=datetime.utcnow(), completed_at=None)
         self.db.add(task)
         await self.db.flush()
+        await put_setting(self.db,"sync_task_source:"+task.id,{"source":source})
         affected = set()
         for index, raw in enumerate(rows, 2):
             try:
@@ -109,8 +113,9 @@ class ProductionIngest:
                         raise ValueError("缺少源标识、完成时间、学号或项目编码")
                     timestamp = datetime.fromisoformat(str(raw["completed_at"]).replace("Z", "+00:00"))
                     # Naive source timestamps are Asia/Shanghai unless source mapping provides an offset.
-                    if timestamp.tzinfo:
-                        timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+                    if timestamp.tzinfo is None:
+                        timestamp = timestamp.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+                    timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
                     external_id = "src:" + hashlib.sha256(f"{source}:{source_id}".encode()).hexdigest()
                     previous = (await self.db.execute(select(TrainingRecord).where(TrainingRecord.external_id == external_id))).scalar_one_or_none()
                     fingerprint = hashlib.sha256(json.dumps(raw, sort_keys=True, default=str, ensure_ascii=False).encode()).hexdigest()

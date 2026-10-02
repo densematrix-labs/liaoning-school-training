@@ -44,6 +44,12 @@ def backup_database(destination=None):
         with tarfile.open(fileobj=buffer,mode="w:gz") as archive:
             archive.add(snapshot,arcname="training.db")
             uploads = source.parent/"uploads"
+            config_keys={"SECRET_KEY","DEPLOYMENT_MODE","RELEASE_MODE","DEBUG","AUDIT_RETENTION_DAYS","BACKUP_RETENTION_DAYS","CAMERA_ALLOWED_HOSTS","AI_FALLBACK_ROUTES","ALLOW_LOCAL_AI_HTTP"}
+            config_values={k:v for k,v in os.environ.items() if k in config_keys or k.startswith(("SCHOOL_DB_","OIDC_","LLM_","VLM_"))}
+            config_payload=json.dumps(config_values).encode()
+            config_info=tarfile.TarInfo("runtime-config.json")
+            config_info.size=len(config_payload)
+            archive.addfile(config_info,io.BytesIO(config_payload))
             if uploads.exists():
                 archive.add(uploads,arcname="uploads")
             manifest = json.dumps({"format":1,"created_at":datetime.utcnow().isoformat(),"app_version":settings.APP_VERSION,
@@ -58,6 +64,11 @@ def backup_database(destination=None):
         temporary.replace(target)
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     target.with_suffix(".sha256").write_text(digest+"  "+target.name+"\n")
+    retention=max(7,int(os.getenv("BACKUP_RETENTION_DAYS","30")))
+    for old in dest.glob("backup-*.enc"):
+        if old != target and old.stat().st_mtime < time.time()-retention*86400:
+            old.unlink()
+            old.with_suffix(".sha256").unlink(missing_ok=True)
     return {"filename":target.name,"sha256":digest,"size":target.stat().st_size}
 
 
@@ -171,6 +182,7 @@ class ReleaseWorker:
                     try:
                         result=await asyncio.to_thread(backup_database)
                         await put_setting(db,"release:last_backup",{"time":now.isoformat(),"status":"completed",**result})
+                        await put_setting(db,"release:backup_error",{})
                     except Exception:
                         await put_setting(db,"release:backup_error",{"time":now.isoformat(),"status":"failed"})
                         logger.exception("scheduled_backup_failed")
@@ -191,8 +203,13 @@ class ReleaseWorker:
                 if force:
                     raise ValueError("尚未配置校方数据源")
                 return
+            if not force and cfg.get("hour") is not None and not last.get("backlog"):
+                local=now+timedelta(hours=8)
+                scheduled=local.replace(hour=int(cfg["hour"]),minute=0,second=0,microsecond=0)
+                if local < scheduled and not last.get("time"):
+                    return
             hours=max(1,float(cfg.get("frequency_hours",24)))
-            if not force and last.get("time") and now-datetime.fromisoformat(last["time"])<timedelta(hours=hours):
+            if not force and not last.get("backlog") and last.get("time") and now-datetime.fromisoformat(last["time"])<timedelta(hours=hours):
                 return
             admin=actor or (await db.execute(select(User).where(User.role==UserRole.ADMIN).limit(1))).scalar_one_or_none()
             if not admin:
@@ -200,14 +217,29 @@ class ReleaseWorker:
             credentials={k:os.getenv("SCHOOL_DB_"+k.upper(),"") for k in ("host","port","user","password","database","ssl_ca")}
             credentials["port"]=credentials["port"] or 3306
             try:
-                rows=await asyncio.to_thread(read_mysql,cfg,credentials,last.get("cursor"))
-                task=await ProductionIngest(db).run(rows,actor_id=admin.id,actor_name=admin.name,source=cfg.get("source","school"))
-                cursor=[rows[-1]["updated_at"],rows[-1]["source_record_id"]] if rows else last.get("cursor")
-                # Exceptions persist with raw data for explicit replay; advancing
-                # a cursor cannot erase the quarantined records.
-                await put_setting(db,"release:last_sync",{"time":now.isoformat(),"cursor":cursor,"status":"completed","task_id":task.id})
-                await db.commit()
-                return {"task_id":task.id,"read":task.read_count,"success":task.success_count,"errors":task.error_count,"skipped":task.skipped_count}
+                cursor=last.get("cursor")
+                totals={"read":0,"success":0,"errors":0,"skipped":0,"task_ids":[]}
+                # Drain pages, checkpoint each one; a bounded run resumes without
+                # waiting another full interval if a large backlog remains.
+                limit=min(max(int(cfg.get("batch_size",1000)),1),5000)
+                more=False
+                for _ in range(100):
+                    rows=await asyncio.to_thread(read_mysql,cfg,credentials,cursor)
+                    task=await ProductionIngest(db).run(rows,actor_id=admin.id,actor_name=admin.name,source=cfg.get("source","school"))
+                    new_cursor=[rows[-1]["updated_at"],rows[-1]["source_record_id"]] if rows else cursor
+                    if rows and new_cursor==cursor:
+                        raise ValueError("校方增量游标没有推进")
+                    cursor=new_cursor
+                    more=len(rows)==limit
+                    totals["task_ids"].append(task.id)
+                    for name in ("read","success","errors","skipped"):
+                        totals[name]+=getattr(task,{"read":"read_count","success":"success_count","errors":"error_count","skipped":"skipped_count"}[name])
+                    await put_setting(db,"release:last_sync",{"time":now.isoformat(),"cursor":cursor,"status":"completed","task_id":task.id,"backlog":more})
+                    await put_setting(db,"release:last_sync_error",{})
+                    await db.commit()
+                    if not more:
+                        break
+                return {"task_id":task.id,**totals,"backlog":more}
             except Exception as exc:
                 await db.rollback()
                 await put_setting(db,"release:last_sync_error",{"time":now.isoformat(),"status":"failed","reason":type(exc).__name__})

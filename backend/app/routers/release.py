@@ -1,3 +1,4 @@
+from app.services.time_utils import utc_boundary
 """On-prem implementation and administration APIs."""
 import asyncio
 import csv
@@ -31,6 +32,7 @@ class SourceConfig(BaseModel):
     fields: dict[str,str]
     frequency_hours: int=Field(default=24,ge=1,le=24)
     batch_size: int=Field(default=1000,ge=1,le=5000)
+    hour: int|None=Field(default=None,ge=0,le=23)
 
 
 @router.get("/catalog/{kind}")
@@ -42,7 +44,7 @@ async def catalog_list(kind: str, limit: int=Query(1000,ge=1,le=5000), offset:in
     rows=[]
     for item in items:
         rows.append({**as_dict(item,fields),**(await setting(db,f"state:{kind}:{item.id}",{}))})
-    return {"fields":fields,"required":required,"items":rows}
+    return {"fields":fields+(["code"] if kind in {"abilities","sub-abilities"} else ["code","description"] if kind=="projects" else []),"required":required,"items":rows}
 
 
 @router.post("/catalog/{kind}")
@@ -146,10 +148,11 @@ async def import_records(file:UploadFile=File(...),source:str="school-file",admi
 
 
 @router.post("/exceptions/{exception_id}/retry")
-async def retry_exception(exception_id:str,source:str="school-file",data:dict|None=None,admin=Depends(get_current_admin),db=Depends(get_db)):
+async def retry_exception(exception_id:str,source:str|None=None,data:dict|None=None,admin=Depends(get_current_admin),db=Depends(get_db)):
     item=await db.get(MockSyncException,exception_id)
     if not item:
         raise HTTPException(404)
+    source=source or (await setting(db,"sync_task_source:"+item.task_id,{})).get("source","school-file")
     task=await ProductionIngest(db).run([data or item.raw_data],actor_id=admin.id,actor_name=admin.name,source=source)
     return {"task_id":task.id,"success":task.success_count,"errors":task.error_count,"skipped":task.skipped_count}
 
@@ -162,9 +165,9 @@ async def audit(actor_id:str|None=None,object_type:str|None=None,result:str|None
         if value:
             query=query.where(column==value)
     if date_from:
-        query=query.where(AuditLog.created_at>=date_from)
+        query=query.where(AuditLog.created_at>=utc_boundary(date_from))
     if date_to:
-        query=query.where(AuditLog.created_at<=date_to)
+        query=query.where(AuditLog.created_at<=utc_boundary(date_to))
     rows=(await db.execute(query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit))).scalars().all()
     return [{c.name:getattr(row,c.name) for c in AuditLog.__table__.columns} for row in rows]
 
@@ -219,3 +222,54 @@ async def upload_reference(lab_id:str,file:UploadFile=File(...),admin=Depends(ge
     lab.reference_image_url=image
     await db.commit()
     return {"saved":True,"lab_id":lab_id}
+
+
+@router.post("/connectivity")
+async def connectivity(db=Depends(get_db)):
+    """Read-only network probes; never trigger a paid model generation."""
+    import httpx
+    import time
+    from app.config import settings
+    from app.services.production_data import read_mysql
+    results={"database":"connected"}
+    if settings.LLM_API_KEY:
+        started=time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=10,follow_redirects=False) as client:
+                response=await client.get(settings.LLM_BASE_URL.rstrip('/')+'/models',headers={"Authorization":"Bearer "+settings.LLM_API_KEY})
+                response.raise_for_status()
+            results['ai']={"reachable":True,"seconds":round(time.monotonic()-started,3),"note":"仅验证模型列表接口，不代表推理质量已验收"}
+        except httpx.HTTPError:
+            results['ai']={"reachable":False,"note":"检查出口、证书、接口地址及供应商凭据"}
+    else:
+        results['ai']={"reachable":False,"note":"未配置"}
+    cfg=await setting(db,'release:source',{})
+    if cfg.get('fields'):
+        credentials={k:os.getenv('SCHOOL_DB_'+k.upper(),'') for k in ('host','port','user','password','database','ssl_ca')}
+        credentials['port']=credentials['port'] or 3306
+        try:
+            await asyncio.to_thread(read_mysql,{**cfg,'batch_size':1},credentials)
+            results['school_database']={"reachable":True}
+        except Exception:
+            results['school_database']={"reachable":False,"note":"检查校方只读账号、网段和字段映射"}
+    else:
+        results['school_database']={"reachable":False,"note":"未配置"}
+    await put_setting(db,'release:connectivity',{'time':datetime.utcnow().isoformat(),**results})
+    await db.commit()
+    return results
+
+
+@router.put('/references/{reference_id}')
+async def reference_state(reference_id:str,data:dict,admin=Depends(get_current_admin),db=Depends(get_db)):
+    from app.services.production_data import truth
+    from app.services.audit import record_audit
+    reference=await db.get(ReferenceImage,reference_id)
+    if not reference:raise HTTPException(404,'参考图片不存在')
+    try:active=truth(data.get('enabled'))
+    except ValueError as exc:raise HTTPException(400,str(exc)) from exc
+    before={'enabled':reference.enabled,'label':reference.label}
+    reference.enabled=active
+    if 'label' in data:reference.label=str(data['label'])[:200]
+    await record_audit(db,actor_id=admin.id,actor_name=admin.name,action='reference_state',object_type='reference',object_id=reference_id,before=before,after={'enabled':active,'label':reference.label})
+    await db.commit()
+    return {'id':reference_id,'enabled':active,'label':reference.label}

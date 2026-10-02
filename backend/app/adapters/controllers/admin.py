@@ -13,6 +13,7 @@ import csv
 import io
 
 from app.database import get_db
+from app.config import settings
 from app.models.user import User, UserRole
 from app.models.ability import AbilityProfile, MajorAbility, SubAbility
 from app.models.lab import Lab
@@ -100,8 +101,8 @@ async def get_admin_overview(
     latest_score = await db.execute(select(func.max(Score.calculated_at)))
     return {
         **counts,
-        "database": "SQLite 演示库",
-        "sync_status": "正常",
+        "database": "校内 SQLite" if settings.RELEASE_MODE else "SQLite 演示库",
+        "sync_status": "请在上线管理查看最近同步结果" if settings.RELEASE_MODE else "正常",
         "last_data_at": latest_score.scalar(),
     }
 
@@ -347,6 +348,10 @@ async def update_major_ability(
     if not ability:
         raise HTTPException(status_code=404, detail="能力不存在")
     
+    if settings.RELEASE_MODE:
+        from app.services.catalog import save_item
+        await save_item(db,"abilities",data.model_dump(exclude_none=True),admin,ability.id)
+
     if data.name is not None:
         ability.name = data.name
     if data.description is not None:
@@ -464,6 +469,10 @@ async def update_sub_ability(
     if not sub_ability:
         raise HTTPException(status_code=404, detail="子能力不存在")
     
+    if settings.RELEASE_MODE:
+        from app.services.catalog import save_item
+        await save_item(db,"sub-abilities",data.model_dump(exclude_none=True),admin,sub_ability.id)
+
     if data.name is not None:
         sub_ability.name = data.name
     if data.description is not None:
@@ -571,6 +580,10 @@ async def update_lab(
     if not lab:
         raise HTTPException(status_code=404, detail="实训室不存在")
     
+    if settings.RELEASE_MODE:
+        from app.services.catalog import save_item
+        await save_item(db,"labs",data.model_dump(exclude_none=True),admin,lab.id)
+
     if data.name is not None:
         lab.name = data.name
     if data.building is not None:
@@ -667,6 +680,15 @@ async def update_project_configuration(
     project = (await db.execute(select(TrainingProject).where(TrainingProject.id == project_id))).scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="实训项目不存在")
+    if settings.RELEASE_MODE:
+        from app.services.catalog import save_item
+        try:
+            await save_item(db,"projects",data.model_dump(),admin,project.id)
+            await db.commit()
+            return {"message":"评分规则与能力映射已保存","project_id":project.id,"max_score":project.max_score,"rule_version":project.scoring_rules["version"]}
+        except ValueError as exc:
+            raise HTTPException(400,str(exc)) from exc
+
     if not data.steps:
         raise HTTPException(status_code=400, detail="至少保留一个操作步骤")
 
@@ -750,6 +772,14 @@ async def update_ability_mapping(
     if not project:
         raise HTTPException(status_code=404, detail="实训项目不存在")
     
+    if settings.RELEASE_MODE:
+        from app.services.catalog import save_item
+        try:
+            await save_item(db,"projects",{"ability_mapping":mapping},admin,project.id)
+            await db.commit()
+            return {"message":"更新成功"}
+        except ValueError as exc:
+            raise HTTPException(400,str(exc)) from exc
     project.ability_mapping = mapping
     await db.commit()
     
@@ -771,6 +801,7 @@ async def _sync_task_response(db: AsyncSession, task: MockSyncTask) -> SyncTaskR
         error_count=task.error_count,
         started_at=task.started_at,
         completed_at=task.completed_at,
+        message="真实数据处理完成" if __import__("app.config",fromlist=["settings"]).settings.RELEASE_MODE else "演示数据导入验证已完成",
         exceptions=[
             SyncExceptionResponse(
                 id=item.id,

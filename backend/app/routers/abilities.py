@@ -1,3 +1,4 @@
+from app.services.time_utils import utc_boundary
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -89,9 +90,9 @@ async def get_ability_trend(
     if project_id:
         query = query.where(Score.project_id == project_id)
     if date_from:
-        query = query.where(Score.calculated_at >= date_from)
+        query = query.where(Score.calculated_at >= utc_boundary(date_from))
     if date_to:
-        query = query.where(Score.calculated_at <= date_to)
+        query = query.where(Score.calculated_at <= utc_boundary(date_to))
     rows = (await db.execute(query.order_by(Score.calculated_at))).all()
     abilities = (await db.execute(select(MajorAbility).order_by(MajorAbility.display_order))).scalars().all()
     subs = (await db.execute(select(SubAbility))).scalars().all()
@@ -114,12 +115,21 @@ async def get_ability_trend(
         })
     from app.config import settings
     if settings.RELEASE_MODE:
-        from app.services.evaluation import evaluate, select_repeated
+        from app.services.evaluation import evaluate, select_repeated, active_schema
         from app.services.production_data import setting
         config = await setting(db,"release:evaluation",{"decay":1.0})
+        abilities,subs = await active_schema(db)
         points = []
         for index, (score,project) in enumerate(rows):
             values = evaluate([x[0] for x in select_repeated(rows[:index+1])],abilities,subs,float(config.get("decay",1.0)))
             points.append({"date":score.calculated_at,"score_id":score.id,"project_id":score.project_id,"project_name":project.name,
                            "abilities":{key:round(value*100,1) for key,value in values["major"].items()}})
     return {"abilities": [{"id": item.id, "name": item.name} for item in abilities], "points": points}
+
+
+@router.get('/student/{student_id}/snapshots')
+async def historical_evaluation(student_id: str,current_user:UserResponse=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
+    await require_student_access(current_user,student_id,db)
+    from app.models.operations import SystemSetting
+    rows=(await db.execute(select(SystemSetting).where(SystemSetting.key.like('ability_snapshot:'+student_id+':%')).order_by(SystemSetting.updated_at.desc()).limit(100))).scalars().all()
+    return [x.value for x in rows]

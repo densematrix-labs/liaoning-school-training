@@ -25,6 +25,10 @@ class AbilityService:
             select(MajorAbility).order_by(MajorAbility.display_order)
         )
         major_abilities = result.scalars().all()
+        from app.config import settings
+        if settings.RELEASE_MODE:
+            from app.services.evaluation import active_schema
+            major_abilities, active_subs = await active_schema(self.db)
         
         responses = []
         for ma in major_abilities:
@@ -32,6 +36,8 @@ class AbilityService:
                 select(SubAbility).where(SubAbility.major_ability_id == ma.id)
             )
             subs = sub_result.scalars().all()
+            if settings.RELEASE_MODE:
+                subs=[x for x in active_subs if x.major_ability_id==ma.id]
             
             responses.append(MajorAbilityResponse(
                 id=ma.id,
@@ -78,6 +84,9 @@ class AbilityService:
         )
         major_abilities = major_abilities_result.scalars().all()
         
+        if settings.RELEASE_MODE:
+            from app.services.evaluation import active_schema
+            major_abilities,_ = await active_schema(self.db)
         major_ability_scores = profile.major_abilities or {}
         
         strongest = None
@@ -257,10 +266,10 @@ class AbilityService:
         
         from app.config import settings
         if settings.RELEASE_MODE:
-            from app.services.evaluation import evaluate, select_repeated
+            from app.services.evaluation import evaluate, select_repeated, active_schema
             from app.services.production_data import setting
             config = await setting(self.db, "release:evaluation", {"decay":1.0})
-            all_subs = list((await self.db.execute(select(SubAbility))).scalars())
+            major_abilities, all_subs = await active_schema(self.db)
             result = evaluate([pair[0] for pair in select_repeated(score_rows)], major_abilities, all_subs, float(config.get("decay",1.0)))
             sub_ability_avgs, major_ability_avgs, all_ready = result["sub"], result["major"], result["ready"]
 
@@ -290,6 +299,16 @@ class AbilityService:
             )
             self.db.add(profile)
         
+        if settings.RELEASE_MODE:
+            from app.services.production_data import put_setting
+            from datetime import datetime
+            from uuid import uuid4
+            await put_setting(self.db,"ability_snapshot:"+student_id+":"+uuid4().hex,{
+                "computed_at":datetime.utcnow().isoformat(),"student_id":student_id,
+                "score_ids":[pair[0].id for pair in select_repeated(score_rows)],"config":config,
+                "abilities":[{"id":a.id,"name":a.name,"threshold":a.graduation_threshold} for a in major_abilities],
+                "sub_definitions":[{"id":a.id,"parent":a.major_ability_id,"weight":a.weight} for a in all_subs],
+                "sub":sub_ability_avgs,"major":major_ability_avgs,"ready":all_ready})
         await self.db.commit()
         await self.db.refresh(profile)
         

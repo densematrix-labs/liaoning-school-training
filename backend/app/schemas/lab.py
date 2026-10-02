@@ -59,7 +59,7 @@ class EnvironmentCheckResponse(BaseModel):
     lab_id: str
     lab_name: Optional[str] = None
     total_score: int
-    final_score: int
+    final_score: Optional[int]
     max_score: int = 100
     details: dict
     summary: str

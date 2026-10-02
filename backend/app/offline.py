@@ -138,9 +138,9 @@ async def static_site(path: str):
     candidate = (STATIC / path).resolve()
     if not candidate.is_relative_to(STATIC):
         raise HTTPException(404)
-    if candidate.is_file():
+    if candidate.is_file() and path != "index.html":
         return FileResponse(candidate)
-    if Path(path).suffix:
+    if Path(path).suffix and path != "index.html":
         raise HTTPException(404)
     index = (STATIC / "index.html").read_text()
     runtime = "<script>window.__SHIXUN_DEMO__=" + json.dumps(MODE == "demo") + ";</script>"

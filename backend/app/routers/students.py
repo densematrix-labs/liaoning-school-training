@@ -1,3 +1,4 @@
+from app.services.time_utils import utc_boundary
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -179,9 +180,9 @@ async def get_class_overview(
     student_ids = [item.id for item in students]
     query = select(Score).where(Score.student_id.in_(student_ids))
     if date_from:
-        query = query.where(Score.calculated_at >= date_from)
+        query = query.where(Score.calculated_at >= utc_boundary(date_from))
     if date_to:
-        query = query.where(Score.calculated_at <= date_to)
+        query = query.where(Score.calculated_at <= utc_boundary(date_to))
     scores = list((await db.execute(query)).scalars().all()) if student_ids else []
 
     scores_by_student: dict[str, list[Score]] = defaultdict(list)
@@ -190,6 +191,12 @@ async def get_class_overview(
 
     abilities = list((await db.execute(select(MajorAbility).order_by(MajorAbility.display_order))).scalars().all())
     sub_abilities = list((await db.execute(select(SubAbility))).scalars().all())
+    from app.config import settings
+    from app.services.evaluation import evaluate,select_repeated,active_schema
+    from app.services.production_data import setting
+    config=await setting(db,"release:evaluation",{"decay":1.0}) if settings.RELEASE_MODE else {}
+    if settings.RELEASE_MODE:
+        abilities,sub_abilities=await active_schema(db)
     sub_by_major: dict[str, list[SubAbility]] = defaultdict(list)
     for sub in sub_abilities:
         sub_by_major[sub.major_ability_id].append(sub)
@@ -217,6 +224,11 @@ async def get_class_overview(
             major_average[ability.id] = value
             if value >= ability.graduation_threshold:
                 passed_count += 1
+        if settings.RELEASE_MODE:
+            pairs=[(s,project_map[s.project_id]) for s in scores_by_student.get(student.id,[]) if s.project_id in project_map]
+            value=evaluate([p[0] for p in select_repeated(pairs)],abilities,sub_abilities,float(config.get("decay",1.0)))
+            major_average=value["major"]
+            passed_count=sum(major_average.get(a.id,0)>=a.graduation_threshold for a in abilities)
         total_count = len(abilities)
         progress = round(passed_count / total_count * 100, 1) if total_count else 0
         profiles.append({
@@ -379,3 +391,21 @@ async def get_student(
         class_name=cls.name if cls else None,
         enrollment_year=student.enrollment_year,
     )
+
+
+@router.get('/classes/{class_id}/overview.csv')
+async def export_overview(class_id:str,date_from:datetime|None=None,date_to:datetime|None=None,current_user:UserResponse=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
+    import csv,io
+    from fastapi.responses import Response
+    data=await get_class_overview(class_id,date_from,date_to,current_user,db)
+    out=io.StringIO();writer=csv.writer(out)
+    def safe(value):
+        return "'"+value if isinstance(value,str) and value.startswith(('=','+','-','@')) else value
+    writer.writerow(['班级',safe(data['class_name']),'学生数',data['student_count'],'实训次数',data['training_count']])
+    writer.writerow(['统计开始',date_from or '全部','统计结束',date_to or '全部'])
+    for category in ['score_distribution','ability_distribution','common_weak_abilities','students']:
+        rows=data[category];writer.writerow([category])
+        if rows:
+            fields=list(rows[0]);writer.writerow(fields)
+            writer.writerows([[safe(r.get(k,'')) for k in fields] for r in rows])
+    return Response('\ufeff'+out.getvalue(),media_type='text/csv',headers={'Content-Disposition':'attachment; filename="class-overview.csv"'})

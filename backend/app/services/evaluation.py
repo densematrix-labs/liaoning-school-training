@@ -40,3 +40,15 @@ def select_repeated(rows):
             pairs=[max(pairs,key=lambda x:(x[0].total_score/x[0].max_score if x[0].max_score else 0,x[0].id))]
         result.extend(pairs)
     return result
+
+
+async def active_schema(db):
+    from sqlalchemy import select
+    from app.models.ability import MajorAbility,SubAbility
+    from app.services.production_data import enabled
+    majors=list((await db.execute(select(MajorAbility).order_by(MajorAbility.display_order))).scalars())
+    subs=list((await db.execute(select(SubAbility))).scalars())
+    majors=[a for a in majors if await enabled(db,'abilities',a.id)]
+    ids={a.id for a in majors}
+    subs=[s for s in subs if s.major_ability_id in ids and await enabled(db,'sub-abilities',s.id)]
+    return majors,subs

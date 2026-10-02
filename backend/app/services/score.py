@@ -1,3 +1,4 @@
+from app.services.time_utils import utc_boundary
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
@@ -34,9 +35,9 @@ class ScoreService:
         if project_id:
             query = query.where(Score.project_id == project_id)
         if date_from:
-            query = query.where(Score.calculated_at >= date_from)
+            query = query.where(Score.calculated_at >= utc_boundary(date_from))
         if date_to:
-            query = query.where(Score.calculated_at <= date_to)
+            query = query.where(Score.calculated_at <= utc_boundary(date_to))
         
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
@@ -211,9 +212,9 @@ class ScoreService:
         if project_id:
             query = query.where(Score.project_id == project_id)
         if date_from:
-            query = query.where(Score.calculated_at >= date_from)
+            query = query.where(Score.calculated_at >= utc_boundary(date_from))
         if date_to:
-            query = query.where(Score.calculated_at <= date_to)
+            query = query.where(Score.calculated_at <= utc_boundary(date_to))
         
         # Count total
         count_query = select(func.count()).select_from(query.subquery())

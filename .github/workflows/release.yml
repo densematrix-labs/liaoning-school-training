@@ -1,0 +1,33 @@
+name: Offline release validation
+on:
+  push:
+    branches: ['release/**']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pip install -r backend/requirements.txt
+      - run: pytest --cov=app --cov-fail-under=95 -q
+        working-directory: backend
+      - run: npm ci --no-audit --no-fund && npm run test:coverage && npm run build
+        working-directory: frontend
+      - run: bash -n deploy/offline/*.sh scripts/build_offline_bundle.sh
+      - run: docker build -f Dockerfile.offline -t liaogui-release-test .
+      - name: Air-gapped bootstrap
+        run: |
+          docker run -d --name offline-test --network none -e SECRET_KEY=isolated-ci-only-secret-at-least-32-characters -e BOOTSTRAP_ADMIN_PASSWORD=isolated-ci-password-only-123 liaogui-release-test
+          for attempt in $(seq 1 30); do
+            if docker exec offline-test python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"; then exit 0; fi
+            sleep 2
+          done
+          docker logs offline-test
+          exit 1

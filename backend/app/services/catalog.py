@@ -22,8 +22,8 @@ CATALOG = {
     "majors": (Major,["code","name","description"],["code","name"]),
     "classes": (Class,["name","major_id","teacher_id","year"],["name","major_id","year"]),
     "students": (Student,["user_id","student_no","name","major_id","class_id","enrollment_year"],["user_id","student_no","name","major_id","class_id","enrollment_year"]),
-    "labs": (Lab,["name","building","floor","capacity","reference_image_url"],["name"]),
-    "abilities": (MajorAbility,["name","description","weight","graduation_threshold","display_order"],["name"]),
+    "labs": (Lab,["name","building","floor","capacity","reference_image_url","equipment","status","current_students"],["name"]),
+    "abilities": (MajorAbility,["name","description","weight","graduation_threshold","display_order","icon"],["name"]),
     "sub-abilities": (SubAbility,["major_ability_id","name","description","weight"],["major_ability_id","name"]),
     "projects": (TrainingProject,["name","major_id","lab_id","duration","steps","scoring_rules","ability_mapping"],["name","major_id"]),
 }
@@ -41,12 +41,16 @@ async def save_item(db, kind, data, actor, item_id=None):
     if kind not in CATALOG:
         raise ValueError("不支持的数据类型")
     model, fields, required = CATALOG[kind]
-    allowed = set(fields) | {"id","enabled","password","code","oidc_subject","oidc_issuer"}
+    allowed = set(fields) | {"id","enabled","password","code","description","oidc_subject","oidc_issuer"}
     if set(data)-allowed:
         raise ValueError("未知字段："+",".join(sorted(set(data)-allowed)))
     item = await db.get(model, item_id) if item_id else None
     if item_id and not item:
         raise ValueError("记录不存在")
+    if kind == "accounts" and item_id == actor.id:
+        from app.services.production_data import truth
+        if ("enabled" in data and not truth(data["enabled"])) or data.get("role", "admin") != "admin":
+            raise ValueError("不能停用或降级当前管理员账号")
     before = as_dict(item,fields) if item else None
     values = {key:data[key] for key in fields if key in data}
     merged = {**(before or {}),**values}
@@ -107,6 +111,12 @@ async def save_item(db, kind, data, actor, item_id=None):
             _,_,maximum,_ = score_steps(temporary,{str(s["id"]):True for s in steps if s.get("enabled",True)})
             values["max_score"] = maximum
         rules = dict(merged["scoring_rules"])
+        if "code" in data:
+            rules["code"] = str(data["code"])
+        if rules.get("code"):
+            projects = (await db.execute(select(TrainingProject))).scalars().all()
+            if any(p.id != item_id and (p.scoring_rules or {}).get("code")==rules["code"] for p in projects):
+                raise ValueError("实训项目编码已存在")
         if rules.get("repeat_mode","all") not in {"all","latest","highest","average"}:
             raise ValueError("重复计分模式必须为 all/latest/highest/average")
         rules["version"] = int((item.scoring_rules or {}).get("version",0) if item else 0)+1
@@ -124,6 +134,8 @@ async def save_item(db, kind, data, actor, item_id=None):
         state["enabled"] = truth(data["enabled"])
     if "code" in data:
         state["code"] = str(data["code"])
+    if kind == "projects" and "description" in data:
+        state["description"] = str(data["description"])
     await put_setting(db,f"state:{kind}:{item.id}",state,actor.id)
     if kind=="accounts" and ("enabled" in data or "password" in data or "role" in data):
         from app.services.account_security import revoke

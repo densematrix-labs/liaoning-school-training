@@ -1,3 +1,4 @@
+from app.services.time_utils import utc_boundary
 from datetime import datetime
 from typing import Optional, List
 import json
@@ -151,9 +152,9 @@ class ReportService:
         else:
             query = select(Score).where(Score.student_id == student_id)
             if date_from:
-                query = query.where(Score.calculated_at >= date_from)
+                query = query.where(Score.calculated_at >= utc_boundary(date_from))
             if date_to:
-                query = query.where(Score.calculated_at <= date_to)
+                query = query.where(Score.calculated_at <= utc_boundary(date_to))
             if not date_from and not date_to:
                 query = query.limit(10)
             scores_result = await self.db.execute(query.order_by(Score.calculated_at.desc()))
@@ -200,7 +201,7 @@ class ReportService:
                 ],
                 "steps": [
                     {
-                        "step_name": project_step_names.get(str(step_id), "相关操作步骤"),
+                        "step_name": detail.get("step_name") or project_step_names.get(str(step_id), "相关操作步骤"),
                         "passed": detail.get("passed", False),
                         "score": detail.get("score", 0),
                         "max_score": detail.get("max_score", 0),
@@ -231,6 +232,9 @@ class ReportService:
             environment_data = []
             for item in env_rows:
                 review = (await self.db.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == item.id))).scalar_one_or_none()
+                if review and review.status == "rejected":
+                    environment_data.append({"review_status":"rejected","summary":"教师已驳回，不能作为最终评价"})
+                    continue
                 environment_data.append({
                     "total_score": sum(v.get("score",0) for v in (review.reviewed_details or {}).values() if isinstance(v,dict) and "score" in v) if review and review.status != "rejected" else item.total_score,
                     "summary": review.reviewed_summary if review and review.status != "rejected" else item.summary,
@@ -252,9 +256,16 @@ class ReportService:
                     })
         
         if settings.RELEASE_MODE and report_type == "periodic":
-            from app.services.evaluation import evaluate
-            evaluated = evaluate(scores, abilities, sub_abilities)
-            ability_data = [{"name":a.name,"score":round(evaluated["major"].get(a.id,0)*100,1),"threshold":a.graduation_threshold*100} for a in abilities]
+            from app.services.evaluation import evaluate,select_repeated,active_schema
+            from app.services.production_data import setting
+            abilities,sub_abilities=await active_schema(self.db)
+            config=await setting(self.db,"release:evaluation",{"decay":1.0})
+            projects={p.id:p for p in (await self.db.execute(select(TrainingProject))).scalars()}
+            pairs=sorted([(s,projects[s.project_id]) for s in scores],key=lambda p:(p[0].calculated_at,p[0].id))
+            evaluated=evaluate([p[0] for p in select_repeated(pairs)],abilities,sub_abilities,float(config.get("decay",1.0)))
+            baseline=evaluate([pairs[0][0]],abilities,sub_abilities,float(config.get("decay",1.0)))
+            ability_data=[{"name":a.name,"score":round(evaluated["major"].get(a.id,0)*100,1),"threshold":a.graduation_threshold*100,
+                "range_first_score":round(baseline["major"].get(a.id,0)*100,1),"range_change":round((evaluated["major"].get(a.id,0)-baseline["major"].get(a.id,0))*100,1)} for a in abilities]
 
         # Generate report content via LLM
         content = await self._generate_report_content(
@@ -289,7 +300,7 @@ class ReportService:
                 f"- **实训成绩：** {scores[0].total_score:g}/{scores[0].max_score:g} 分",
             ])
         else:
-            summary_lines.append(f"- **覆盖范围：** 最近 {len(scores)} 次实训")
+            summary_lines.append(f"- **覆盖范围：** {date_from.isoformat()} 至 {date_to.isoformat()}，共 {len(scores)} 次实训" if date_from and date_to else f"- **覆盖范围：** 最近 {len(scores)} 次实训")
         content = "\n".join(summary_lines) + "\n\n" + content
         
         # Save report
@@ -314,7 +325,11 @@ class ReportService:
             from app.services.production_data import put_setting
             await put_setting(self.db, "report_meta:"+report.id, {"model":getattr(self,"last_model",settings.LLM_MODEL),
                 "date_from":date_from.isoformat() if date_from else None,"date_to":date_to.isoformat() if date_to else None,
-                "score_ids":[item.id for item in scores],"input_abilities":ability_data})
+                "score_ids":[item.id for item in scores],"input_abilities":ability_data,
+                "snapshot":{"student_name":student.name,"class_id":student.class_id,"class_name":class_obj.name if class_obj else None,
+                "project_name":selected_project.name if selected_project and report_type=="single" else None,
+                "score_total":scores[0].total_score if report_type=="single" else None,"score_max":scores[0].max_score if report_type=="single" else None,
+                "training_completed_at":(selected_record.completed_at if selected_record else scores[0].calculated_at).isoformat() if report_type=="single" else None}})
         await self.db.commit()
         await self.db.refresh(report)
         
@@ -344,6 +359,9 @@ class ReportService:
             for i, row in enumerate(ability_data):
                 facts[f"ability_{i}.score"] = row["score"]
                 facts[f"ability_{i}.threshold"] = row["threshold"]
+                if "range_change" in row:
+                    facts[f"ability_{i}.range_first_score"]=row["range_first_score"]
+                    facts[f"ability_{i}.range_change"]=row["range_change"]
             instruction = "你是铁路实训教师。只依据给定匿名数据诊断，无数据明确写无数据。输出 JSON，必须包含 overview, score_analysis, weaknesses, environment, suggestions, training_plan 六个非空中文字符串及 evidence 数组。evidence 每项为 key,value，必须原样引用 facts 中的键和值。前四个事实章节只允许出现 facts 中已有数字，不输出序号或日期数字，不捏造能力趋势；后两章是训练建议。环境已驳回的机器结论不得当作最终评价。"
             result, self.last_model = await completion([{"role":"system","content":instruction},
                 {"role":"user","content":json.dumps({"scores":scores_data,"abilities":ability_data,"environment":environment_data,"facts":facts,"type":report_type},ensure_ascii=False)}],db=self.db)
@@ -624,7 +642,17 @@ class ReportService:
             score_max=score.max_score if score else None,
         )
 
-        return DiagnosticReportResponse(
+        snapshot = {}
+        if settings.RELEASE_MODE:
+            from app.services.production_data import setting
+            metadata = await setting(self.db, "report_meta:"+report.id, {})
+            snapshot = metadata.get("snapshot", {})
+            if snapshot:
+                title = report.title
+                content = report.content
+                if snapshot.get("score_max"):
+                    snapshot["score_percentage"] = round(snapshot["score_total"]/snapshot["score_max"]*100,1)
+        response = DiagnosticReportResponse(
             id=report.id,
             student_id=report.student_id,
             student_name=student_name,
@@ -646,6 +674,8 @@ class ReportService:
                 record.id if record else (score.id if score else report.id),
             ) if score else None,
         )
+
+        return response.model_copy(update={**snapshot, "training_completed_at":datetime.fromisoformat(snapshot["training_completed_at"]) if snapshot.get("training_completed_at") else response.training_completed_at})
 
     async def _infer_legacy_score(
         self,

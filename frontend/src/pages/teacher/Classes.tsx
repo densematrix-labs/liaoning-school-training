@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../../lib/api'
+import { api, getErrorMessage } from '../../lib/api'
 import AbilityRadar from '../../components/AbilityRadar'
 
 export default function TeacherClasses() {
@@ -10,6 +10,8 @@ export default function TeacherClasses() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [studentId, setStudentId] = useState('')
+  const [exportError,setExportError]=useState('')
+  const exportClass=async()=>{try{const res=await api.get(`/api/v1/students/classes/${classId}/overview.csv`,{responseType:'blob',params:{date_from:dateFrom||undefined,date_to:dateTo?`${dateTo}T23:59:59`:undefined}});const url=URL.createObjectURL(res.data);const a=document.createElement('a');a.href=url;a.download='班级统计.csv';a.click();URL.revokeObjectURL(url)}catch(e){setExportError(getErrorMessage(e))}}
   const [graduationFilter, setGraduationFilter] = useState<'all' | 'ready' | 'risk'>('all')
   const classes = useQuery({ queryKey: ['teacher-classes'], queryFn: async () => (await api.get('/api/v1/students/classes')).data })
   const overview = useQuery({
@@ -31,6 +33,7 @@ export default function TeacherClasses() {
       <Field label="毕业达标筛选"><select className="input-field" value={graduationFilter} onChange={(e) => setGraduationFilter(e.target.value as any)}><option value="all">全部学生</option><option value="ready">已达标</option><option value="risk">存在毕业风险</option></select></Field>
     </section>
     {!classId && <section className="railway-card p-12 text-center text-text-muted">选择班级后查看成绩分布、能力分布与毕业达标情况</section>}
+    {classId&&<button className="btn-secondary" onClick={exportClass}>导出班级统计与能力分析</button>}{exportError&&<p role="alert">{exportError}</p>}
     {overview.data && <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"><Metric label="学生" value={overview.data.student_count} unit="人" /><Metric label="有实训记录" value={overview.data.completed_students} unit="人" /><Metric label="实训记录" value={overview.data.training_count} unit="次" /><Metric label="平均成绩" value={overview.data.average_score} unit="分" /><Metric label="毕业达标" value={overview.data.graduation_ready_count} unit="人" tone="good" /><Metric label="毕业风险" value={overview.data.graduation_not_ready_count} unit="人" tone="warn" /></div>
       <section className="railway-card p-5"><div className="flex items-center justify-between gap-3"><div><p className="eyebrow">GRADUATION READINESS</p><h2 className="section-heading">班级毕业达标进度</h2></div><strong className="font-mono text-2xl text-accent-cyan">{overview.data.graduation_ready_rate}%</strong></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-railway-700"><div className="h-full rounded-full bg-status-success" style={{ width: `${overview.data.graduation_ready_rate}%` }} /></div><p className="mt-2 text-xs text-text-muted">依据各能力维度实际值与配置阈值判断；未全部达标的学生标记为毕业风险。</p></section>

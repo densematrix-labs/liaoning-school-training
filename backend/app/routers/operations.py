@@ -460,6 +460,8 @@ async def create_account(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
+    if settings.RELEASE_MODE and len(payload.password)<12:
+        raise HTTPException(400,"校内账号密码至少 12 位，请使用上线管理配置")
     if (await db.execute(select(User.id).where(User.username == payload.username))).scalar_one_or_none():
         raise HTTPException(status_code=409, detail="账号已存在")
     item = User(id=str(uuid.uuid4()), username=payload.username, name=payload.name, role=payload.role, password_hash=AuthService.get_password_hash(payload.password))
