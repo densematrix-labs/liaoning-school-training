@@ -138,13 +138,13 @@ class ScoreService:
             steps_map = {s["id"]: s for s in project.steps}
             for step_id, detail in score.details.items():
                 step_info = steps_map.get(step_id, {})
-                related_abilities = (project.ability_mapping or {}).get(str(step_id)) or detail.get("related_abilities", step_info.get("abilities", []))
+                related_abilities = detail.get("related_abilities") or (project.ability_mapping or {}).get(str(step_id)) or step_info.get("abilities", [])
                 step_details.append(StepScoreDetail(
                     step_id=step_id,
-                    step_name=step_info.get("name", step_id),
+                    step_name=detail.get("step_name") or step_info.get("name", step_id),
                     passed=detail.get("passed", False),
                     score=detail.get("score", 0),
-                    max_score=step_info.get("score", 10),
+                    max_score=detail.get("max_score", step_info.get("score", 10)),
                     deduction=detail.get("deduction"),
                     reason=detail.get("reason"),
                     related_abilities=related_abilities,

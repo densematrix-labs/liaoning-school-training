@@ -1,3 +1,4 @@
+from app.config import settings
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -32,7 +33,8 @@ async def create_environment_task(
             request.score_id,
             current_user.id,
         )
-        background_tasks.add_task(process_environment_task, task.id)
+        if not settings.RELEASE_MODE:
+            background_tasks.add_task(process_environment_task, task.id)
         return task
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

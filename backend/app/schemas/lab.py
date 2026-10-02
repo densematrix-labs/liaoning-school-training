@@ -47,6 +47,7 @@ class EnvironmentCheckRequest(BaseModel):
 
 
 class CategoryScore(BaseModel):
+    confidence: Optional[float] = None
     score: int
     max_score: int
     issues: List[str]

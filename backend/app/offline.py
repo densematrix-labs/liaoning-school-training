@@ -24,6 +24,7 @@ STATIC = Path(os.getenv("STATIC_DIR", "/app/static")).resolve()
 async def lifespan(_: FastAPI):
     if MODE not in {"pilot", "demo"}:
         raise RuntimeError("DEPLOYMENT_MODE must be pilot or demo")
+    settings.RELEASE_MODE = MODE != "demo"
     if len(settings.SECRET_KEY) < 32 or settings.SECRET_KEY.startswith("liaoning-railway-training-demo"):
         raise RuntimeError("Set a unique SECRET_KEY with at least 32 characters")
     await init_db()
@@ -53,11 +54,15 @@ async def lifespan(_: FastAPI):
                             name="系统管理员", role=UserRole.ADMIN,
                             password_hash=AuthService.get_password_hash(password)))
                 await db.commit()
+        from app.services.operations_runtime import worker
+        await worker.start()
     try:
         yield
     finally:
         if MODE == "demo":
             await sync_scheduler.stop()
+        else:
+            await worker.stop()
 
 
 site = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -83,18 +88,38 @@ class PilotBoundary:
         path = scope.get("path", "").rstrip("/")
         method = scope.get("method", "GET")
         blocked = MODE == "pilot" and (
-            path.startswith("/api/v1/dashboard")
-            or (method not in {"GET", "HEAD", "OPTIONS"} and (
+            (method not in {"GET", "HEAD", "OPTIONS"} and (
                 path == "/api/v1/admin/sync" or path.startswith("/api/v1/admin/sync/")
                 or path.startswith("/api/v1/operations/sync")
                 or path.startswith("/api/v1/admin/operations/sync")
             ))
+            or (method == "DELETE" and path.startswith("/api/v1/admin/"))
         )
+        if MODE == "pilot" and path.startswith("/api/") and not path.startswith(("/api/v1/auth/login", "/api/v1/sso/")):
+            if scope["type"] == "websocket":
+                await send({"type":"websocket.close","code":1008})
+                return
+            try:
+                from app.services.account_security import validate_account
+                token = dict(scope.get("headers",[])).get(b"authorization",b"").decode()
+                if not token.startswith("Bearer "):
+                    raise HTTPException(401,"请先登录")
+                data = AuthService.decode_token(token[7:], token_type="refresh" if path=="/api/v1/auth/refresh" else "access")
+                async with AsyncSessionLocal() as db:
+                    user = await db.get(User,data.user_id)
+                    if not user:
+                        raise HTTPException(401,"账号不存在")
+                    await validate_account(db,user,data.version)
+                    if path.startswith("/api/v1/dashboard") and user.role != UserRole.ADMIN:
+                        raise HTTPException(403,"校内大屏仅限管理员，学生和教师请使用各自统计页面")
+            except HTTPException as exc:
+                await JSONResponse(status_code=exc.status_code,content={"detail":exc.detail})(scope,receive,send)
+                return
         if blocked and scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
             return
         if blocked and scope["type"] == "http":
-            response = JSONResponse(status_code=503, content={"detail": "试部署包未开放演示同步及公共大屏；真实数据接入和权限验收完成后开放。"})
+            response = JSONResponse(status_code=409, content={"detail": "校内部署禁止演示同步和删除历史对象；请使用上线管理中的真实导入或停用功能。"})
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
@@ -122,4 +147,5 @@ async def static_site(path: str):
     return HTMLResponse(index.replace("<head>", "<head>" + runtime), headers={"Cache-Control": "no-store"})
 
 
-app = PilotBoundary(site)
+from app.services.operations_runtime import OperationalMiddleware
+app = OperationalMiddleware(PilotBoundary(site))

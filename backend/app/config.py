@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "辽轨智能实训能力评估平台"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
+    RELEASE_MODE: bool = False
     
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./training.db"

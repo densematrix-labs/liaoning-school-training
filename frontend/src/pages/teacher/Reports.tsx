@@ -8,6 +8,8 @@ import { api } from '../../lib/api'
 import { ReportTaskStatus, useReportTask } from '../../lib/useReportTask'
 
 export default function TeacherReports() {
+  const [periodFrom,setPeriodFrom] = useState('')
+  const [periodTo,setPeriodTo] = useState('')
   const [params] = useSearchParams()
   const [classId, setClassId] = useState(params.get('class_id') || '')
   const [studentId, setStudentId] = useState('')
@@ -59,8 +61,9 @@ export default function TeacherReports() {
       <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">选择学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="生成报告类型"><select className="input-field" value={reportType} onChange={(e) => { const value = e.target.value as 'single' | 'periodic'; setReportType(value); if (value !== 'single') setScoreId('') }}><option value="single">单次实训诊断</option><option value="periodic">阶段综合诊断</option></select></Field>
       <Field label="生成依据记录"><select className="input-field" value={scoreId} disabled={reportType !== 'single' || !studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">选择记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
-      <button className="btn-primary" disabled={!studentId || (reportType === 'single' && !scoreId) || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: studentId, report_type: reportType, score_id: reportType === 'single' ? scoreId : undefined })}>{reportTask.create.isPending ? '正在生成…' : '生成诊断报告'}</button>
+      <button className="btn-primary" disabled={!studentId || (reportType === 'single' && !scoreId) || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: studentId, report_type: reportType, score_id: reportType === 'single' ? scoreId : undefined, date_from: reportType === 'periodic' ? periodFrom || undefined : undefined, date_to: reportType === 'periodic' && periodTo ? periodTo + 'T23:59:59' : undefined })}>{reportTask.create.isPending ? '正在生成…' : '生成诊断报告'}</button>
     </section>
+    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<input type="date" className="input-field" value={periodFrom} onChange={e=>setPeriodFrom(e.target.value)}/></label><label className="text-sm">阶段结束日期<input type="date" className="input-field" value={periodTo} onChange={e=>setPeriodTo(e.target.value)}/></label></div>
     <ReportTaskStatus task={reportTask.task} onView={() => reportTask.task?.report && showReport(reportTask.task.report)} />
 
     {studentId && <section className="railway-card grid gap-4 p-4 sm:grid-cols-2">

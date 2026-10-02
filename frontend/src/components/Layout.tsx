@@ -15,6 +15,7 @@ export default function Layout() {
   const { user, logout } = useAuthStore()
   if (!user) return null
 
+  const demoMode = (window as Window & { __SHIXUN_DEMO__?: boolean }).__SHIXUN_DEMO__ !== false
   const role = roleMeta[user.role]
   const links = roleMenus[user.role]
   const handleLogout = () => { logout(); navigate('/login') }
@@ -37,7 +38,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center justify-end gap-3">
-            <NavLink to="/dashboard" className="hidden rounded border border-accent-cyan/40 bg-accent-electric/10 px-3 py-1.5 text-xs font-semibold text-accent-cyan transition hover:bg-accent-cyan/15 sm:block">公共大屏</NavLink>
+            {(demoMode || user.role === 'admin') && <NavLink to="/dashboard" className="hidden rounded border border-accent-cyan/40 bg-accent-electric/10 px-3 py-1.5 text-xs font-semibold text-accent-cyan transition hover:bg-accent-cyan/15 sm:block">数据大屏</NavLink>}
             <div className="hidden border-l border-accent-cyan/30 pl-3 text-right sm:block">
               <div className="flex items-center justify-end gap-2"><span className="text-sm font-semibold text-text-primary">{user.name}</span><span className={clsx('role-badge', role.accent)}>{role.label}</span></div>
               <p className="text-[10px] text-text-muted">{user.class_name || role.scope}</p>
@@ -74,9 +75,9 @@ export default function Layout() {
 
       <main className="px-4 pb-10 pt-36 sm:px-6 lg:ml-64 lg:px-8 lg:pt-28">
         <div className="mx-auto max-w-[1500px]">
-          <div className="mb-5 flex items-start gap-2 rounded border border-status-warning/25 bg-status-warning/5 px-4 py-2 text-xs text-text-secondary">
+          {demoMode && <div className="mb-5 flex items-start gap-2 rounded border border-status-warning/25 bg-status-warning/5 px-4 py-2 text-xs text-text-secondary">
             <span className="font-mono text-status-warning">DEMO</span><span>演示环境：实训项目名称、成绩及其计算出的能力结果均为模拟数据，非校方确认数据。</span>
-          </div>
+          </div>}
           <Outlet />
         </div>
       </main>

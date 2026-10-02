@@ -1,0 +1,55 @@
+import { useEffect, useState } from 'react'
+import { api, getErrorMessage } from '../../lib/api'
+
+const types: Record<string,string> = { accounts:'账号', majors:'专业', classes:'班级', students:'学生', labs:'实训室', abilities:'大类能力', 'sub-abilities':'子能力', projects:'实训项目' }
+const labels: Record<string,string> = { username:'登录账号',name:'名称',role:'角色',code:'编码',description:'说明',major_id:'专业 ID',teacher_id:'教师账号 ID',year:'年级',user_id:'学生账号 ID',student_no:'学号',class_id:'班级 ID',enrollment_year:'入学年份',building:'楼栋',floor:'楼层',capacity:'容量',reference_image_url:'标准图片地址',weight:'权重',graduation_threshold:'达标阈值（0—1）',display_order:'显示顺序',major_ability_id:'大类能力 ID',lab_id:'实训室 ID',duration:'时长（分钟）',steps:'操作步骤（JSON）',scoring_rules:'评分与重复计分规则（JSON）',ability_mapping:'步骤能力映射（JSON）',password:'初始或重置密码（至少 12 位）',oidc_issuer:'校园认证 issuer',oidc_subject:'校园身份 subject' }
+const sourceFields=['source_record_id','student_no','project_code','completed_at','steps','updated_at']
+
+async function download(path:string,filename:string) {
+  const result=await api.get(path,{responseType:'blob'})
+  const url=URL.createObjectURL(result.data)
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url)
+}
+
+export default function Release() {
+  const [tab,setTab]=useState('data')
+  const [kind,setKind]=useState('accounts')
+  const [catalog,setCatalog]=useState<any>({fields:[],required:[],items:[]})
+  const [form,setForm]=useState<Record<string,any>>({})
+  const [selected,setSelected]=useState('')
+  const [result,setResult]=useState<any>(null)
+  const [error,setError]=useState('')
+  const [busy,setBusy]=useState(false)
+  const [source,setSource]=useState<any>({enabled:false,source:'school',table:'',fields:Object.fromEntries(sourceFields.map(k=>[k,k])),frequency_hours:24,batch_size:1000})
+  const [status,setStatus]=useState<any>(null)
+  const [audit,setAudit]=useState<any[]>([])
+  const [from,setFrom]=useState('')
+  const [to,setTo]=useState('')
+  const [file,setFile]=useState<File|null>(null)
+  const load=async()=>setCatalog((await api.get(`/api/v1/release/catalog/${kind}`)).data)
+  const run=async(task:()=>Promise<any>)=>{setBusy(true);setError('');try { const value=await task();setResult(value??{saved:true}) } catch(e) {setError(getErrorMessage(e))} finally {setBusy(false)} }
+  useEffect(()=>{setForm({});setSelected('');run(load)},[kind])
+  useEffect(()=>{if(tab==='source')run(async()=>{const data=(await api.get('/api/v1/release/source')).data;if(data.config.fields)setSource(data.config);return data});if(tab==='runtime')run(async()=>{const data=(await api.get('/api/v1/release/status')).data;setStatus(data);return data})},[tab])
+  const upload=async(path:string,preview=false)=>{if(!file)throw new Error('请选择文件');const data=new FormData();data.append('file',file);return (await api.post(path,data,{params:{preview},headers:{'Content-Type':'multipart/form-data'}})).data}
+  const save=async()=>{const data=Object.fromEntries(Object.entries(form).filter(([,v])=>v!==''));for(const key of ['steps','scoring_rules','ability_mapping'])if(typeof data[key]==='string')data[key]=JSON.parse(data[key]);const response=selected?await api.put(`/api/v1/release/catalog/${kind}/${selected}`,data):await api.post(`/api/v1/release/catalog/${kind}`,data);await load();return response.data}
+  return <div className="space-y-6">
+    <header><p className="eyebrow">校内运行管理</p><h1 className="page-title">上线管理</h1><p className="mt-2 text-sm text-text-muted">先导入专业、账号和班级，再导入学生、能力体系与项目规则。停用保留全部历史记录。</p></header>
+    <nav className="flex flex-wrap gap-2">{[['data','基础数据'],['records','真实实训导入'],['source','校方数据源'],['audit','操作审计'],['runtime','运行与备份']].map(([key,label])=><button className={tab===key?'btn-primary':'btn-secondary'} key={key} onClick={()=>{setTab(key);setResult(null)}}>{label}</button>)}</nav>
+    {error&&<p role="alert" className="alert-warning rounded p-4">{error}</p>}
+    {tab==='data'&&<>
+      <section className="railway-card space-y-4 p-5"><label>数据类型<select className="input-field" value={kind} onChange={e=>setKind(e.target.value)}>{Object.entries(types).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+        <div className="flex flex-wrap gap-3"><button className="btn-secondary" onClick={()=>run(()=>download(`/api/v1/release/templates/${kind}.csv`,`${kind}.csv`))}>下载导入模板</button><input aria-label="基础数据文件" type="file" accept=".csv,.xlsx" onChange={e=>setFile(e.target.files?.[0]??null)}/><button className="btn-secondary" disabled={!file||busy} onClick={()=>run(()=>upload(`/api/v1/release/catalog/${kind}/import`,true))}>校验文件</button><button className="btn-primary" disabled={!file||busy} onClick={()=>run(async()=>{const value=await upload(`/api/v1/release/catalog/${kind}/import`);await load();return value})}>导入有效记录</button></div>
+        <div className="max-h-72 space-y-2 overflow-y-auto">{catalog.items.map((item:any)=><button key={item.id} className="flex w-full justify-between rounded border border-accent-cyan/20 p-3 text-left" onClick={()=>{setSelected(item.id);setForm(Object.fromEntries(Object.entries(item).filter(([k])=>k!=='id').map(([k,v])=>[k,typeof v==='object'?JSON.stringify(v):v??''])))}}><span>{item.name||item.username} {item.enabled===false?'（已停用）':''}</span><small className="break-all text-text-muted">{item.id}</small></button>)}</div>
+      </section>
+      <section className="railway-card space-y-4 p-5"><h2 className="section-heading">{selected?'编辑记录':'新建记录'}</h2><div className="grid gap-4 md:grid-cols-2">{[...catalog.fields,...(kind==='accounts'?['password','oidc_issuer','oidc_subject']:[])].map((field:string)=><label key={field} className="text-sm">{labels[field]||field}{catalog.required.includes(field)?' *':''}{['steps','scoring_rules','ability_mapping'].includes(field)?<textarea className="input-field min-h-24" value={form[field]??''} onChange={e=>setForm({...form,[field]:e.target.value})}/>:field==='role'?<select className="input-field" value={form[field]??''} onChange={e=>setForm({...form,[field]:e.target.value})}><option value="">选择角色</option><option value="student">学生</option><option value="teacher">教师</option><option value="admin">管理员</option></select>:<input className="input-field" type={field==='password'?'password':'text'} value={form[field]??''} onChange={e=>setForm({...form,[field]:e.target.value})}/>}</label>)}</div>
+        <label className="flex gap-2"><input type="checkbox" checked={form.enabled!==false} onChange={e=>setForm({...form,enabled:e.target.checked})}/>启用</label><div className="flex gap-3"><button className="btn-primary" disabled={busy} onClick={()=>run(save)}>保存</button><button className="btn-secondary" onClick={()=>{setSelected('');setForm({})}}>新建另一条</button>{selected&&<button className="btn-secondary" onClick={()=>run(async()=>(await api.get(`/api/v1/release/versions/${kind}/${selected}`)).data)}>查看修改前后记录</button>}</div>
+        {kind==='labs'&&selected&&<div className="flex flex-wrap gap-3"><input aria-label="标准状态图片" type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setFile(e.target.files?.[0]??null)}/><button className="btn-secondary" disabled={!file||busy} onClick={()=>run(()=>upload(`/api/v1/release/labs/${selected}/reference`))}>保存标准状态图片</button></div>}
+      </section>
+    </>}
+    {tab==='records'&&<section className="railway-card space-y-4 p-5"><h2 className="section-heading">导入真实逐步骤实训结果</h2><p className="text-sm text-text-secondary">每行对应一次已完成实训，必须提供源记录编号、学号、项目编码、完成时间和 steps JSON。缺项记录隔离，不生成成绩；重复记录跳过；更改既有源记录需人工确认。</p><button className="btn-secondary" onClick={()=>run(()=>download('/api/v1/release/templates/records.csv','实训记录模板.csv'))}>下载模板</button><input aria-label="实训记录文件" type="file" accept=".csv,.xlsx" onChange={e=>setFile(e.target.files?.[0]??null)}/><button className="btn-primary" disabled={!file||busy} onClick={()=>run(()=>upload('/api/v1/release/records/import'))}>导入并计算</button></section>}
+    {tab==='source'&&<section className="railway-card space-y-4 p-5"><h2 className="section-heading">只读 MySQL 接入</h2><p className="text-sm text-text-secondary">数据库主机和凭据由实施人员在服务器配置，不在浏览器保存。当前适配一行一次实训、步骤为 JSON 的表或只读视图；校方原始表结构不同，需要根据数据字典适配。</p><label>表或只读视图名称<input className="input-field" value={source.table} onChange={e=>setSource({...source,table:e.target.value})}/></label><div className="grid gap-3 md:grid-cols-2">{sourceFields.map(field=><label key={field}>{field}<input className="input-field" value={source.fields[field]||''} onChange={e=>setSource({...source,fields:{...source.fields,[field]:e.target.value}})}/></label>)}</div><label>自动同步间隔（小时）<input type="number" min="1" max="24" className="input-field" value={source.frequency_hours} onChange={e=>setSource({...source,frequency_hours:Number(e.target.value)})}/></label><label className="flex gap-2"><input type="checkbox" checked={source.enabled} onChange={e=>setSource({...source,enabled:e.target.checked})}/>启用定时同步</label><div className="flex gap-3"><button className="btn-primary" disabled={busy} onClick={()=>run(async()=>(await api.put('/api/v1/release/source',source)).data)}>保存映射</button><button className="btn-secondary" disabled={busy} onClick={()=>run(async()=>(await api.post('/api/v1/release/source/sync',null,{timeout:300000})).data)}>执行一次同步</button></div></section>}
+    {tab==='audit'&&<section className="railway-card space-y-4 p-5"><div className="flex flex-wrap gap-3"><label>开始时间<input type="datetime-local" className="input-field" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>结束时间<input type="datetime-local" className="input-field" value={to} onChange={e=>setTo(e.target.value)}/></label><button className="btn-primary" onClick={()=>run(async()=>{const data=(await api.get('/api/v1/release/audit',{params:{date_from:from||undefined,date_to:to||undefined}})).data;setAudit(data);return {count:data.length}})}>查询</button></div>{audit.map(row=><details key={row.id} className="rounded border border-accent-cyan/20 p-3"><summary>{row.created_at} · {row.actor_name||row.actor_id||'系统'} · {row.action} · {row.result}</summary><pre className="overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(row,null,2)}</pre></details>)}</section>}
+    {tab==='runtime'&&<section className="railway-card space-y-4 p-5"><h2 className="section-heading">运行检查与加密备份</h2><p>数据库：{status?.database||'未检查'}；任务处理：{status?.worker?.stale?'心跳异常':'正常'}；AI：{status?.ai==='configured-not-probed'?'已配置，仍需连通验证':'未配置'}</p><p className="text-sm text-text-secondary">每日自动加密备份。恢复到新数据目录并核验后再切换；不会直接覆盖正在使用的数据库。</p><button className="btn-primary" disabled={busy} onClick={()=>run(async()=>(await api.post('/api/v1/release/backups')).data)}>立即创建加密备份</button></section>}
+    {busy&&<p role="status">正在处理…</p>}{result&&<details open className="railway-card p-5"><summary>处理结果</summary><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(result,null,2)}</pre></details>}
+  </div>
+}

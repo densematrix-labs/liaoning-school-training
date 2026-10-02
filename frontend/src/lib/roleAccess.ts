@@ -27,6 +27,7 @@ export const roleMenus: Record<Role, Array<{ to: string; label: string; icon: st
     { to: '/class-scores', label: '全校成绩', icon: '▥' },
     { to: '/batch-reports', label: '报告中心', icon: '▤' },
     { to: '/env-check', label: '环境检查', icon: '▣' },
+    { to: '/admin/release', label: '上线管理', icon: '▣' },
     { to: '/admin/config', label: '基础配置', icon: '⚙' },
   ],
 }

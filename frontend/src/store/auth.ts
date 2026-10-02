@@ -68,6 +68,8 @@ export const useAuthStore = create<AuthState>()(
       },
       
       logout: () => {
+        const token = get().token
+        if (token) void api.post('/api/v1/auth/logout', null, {headers:{Authorization:`Bearer ${token}`}}).catch(()=>{})
         set({
           token: null,
           refreshToken: null,

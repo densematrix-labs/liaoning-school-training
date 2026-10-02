@@ -210,7 +210,7 @@ async def test_student_teacher_and_dashboard_acceptance(client, auth_headers, ac
     student = await _login(client, "ACCEPT-S")
     form_login = await client.post("/api/v1/auth/login/form", data={"username": "ACCEPT-S", "password": "123456"})
     assert form_login.status_code == 200
-    refreshed = await client.post("/api/v1/auth/refresh", headers={"Authorization": f"Bearer {form_login.json()['access_token']}"})
+    refreshed = await client.post("/api/v1/auth/refresh", headers={"Authorization": f"Bearer {form_login.json()['refresh_token']}"})
     assert refreshed.status_code == 200
 
     student_paths = [

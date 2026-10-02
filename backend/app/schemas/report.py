@@ -10,6 +10,8 @@ class GenerateReportRequest(BaseModel):
     student_id: str
     report_type: str = "single"
     score_id: Optional[str] = None
+    date_from: Optional[datetime] = None
+    date_to: Optional[datetime] = None
 
 
 class DiagnosticReportResponse(BaseModel):

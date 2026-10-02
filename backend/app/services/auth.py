@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import uuid
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -37,22 +38,22 @@ class AuthService:
     def create_refresh_token(data: dict) -> str:
         to_encode = data.copy()
         expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        to_encode.update({"exp": expire, "type": "refresh"})
+        to_encode.update({"exp": expire, "type": "refresh", "jti": uuid.uuid4().hex})
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     
     @staticmethod
-    def decode_token(token: str) -> TokenData:
+    def decode_token(token: str, token_type: str = "access") -> TokenData:
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
             user_id: str = payload.get("sub")
             role: str = payload.get("role")
-            if user_id is None:
+            if user_id is None or payload.get("type") != token_type:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="无效的认证凭据",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            return TokenData(user_id=user_id, role=role)
+            return TokenData(user_id=user_id, role=role, version=payload.get("ver", 0))
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -69,28 +70,35 @@ class AuthService:
             return None
         return user
     
-    async def login(self, username: str, password: str) -> Token:
+    async def login(self, username: str, password: str, ip: str | None = None) -> Token:
+        from app.services.account_security import require_not_locked, login_attempt, validate_account
+        await require_not_locked(self.db, username)
         user = await self.authenticate_user(username, password)
         if not user:
+            await login_attempt(self.db, username, False, ip=ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户名或密码错误",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        token_data = {"sub": user.id, "role": user.role.value}
+        state = await validate_account(self.db, user)
+        await login_attempt(self.db, username, True, user=user, ip=ip)
+        token_data = {"sub": user.id, "role": user.role.value, "ver": state.get("version",0)}
         access_token = self.create_access_token(token_data)
         refresh_token = self.create_refresh_token(token_data)
         
         return Token(access_token=access_token, refresh_token=refresh_token)
     
-    async def get_current_user(self, user_id: str) -> UserResponse:
+    async def get_current_user(self, user_id: str, version: int | None = None) -> UserResponse:
         result = await self.db.execute(
             select(User).where(User.id == user_id)
         )
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=404, detail="用户不存在")
+        from app.services.account_security import validate_account
+        await validate_account(self.db, user, version)
         
         response = UserResponse(
             id=user.id,

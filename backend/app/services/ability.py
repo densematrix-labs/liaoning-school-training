@@ -65,7 +65,8 @@ class AbilityService:
         
         # Always rebuild from traceable score details so stale or seeded values
         # can never become the source of truth for the ability graph.
-        profile = await self.recalculate_profile(student_id)
+        from app.config import settings
+        profile = await self.recalculate_profile(student_id, persist=not settings.RELEASE_MODE)
         
         if not profile:
             return None
@@ -180,7 +181,7 @@ class AbilityService:
             step_map = {str(step.get("id")): step for step in (project.steps or [])}
             mapping = project.ability_mapping or {}
             for step_id, detail in (score.details or {}).items():
-                related = mapping.get(str(step_id)) or detail.get("related_abilities", [])
+                related = detail.get("related_abilities") or mapping.get(str(step_id), [])
                 step = step_map.get(str(step_id), {})
                 item = {
                     "score_id": score.id,
@@ -197,7 +198,7 @@ class AbilityService:
                     evidence[str(ability_id)].append(item)
         return evidence
     
-    async def recalculate_profile(self, student_id: str) -> Optional[AbilityProfile]:
+    async def recalculate_profile(self, student_id: str, persist: bool = True) -> Optional[AbilityProfile]:
         """Calculate ability profile from all scores"""
         scores_result = await self.db.execute(
             select(Score, TrainingProject)
@@ -215,7 +216,7 @@ class AbilityService:
         for score, project in score_rows:
             if score.details:
                 for step_id, detail in score.details.items():
-                    abilities = (project.ability_mapping or {}).get(str(step_id)) or detail.get("related_abilities", [])
+                    abilities = detail.get("related_abilities") or (project.ability_mapping or {}).get(str(step_id), [])
                     step_score = detail.get("score", 0)
                     max_score = detail.get("max_score", 10)
                     normalized = step_score / max_score if max_score > 0 else 0
@@ -254,6 +255,20 @@ class AbilityService:
             if major_ability_avgs[ma.id] < ma.graduation_threshold:
                 all_ready = False
         
+        from app.config import settings
+        if settings.RELEASE_MODE:
+            from app.services.evaluation import evaluate, select_repeated
+            from app.services.production_data import setting
+            config = await setting(self.db, "release:evaluation", {"decay":1.0})
+            all_subs = list((await self.db.execute(select(SubAbility))).scalars())
+            result = evaluate([pair[0] for pair in select_repeated(score_rows)], major_abilities, all_subs, float(config.get("decay",1.0)))
+            sub_ability_avgs, major_ability_avgs, all_ready = result["sub"], result["major"], result["ready"]
+
+        if not persist:
+            from datetime import datetime
+            return AbilityProfile(id="computed-"+student_id,student_id=student_id,sub_abilities=sub_ability_avgs,
+                                  major_abilities=major_ability_avgs,graduation_ready=all_ready,updated_at=datetime.utcnow())
+
         # Create or update profile
         profile_result = await self.db.execute(
             select(AbilityProfile).where(AbilityProfile.student_id == student_id)
@@ -298,15 +313,19 @@ class AbilityService:
 
         # Class statistics must use the same score-derived calculation as the
         # individual graph rather than any persisted demo seed values.
+        from app.config import settings
+        calculated = []
         for student in students:
-            await self.recalculate_profile(student.id)
+            value = await self.recalculate_profile(student.id,persist=not settings.RELEASE_MODE)
+            if value:
+                calculated.append(value)
         
         # Get profiles
         student_ids = [s.id for s in students]
         profiles_result = await self.db.execute(
             select(AbilityProfile).where(AbilityProfile.student_id.in_(student_ids))
         )
-        profiles = profiles_result.scalars().all()
+        profiles = calculated if settings.RELEASE_MODE else profiles_result.scalars().all()
         
         # Aggregate
         abilities_data = defaultdict(lambda: {"scores": [], "distribution": [0, 0, 0, 0, 0]})

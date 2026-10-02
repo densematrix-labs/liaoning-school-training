@@ -63,7 +63,8 @@ async def get_dashboard_overview(db: AsyncSession = Depends(get_db)):
     pass_rate = round(passed_count / total_count * 100, 1) if total_count > 0 else 0
     
     # 在训人数（模拟）
-    in_training = random.randint(5, 15)
+    from app.config import settings
+    in_training = 0 if settings.RELEASE_MODE else random.randint(5, 15)
     
     # 今日环境检查
     today_env_checks = await db.execute(

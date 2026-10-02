@@ -44,3 +44,6 @@ Thumbs.db
 *.tmp
 *.temp
 ~$*
+
+# Local release artifacts and private runtime config
+artifacts/

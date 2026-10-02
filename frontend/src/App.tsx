@@ -15,6 +15,7 @@ import TeacherScores from './pages/teacher/Scores'
 import TeacherReports from './pages/teacher/Reports'
 import AdminHome from './pages/admin/Home'
 import AdminConfig from './pages/admin/Config'
+import Release from './pages/admin/Release'
 import PerformanceReplay from './pages/PerformanceReplay'
 import { canAccess, roleDestinations, type Role } from './lib/roleAccess'
 
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="batch-reports" element={<RoleRoute roles={['teacher', 'admin']}><TeacherReports /></RoleRoute>} />
 
           <Route path="admin" element={<RoleRoute roles={['admin']}><AdminHome /></RoleRoute>} />
+          <Route path="admin/release" element={<RoleRoute roles={['admin']}><Release /></RoleRoute>} />
           <Route path="admin/config" element={<RoleRoute roles={['admin']}><AdminConfig /></RoleRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

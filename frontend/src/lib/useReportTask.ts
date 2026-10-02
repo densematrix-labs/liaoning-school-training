@@ -7,7 +7,7 @@ export function useReportTask(onCompleted?: (report: any) => void) {
   const queryClient = useQueryClient()
   const [taskId, setTaskId] = useState('')
   const create = useMutation({
-    mutationFn: async (payload: { student_id: string; report_type: 'single' | 'periodic'; score_id?: string }) => (await api.post('/api/v1/reports/generate', payload)).data,
+    mutationFn: async (payload: { student_id: string; report_type: 'single' | 'periodic'; score_id?: string; date_from?: string; date_to?: string }) => (await api.post('/api/v1/reports/generate', payload)).data,
     onSuccess: (task) => setTaskId(task.id),
   })
   const task = useQuery({

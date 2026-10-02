@@ -10,6 +10,8 @@ from app.adapters.controllers.dashboard import router as dashboard_detail_router
 from app.adapters.controllers.student import router as student_detail_router
 from app.config import settings
 from app.database import init_db
+from app.routers.release import router as release_router
+from app.routers.sso import router as sso_router
 from app.routers import (
     abilities_router,
     auth_router,
@@ -71,6 +73,8 @@ app.include_router(
 )
 app.include_router(students_router)
 app.include_router(operations_router)
+app.include_router(release_router)
+app.include_router(sso_router)
 
 
 @app.get("/")

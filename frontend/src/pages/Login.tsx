@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../store/auth'
-import { getErrorMessage } from '../lib/api'
+import { api, getErrorMessage } from '../lib/api'
 
 const demoAccounts = [
   { label: '学生', username: '2023010101', code: 'STUDENT', description: '成绩 · 能力 · 报告' },
@@ -20,6 +20,20 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ssoEnabled,setSsoEnabled] = useState(false)
+  const exchanged = useRef(false)
+  useEffect(() => {
+    api.get('/api/v1/sso/status').then(r=>setSsoEnabled(r.data.enabled)).catch(()=>{})
+    if (new URLSearchParams(window.location.search).get('sso') === '1' && !exchanged.current) {
+      exchanged.current = true
+      api.post('/api/v1/sso/exchange').then(async r => {
+        useAuthStore.setState({token:r.data.access_token,refreshToken:r.data.refresh_token,isAuthenticated:true})
+        await useAuthStore.getState().fetchUser()
+        navigate('/')
+      }).catch(e=>setError(getErrorMessage(e,'统一认证登录失败')))
+    }
+  }, [navigate])
+
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setLoading(true)
@@ -61,6 +75,7 @@ export default function Login() {
             <p className="mt-2 text-sm text-text-muted">使用学号或工号登录对应角色空间</p>
           </div>
 
+          {ssoEnabled && <a className="btn-secondary mt-6 text-center" href="/api/v1/sso/login">校园统一身份登录</a>}
           <form onSubmit={handleSubmit} className="mt-8 min-w-0 space-y-5">
             <label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">{t('username')}</span><input type="text" value={username} onChange={(event) => setUsername(event.target.value)} className="railway-input !py-3" placeholder="请输入学号 / 工号" required autoComplete="username" /></label>
             <label className="block"><span className="mb-2 block text-sm font-medium text-text-secondary">{t('password')}</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="railway-input !py-3" placeholder="请输入密码" required autoComplete="current-password" /></label>

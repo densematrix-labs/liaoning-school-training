@@ -76,6 +76,14 @@ class RecalculationService:
         if not new_details:
             raise ValueError("实训项目未配置操作步骤，无法重算")
 
+        from app.config import settings
+        if settings.RELEASE_MODE:
+            from app.services.production_data import score_steps, put_setting
+            new_details,total_score,max_score,failed_list = score_steps(project,record.steps_data)
+            failed_abilities=set(failed_list)
+            await put_setting(self.db,"score_revision:"+str(__import__("uuid").uuid4()),
+                              {"score_id":score.id,"before":{"total":score.total_score,"details":score.details},
+                               "after":{"total":total_score,"details":new_details}})
         score.total_score = round(total_score, 2)
         score.max_score = round(max_score, 2)
         score.details = new_details

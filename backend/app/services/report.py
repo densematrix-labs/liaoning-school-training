@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List
 import json
 import httpx
@@ -111,6 +112,8 @@ class ReportService:
         student_id: str,
         report_type: str = "single",
         score_id: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
     ) -> DiagnosticReportResponse:
         if report_type not in {"single", "periodic"}:
             raise ValueError("报告类型仅支持 single 或 periodic")
@@ -146,12 +149,14 @@ class ReportService:
             scores_result = await self.db.execute(query)
             scores = scores_result.scalars().all()
         else:
-            scores_result = await self.db.execute(
-                select(Score)
-                .where(Score.student_id == student_id)
-                .order_by(Score.calculated_at.desc())
-                .limit(10)
-            )
+            query = select(Score).where(Score.student_id == student_id)
+            if date_from:
+                query = query.where(Score.calculated_at >= date_from)
+            if date_to:
+                query = query.where(Score.calculated_at <= date_to)
+            if not date_from and not date_to:
+                query = query.limit(10)
+            scores_result = await self.db.execute(query.order_by(Score.calculated_at.desc()))
             scores = scores_result.scalars().all()
 
         if not scores:
@@ -221,6 +226,18 @@ class ReportService:
             for item in env_rows
         ]
         
+        if settings.RELEASE_MODE:
+            from app.models.workflow import EnvironmentReview
+            environment_data = []
+            for item in env_rows:
+                review = (await self.db.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == item.id))).scalar_one_or_none()
+                environment_data.append({
+                    "total_score": sum(v.get("score",0) for v in (review.reviewed_details or {}).values() if isinstance(v,dict) and "score" in v) if review and review.status != "rejected" else item.total_score,
+                    "summary": review.reviewed_summary if review and review.status != "rejected" else item.summary,
+                    "review_status": review.status if review else "需人工复核",
+                    "details": review.reviewed_details if review else item.details,
+                })
+
         # Build ability data
         ability_data = []
         if profile and profile.major_abilities:
@@ -234,6 +251,11 @@ class ReportService:
                         "status": "达标" if score >= ability.graduation_threshold else "待提升",
                     })
         
+        if settings.RELEASE_MODE and report_type == "periodic":
+            from app.services.evaluation import evaluate
+            evaluated = evaluate(scores, abilities, sub_abilities)
+            ability_data = [{"name":a.name,"score":round(evaluated["major"].get(a.id,0)*100,1),"threshold":a.graduation_threshold*100} for a in abilities]
+
         # Generate report content via LLM
         content = await self._generate_report_content(
             # 校外模型只接收任务必需的脱敏标识，真实姓名仅在本地报告元数据中关联。
@@ -287,6 +309,12 @@ class ReportService:
             score_id=scores[0].id if report_type == "single" else None,
         )
         self.db.add(report)
+        await self.db.flush()
+        if settings.RELEASE_MODE:
+            from app.services.production_data import put_setting
+            await put_setting(self.db, "report_meta:"+report.id, {"model":getattr(self,"last_model",settings.LLM_MODEL),
+                "date_from":date_from.isoformat() if date_from else None,"date_to":date_to.isoformat() if date_to else None,
+                "score_ids":[item.id for item in scores],"input_abilities":ability_data})
         await self.db.commit()
         await self.db.refresh(report)
         
@@ -303,6 +331,24 @@ class ReportService:
     ) -> str:
         """Generate report content via LLM"""
         
+        if settings.RELEASE_MODE:
+            from app.services.ai_gateway import completion, validate_report
+            facts = {}
+            for i, row in enumerate(scores_data):
+                facts[f"record_{i}.total_score"] = row["total_score"]
+                facts[f"record_{i}.max_score"] = row["max_score"]
+                facts[f"record_{i}.percentage"] = row["percentage"]
+                for j, step in enumerate(row["steps"]):
+                    facts[f"record_{i}.step_{j}.score"] = step["score"]
+                    facts[f"record_{i}.step_{j}.passed"] = step["passed"]
+            for i, row in enumerate(ability_data):
+                facts[f"ability_{i}.score"] = row["score"]
+                facts[f"ability_{i}.threshold"] = row["threshold"]
+            instruction = "你是铁路实训教师。只依据给定匿名数据诊断，无数据明确写无数据。输出 JSON，必须包含 overview, score_analysis, weaknesses, environment, suggestions, training_plan 六个非空中文字符串及 evidence 数组。evidence 每项为 key,value，必须原样引用 facts 中的键和值。前四个事实章节只允许出现 facts 中已有数字，不输出序号或日期数字，不捏造能力趋势；后两章是训练建议。环境已驳回的机器结论不得当作最终评价。"
+            result, self.last_model = await completion([{"role":"system","content":instruction},
+                {"role":"user","content":json.dumps({"scores":scores_data,"abilities":ability_data,"environment":environment_data,"facts":facts,"type":report_type},ensure_ascii=False)}],db=self.db)
+            return validate_report(result,facts)
+
         prompt = f"""你是一位专业的职业教育指导老师。请根据以下数据为学生生成诊断报告。
 
 ## 学生信息
@@ -383,7 +429,13 @@ class ReportService:
         report_type: str,
         score_id: Optional[str],
         created_by: str,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
     ) -> ReportTaskResponse:
+        if date_from and date_to and date_from > date_to:
+            raise ValueError("统计开始时间不能晚于结束时间")
+        if settings.RELEASE_MODE and report_type == "periodic" and not (date_from and date_to):
+            raise ValueError("阶段报告必须指定开始和结束时间")
         if report_type not in {"single", "periodic"}:
             raise ValueError("报告类型仅支持 single 或 periodic")
         if report_type == "single" and not score_id:
@@ -411,6 +463,9 @@ class ReportService:
             created_by=created_by,
         )
         self.db.add(task)
+        await self.db.flush()
+        from app.services.production_data import put_setting
+        await put_setting(self.db, "report_options:"+task.id, {"date_from":date_from.isoformat() if date_from else None,"date_to":date_to.isoformat() if date_to else None})
         await self.db.commit()
         await self.db.refresh(task)
         return await self.get_task(task.id)
@@ -632,6 +687,10 @@ async def process_report_task(task_id: str) -> None:
         task = (await db.execute(select(ReportTask).where(ReportTask.id == task_id))).scalar_one_or_none()
         if not task:
             return
+        if task.status != TaskStatus.PENDING:
+            return
+        from app.services.production_data import setting
+        options = await setting(db,"report_options:"+task.id,{})
         task.status = TaskStatus.RUNNING
         task.started_at = datetime.utcnow()
         task.error_message = None
@@ -641,6 +700,8 @@ async def process_report_task(task_id: str) -> None:
                 student_id=task.student_id,
                 report_type=task.report_type,
                 score_id=task.score_id,
+                date_from=datetime.fromisoformat(options["date_from"]) if options.get("date_from") else None,
+                date_to=datetime.fromisoformat(options["date_to"]) if options.get("date_to") else None,
             )
             task = (await db.execute(select(ReportTask).where(ReportTask.id == task_id))).scalar_one()
             task.status = TaskStatus.COMPLETED

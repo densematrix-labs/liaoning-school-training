@@ -5,6 +5,7 @@ from typing import List, Optional
 import html
 
 from app.database import get_db
+from app.config import settings
 from app.routers.auth import get_current_user
 from app.services.report import ReportService, process_report_task
 from app.schemas.auth import UserResponse
@@ -32,8 +33,11 @@ async def generate_report(
             report_type=request.report_type,
             score_id=request.score_id,
             created_by=current_user.id,
+            date_from=request.date_from,
+            date_to=request.date_to,
         )
-        background_tasks.add_task(process_report_task, task.id)
+        if not settings.RELEASE_MODE:
+            background_tasks.add_task(process_report_task, task.id)
         return task
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

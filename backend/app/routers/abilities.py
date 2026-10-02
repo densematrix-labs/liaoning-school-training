@@ -103,7 +103,7 @@ async def get_ability_trend(
         for step_id, detail in (score.details or {}).items():
             maximum = float(detail.get("max_score", 0) or 0)
             value = float(detail.get("score", 0) or 0) / maximum if maximum else 0
-            for sub_id in mapping.get(str(step_id)) or detail.get("related_abilities", []):
+            for sub_id in detail.get("related_abilities") or mapping.get(str(step_id), []):
                 cumulative[sub_to_major.get(str(sub_id), str(sub_id))].append(value)
         points.append({
             "date": score.calculated_at,
@@ -112,4 +112,14 @@ async def get_ability_trend(
             "project_name": project.name,
             "abilities": {item.id: round(sum(cumulative[item.id]) / len(cumulative[item.id]) * 100, 1) if cumulative[item.id] else 0 for item in abilities},
         })
+    from app.config import settings
+    if settings.RELEASE_MODE:
+        from app.services.evaluation import evaluate, select_repeated
+        from app.services.production_data import setting
+        config = await setting(db,"release:evaluation",{"decay":1.0})
+        points = []
+        for index, (score,project) in enumerate(rows):
+            values = evaluate([x[0] for x in select_repeated(rows[:index+1])],abilities,subs,float(config.get("decay",1.0)))
+            points.append({"date":score.calculated_at,"score_id":score.id,"project_id":score.project_id,"project_name":project.name,
+                           "abilities":{key:round(value*100,1) for key,value in values["major"].items()}})
     return {"abilities": [{"id": item.id, "name": item.name} for item in abilities], "points": points}

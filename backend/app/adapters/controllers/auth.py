@@ -26,6 +26,8 @@ async def get_current_user(
             detail="无法验证凭据",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    from app.services.account_security import validate_account
+    await validate_account(db, user, token_data.version)
     return user
 
 

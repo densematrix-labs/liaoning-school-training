@@ -6,6 +6,8 @@ import { useAuthStore } from '../../store/auth'
 import { ReportTaskStatus, useReportTask } from '../../lib/useReportTask'
 
 export default function StudentReports() {
+  const [periodFrom,setPeriodFrom] = useState('')
+  const [periodTo,setPeriodTo] = useState('')
   const { user } = useAuthStore()
   const [selected, setSelected] = useState<any>(null)
   const reports = useQuery({ queryKey: ['student-reports'], queryFn: async () => (await api.get('/api/v1/reports/')).data })
@@ -18,8 +20,9 @@ export default function StudentReports() {
     <section className="railway-card grid gap-4 p-5 lg:grid-cols-[1fr_auto_auto] lg:items-end">
       <label className="text-sm text-text-secondary"><span className="mb-2 block">单次实训记录</span><select className="input-field" value={scoreId} onChange={(e) => setScoreId(e.target.value)}><option value="">最近一次实训</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></label>
       <button className="btn-secondary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'single', score_id: scoreId || undefined })}>生成单次报告</button>
-      <button className="btn-primary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'periodic' })}>生成阶段报告</button>
+      <button className="btn-primary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'periodic', date_from: periodFrom || undefined, date_to: periodTo ? periodTo + 'T23:59:59' : undefined })}>生成阶段报告</button>
     </section>
+    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<input type="date" className="input-field" value={periodFrom} onChange={e=>setPeriodFrom(e.target.value)}/></label><label className="text-sm">阶段结束日期<input type="date" className="input-field" value={periodTo} onChange={e=>setPeriodTo(e.target.value)}/></label></div>
     <ReportTaskStatus task={reportTask.task} />
     {reportTask.create.error && <p className="alert-warning rounded p-4">报告任务提交失败</p>}
     <div className="grid gap-5 xl:grid-cols-[340px_1fr]">

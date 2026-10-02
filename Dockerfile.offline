@@ -5,19 +5,20 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.11-slim-bookworm
+FROM public.ecr.aws/docker/library/python:3.11-slim-bookworm
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DEBUG=false \
     DATABASE_URL=sqlite+aiosqlite:////data/training.db \
     REPORT_BACKUP_DIR=/data/private-backups MOCK_DATA_DIR=/app/mock-data \
-    STATIC_DIR=/app/static DEPLOYMENT_MODE=pilot
+    STATIC_DIR=/app/static DEPLOYMENT_MODE=pilot RELEASE_MODE=true
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && useradd --uid 10001 --create-home app \
-    && mkdir /data && chown app:app /data
+    && mkdir /data /backups && chown app:app /data /backups
 COPY backend/app/ /app/app/
 COPY mock-data/*.json /app/mock-data/
 COPY --from=frontend /build/dist /app/static
+RUN chown -R app:app /app
 USER 10001:10001
 VOLUME ["/data"]
 EXPOSE 8080

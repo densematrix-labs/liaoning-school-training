@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import event
 from app.config import settings
 
 engine = create_async_engine(
@@ -7,6 +8,17 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     future=True
 )
+
+if settings.DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine.sync_engine, "connect")
+    def sqlite_options(connection, _record):
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA busy_timeout=30000")
+        if settings.RELEASE_MODE:
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.close()
+
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
