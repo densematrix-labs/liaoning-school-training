@@ -56,6 +56,9 @@ async def main():
     backup=backup_database();restored=restore_to_new_directory('/backups/'+backup['filename'],'/tmp/release-restored',os.environ['BACKUP_ENCRYPTION_KEY'])
     assert restored['counts']['students']==140 and restored['counts']['scores']==1000
     ordered=sorted(latencies)
-    result={'environment':'isolated Docker Desktop linux/amd64, synthetic data, not school acceptance','students':140,'labs':4,'abilities':5,'import':first,'duplicate_import':repeat,'load':{'distinct_users':50,'seconds':duration,'requests':len(latencies),'errors':len(failures),'p95_seconds':round(ordered[min(len(ordered)-1,int(len(ordered)*.95))],3),'max_seconds':round(max(ordered),3)},'class_overview_seconds':round(summary_seconds,3),'backup_restore':restored,'elapsed_seconds':round(time.monotonic()-started,3)}
+    result={'environment':os.getenv('SMOKE_ENVIRONMENT','isolated Docker linux/amd64, synthetic data, not school acceptance'),'students':140,'labs':4,'abilities':5,'import':first,'duplicate_import':repeat,'load':{'distinct_users':50,'seconds':duration,'requests':len(latencies),'errors':len(failures),'p95_seconds':round(ordered[min(len(ordered)-1,int(len(ordered)*.95))],3),'max_seconds':round(max(ordered),3)},'class_overview_seconds':round(summary_seconds,3),'backup_restore':restored,'elapsed_seconds':round(time.monotonic()-started,3)}
     Path('/data/release-smoke-result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2));print(json.dumps(result,ensure_ascii=False))
+    assert not failures, failures
+    if os.getenv('SMOKE_ENFORCE_PERFORMANCE')=='true':
+        assert result['load']['p95_seconds']<=3 and summary_seconds<=10 and first['seconds']<=300, result
 asyncio.run(main())

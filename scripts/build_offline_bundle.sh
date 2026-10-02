@@ -5,7 +5,12 @@ cd "$project_root"
 image_tag="${IMAGE:-liaogui-shixun:release-20261001}"
 bundle="artifacts/release/liaogui-offline-amd64-20261001"
 mkdir -p "$bundle"
-docker build --platform linux/amd64 -f Dockerfile.offline -t "$image_tag" .
+if [[ "${SKIP_BUILD:-0}" == 1 ]]; then
+  [[ -n "${VERIFIED_IMAGE_ID:-}" ]] || { echo 'SKIP_BUILD requires VERIFIED_IMAGE_ID' >&2; exit 1; }
+  [[ "$(docker image inspect --format '{{.Id}}' "$image_tag")" == "$VERIFIED_IMAGE_ID" ]] || { echo 'Verified image ID mismatch' >&2; exit 1; }
+else
+  docker build --platform linux/amd64 -f Dockerfile.offline -t "$image_tag" .
+fi
 cp deploy/offline/* "$bundle/"
 printf '%s\n' "$image_tag" > "$bundle/IMAGE"
 mkdir -p "$bundle/docs"

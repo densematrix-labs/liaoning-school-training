@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from cryptography.fernet import Fernet
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 
 from app.config import settings
 from app.database import AsyncSessionLocal
@@ -128,6 +128,7 @@ class OperationalMiddleware:
                     except Exception:
                         pass
                     async with AsyncSessionLocal() as db:
+                        await db.execute(text("BEGIN IMMEDIATE"))
                         if actor and not await db.get(User,actor):
                             actor=None
                         db.add(AuditLog(actor_id=actor,action=method,object_type="api",object_id=path[:100],
@@ -178,17 +179,27 @@ class ReleaseWorker:
                     jobs.extend(processor(i) for i in ids)
             if jobs:
                 await asyncio.gather(*jobs)
+            now=datetime.utcnow()
             async with AsyncSessionLocal() as db:
-                now=datetime.utcnow()
                 last=await setting(db,"release:last_backup",{})
-                if os.getenv("BACKUP_ENCRYPTION_KEY") and (not last.get("time") or now-datetime.fromisoformat(last["time"])>=timedelta(days=1)):
-                    try:
-                        result=await asyncio.to_thread(backup_database)
-                        await put_setting(db,"release:last_backup",{"time":now.isoformat(),"status":"completed",**result})
-                        await put_setting(db,"release:backup_error",{})
-                    except Exception:
-                        await put_setting(db,"release:backup_error",{"time":now.isoformat(),"status":"failed"})
-                        logger.exception("scheduled_backup_failed")
+            # Do not retain a read snapshot while a backup/import writes. In WAL
+            # mode upgrading that stale snapshot fails immediately, even with a
+            # busy timeout. Acquire the write transaction before reading settings.
+            backup_result=None
+            backup_failed=False
+            if os.getenv("BACKUP_ENCRYPTION_KEY") and (not last.get("time") or now-datetime.fromisoformat(last["time"])>=timedelta(days=1)):
+                try:
+                    backup_result=await asyncio.to_thread(backup_database)
+                except Exception:
+                    backup_failed=True
+                    logger.exception("scheduled_backup_failed")
+            async with AsyncSessionLocal() as db:
+                await db.execute(text("BEGIN IMMEDIATE"))
+                if backup_result is not None:
+                    await put_setting(db,"release:last_backup",{"time":now.isoformat(),"status":"completed",**backup_result})
+                    await put_setting(db,"release:backup_error",{})
+                elif backup_failed:
+                    await put_setting(db,"release:backup_error",{"time":now.isoformat(),"status":"failed"})
                 retention=max(180,int(os.getenv("AUDIT_RETENTION_DAYS","180")))
                 await db.execute(delete(AuditLog).where(AuditLog.created_at<now-timedelta(days=retention)))
                 await put_setting(db,"release:worker",{"heartbeat":now.isoformat(),"status":"running"})

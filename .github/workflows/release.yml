@@ -45,7 +45,11 @@ jobs:
           DOCKER_NETWORK=none CONTAINER_NAME=installer-check bash start.sh
           docker exec installer-check python -c "import sqlite3; c=sqlite3.connect('/data/training.db'); assert c.execute('select count(*) from users').fetchone()[0]==1"
       - name: Synthetic 140-student integration and 50-user load
-        run: docker exec -e RELEASE_SMOKE_ALLOWED=true -e SMOKE_LOAD_SECONDS=60 -i installer-check python - < scripts/release_smoke.py
+        run: docker exec -e RELEASE_SMOKE_ALLOWED=true -e SMOKE_LOAD_SECONDS=60 -e SMOKE_ENFORCE_PERFORMANCE=true -e "SMOKE_ENVIRONMENT=GitHub Actions Ubuntu native amd64; synthetic data; not school acceptance" -i installer-check python - < scripts/release_smoke.py
+      - name: No background database failures
+        run: |
+          docker logs installer-check > /tmp/release-container.log 2>&1
+          if grep -E "release_worker_failed|audit_persistence_failed|database is locked|Traceback" /tmp/release-container.log; then exit 1; fi
       - name: Save reproducible measurements
         if: always()
         run: |

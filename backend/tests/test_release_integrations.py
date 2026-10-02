@@ -423,3 +423,31 @@ async def test_real_ingest_crosses_transaction_checkpoints(test_db,acceptance_da
         assert (result.success_count,result.error_count)==(205,0)
         repeated=await ProductionIngest(db).run(rows,actor_id=acceptance_data['teacher'])
         assert (repeated.success_count,repeated.skipped_count)==(0,205)
+
+async def test_worker_backup_concurrent_wal_writer(tmp_path,monkeypatch):
+    """A write during backup must not invalidate the worker's read snapshot."""
+    import sqlite3
+    import app.services.operations_runtime as runtime
+    from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker
+    from app.database import Base
+    path=tmp_path/'worker.db'
+    engine=create_async_engine('sqlite+aiosqlite:///'+str(path))
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    with sqlite3.connect(path) as connection:
+        connection.execute('PRAGMA journal_mode=WAL')
+    factory=async_sessionmaker(engine,expire_on_commit=False)
+    monkeypatch.setattr(runtime,'AsyncSessionLocal',factory)
+    monkeypatch.setenv('BACKUP_ENCRYPTION_KEY','configured')
+    def concurrent_backup():
+        with sqlite3.connect(path) as connection:
+            connection.execute("INSERT INTO system_settings (key,value,updated_at) VALUES ('concurrent', '{}', CURRENT_TIMESTAMP)")
+        return {'filename':'synthetic.enc'}
+    monkeypatch.setattr(runtime,'backup_database',concurrent_backup)
+    try:
+        await runtime.ReleaseWorker().tick()
+        async with factory() as db:
+            assert (await setting(db,'release:last_backup'))['status']=='completed'
+            assert (await setting(db,'release:worker'))['status']=='running'
+    finally:
+        await engine.dispose()
