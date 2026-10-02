@@ -4,6 +4,7 @@ project_root="$(cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$project_root"
 image_tag="${IMAGE:-liaogui-shixun:release-20261001}"
 bundle="artifacts/release/liaogui-offline-amd64-20261001"
+[[ ! -e "$bundle" ]] || { echo "Bundle path already exists; refusing to package stale or site-local files: $bundle" >&2; exit 1; }
 mkdir -p "$bundle"
 if [[ "${SKIP_BUILD:-0}" == 1 ]]; then
   [[ -n "${VERIFIED_IMAGE_ID:-}" ]] || { echo 'SKIP_BUILD requires VERIFIED_IMAGE_ID' >&2; exit 1; }

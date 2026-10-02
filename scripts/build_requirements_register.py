@@ -31,7 +31,7 @@ groups={
 '7.1':('G04/G06/G07/G15','接口真实接入/文档/完整鉴权不足','docs/release/openapi.json; backend/app/routers/release.py','接口/文档完成；外部系统联调资料 E06/E09'),
 '7.2':('G13/G15/G18/G21','密码/会话/凭据及调用数据保护不足','backend/app/services/auth.py; backend/app/services/ai_gateway.py','代码完成；HTTPS/真实数据出域许可 E13/E17'),
 '7.3':('G16/G17/G18/G19','静态健康、审计/备份恢复不足','backend/app/services/operations_runtime.py; deploy/offline','代码及本地演练完成；现场备份介质/恢复演练 E22'),
-'8.1':('G17/G20/G30','已有短测不能代表目标服务器验收','scripts/release_smoke.py; docs/release/VERIFICATION.md','正式性能/24h及可能72h未完成：E10/E23–E25'),
+'8.1':('G17/G20/G30/G34','已有短测不能代表目标服务器验收','scripts/release_smoke.py; docs/release/VERIFICATION.md','正式性能/24h及可能72h未完成：E10/E23–E25'),
 '8.2':('G30/G31/G33','交付包/手册未跟上真实系统','deploy/offline; docs/release','包/文档完成状态看 VERIFICATION；现场实施/培训 E01–E26'),
 '8.3':('G33','未冻结验收数据、无双方签署记录','docs/release/ACCEPTANCE.md','验收模板完成；实际验收未完成 E01/E08/E23–E26')}
 with (folder/'requirements-traceability.csv').open('w',encoding='utf-8-sig',newline='') as f:
@@ -41,5 +41,5 @@ with (folder/'requirements-traceability.csv').open('w',encoding='utf-8-sig',newl
         if key=='4.1.4':detail=('E15','未取得百万 token 模型能力证据','供应商证明+实际服务型号核验','未完成：不能用默认 qwen-plus 名称或模拟测试宣称达标')
         if key=='5.1.3':detail=('G24/E19/E20','摄像机型号/接口/事件关联未知','采集地址白名单+通用图片字节适配','通用入口完成；设备专有接口联调未完成')
         writer.writerow([key,title,*detail])
-(folder/'source-manifest.json').write_text(json.dumps({'source':'项目本地老师意见修订版_20260906.docx','official_final_confirmed':False,'extracted_text_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'parameter_count':len(rows),'comparison_base':'e8d358b'},ensure_ascii=False,indent=2))
+(folder/'source-manifest.json').write_text(json.dumps({'source':'项目本地老师意见修订版_20260906.docx','official_final_confirmed':False,'source_docx_sha256':hashlib.sha256((root/'docs/智能实训能力评估平台项目参数_老师意见修订版_20260906.docx').read_bytes()).hexdigest(),'extracted_text_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'parameter_count':len(rows),'comparison_base':'e8d358b'},ensure_ascii=False,indent=2))
 print('Mapped parameter count:',len(rows))

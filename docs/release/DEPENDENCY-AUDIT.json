@@ -1,0 +1,11 @@
+{
+  "recorded_at_utc": "2026-10-02T06:17:06.911310+00:00",
+  "runtime_python_scanned_packages": 39,
+  "runtime_python_known_vulnerabilities": 0,
+  "frontend_production_known_vulnerabilities": 0,
+  "scope": "pip-audit runtime requirements; npm audit --omit=dev. OS/base image penetration and campus security acceptance not performed.",
+  "commands": [
+    "pip-audit -r backend/requirements.txt --format=json",
+    "npm audit --omit=dev --json"
+  ]
+}
