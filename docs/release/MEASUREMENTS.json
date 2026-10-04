@@ -1,6 +1,6 @@
 {
-  "runtime_source_commit": "4d8b52214002b66f040d8dc4b0e688cb9444a3dd",
-  "ci_url": "https://github.com/densematrix-labs/liaoning-school-training/actions/runs/36973089695",
+  "runtime_source_commit": "11c100cb2e674a04ef9bc39c361aa2e4ee3efcae",
+  "ci_url": "https://github.com/densematrix-labs/liaoning-school-training/actions/runs/37179580747",
   "ci_result": "success",
   "ci_checks": [
     "backend/frontend tests and coverage",
@@ -10,37 +10,37 @@
     "synthetic import/load/backup restore",
     "no background database errors"
   ],
-  "local_image_id": "sha256:447943f22c3ad4e4e7c248eee3507968029faa2342a70c7a52561cc43db5b06b",
+  "local_image_id": "sha256:b2e7a4bfad68d88113c0e8c07236af939ab75b7fc7a071552b42fd0548c93598",
   "native_ubuntu": {
     "environment": "GitHub Actions Ubuntu native amd64; synthetic data; not school acceptance",
     "students": 140,
     "labs": 4,
     "abilities": 5,
     "import": {
-      "task_id": "5d4cc83e-40c9-4aa9-9b9f-60fe3f476e34",
+      "task_id": "36762ad9-b4d3-474b-8e19-ba0986506576",
       "read": 1000,
       "success": 1000,
       "skipped": 0,
       "errors": 0,
-      "seconds": 5.911
+      "seconds": 8.597
     },
     "duplicate_import": {
-      "task_id": "99cf7b05-0cf3-412c-8f69-0c8cb54e54c8",
+      "task_id": "c357e49f-32fb-4502-922e-62d5a1d55330",
       "read": 1000,
       "success": 0,
       "skipped": 1000,
       "errors": 0,
-      "seconds": 0.925
+      "seconds": 1.648
     },
     "load": {
       "distinct_users": 50,
       "seconds": 60,
       "requests": 6000,
       "errors": 0,
-      "p95_seconds": 0.21,
-      "max_seconds": 0.358
+      "p95_seconds": 0.329,
+      "max_seconds": 0.424
     },
-    "class_overview_seconds": 0.018,
+    "class_overview_seconds": 0.032,
     "backup_restore": {
       "verified": true,
       "counts": {
@@ -49,53 +49,124 @@
         "scores": 1000
       }
     },
-    "elapsed_seconds": 67.266
+    "elapsed_seconds": 70.959
   },
-  "local_amd64_emulation": {
-    "environment": "Mac ARM Docker Desktop emulating linux/amd64; synthetic data; not school acceptance",
-    "students": 140,
-    "labs": 4,
-    "abilities": 5,
-    "import": {
-      "task_id": "a9380a3f-66b2-4043-b1d1-a92712dbc1f5",
-      "read": 1000,
-      "success": 1000,
-      "skipped": 0,
-      "errors": 0,
-      "seconds": 47.451
+  "school_acceptance": false,
+  "previous_release": {
+    "runtime_source_commit": "4d8b52214002b66f040d8dc4b0e688cb9444a3dd",
+    "image_id": "sha256:447943f22c3ad4e4e7c248eee3507968029faa2342a70c7a52561cc43db5b06b",
+    "native_ubuntu": {
+      "environment": "GitHub Actions Ubuntu native amd64; synthetic data; not school acceptance",
+      "students": 140,
+      "labs": 4,
+      "abilities": 5,
+      "import": {
+        "task_id": "5d4cc83e-40c9-4aa9-9b9f-60fe3f476e34",
+        "read": 1000,
+        "success": 1000,
+        "skipped": 0,
+        "errors": 0,
+        "seconds": 5.911
+      },
+      "duplicate_import": {
+        "task_id": "99cf7b05-0cf3-412c-8f69-0c8cb54e54c8",
+        "read": 1000,
+        "success": 0,
+        "skipped": 1000,
+        "errors": 0,
+        "seconds": 0.925
+      },
+      "load": {
+        "distinct_users": 50,
+        "seconds": 60,
+        "requests": 6000,
+        "errors": 0,
+        "p95_seconds": 0.21,
+        "max_seconds": 0.358
+      },
+      "class_overview_seconds": 0.018,
+      "backup_restore": {
+        "verified": true,
+        "counts": {
+          "users": 145,
+          "students": 140,
+          "scores": 1000
+        }
+      },
+      "elapsed_seconds": 67.266
     },
-    "duplicate_import": {
-      "task_id": "b4f2116a-7d63-41d8-9ba7-ce98eb3d9608",
-      "read": 1000,
-      "success": 0,
-      "skipped": 1000,
-      "errors": 0,
-      "seconds": 15.126
+    "local_amd64_emulation": {
+      "environment": "Mac ARM Docker Desktop emulating linux/amd64; synthetic data; not school acceptance",
+      "students": 140,
+      "labs": 4,
+      "abilities": 5,
+      "import": {
+        "task_id": "a9380a3f-66b2-4043-b1d1-a92712dbc1f5",
+        "read": 1000,
+        "success": 1000,
+        "skipped": 0,
+        "errors": 0,
+        "seconds": 47.451
+      },
+      "duplicate_import": {
+        "task_id": "b4f2116a-7d63-41d8-9ba7-ce98eb3d9608",
+        "read": 1000,
+        "success": 0,
+        "skipped": 1000,
+        "errors": 0,
+        "seconds": 15.126
+      },
+      "load": {
+        "distinct_users": 50,
+        "seconds": 60,
+        "requests": 1524,
+        "errors": 0,
+        "p95_seconds": 3.57,
+        "max_seconds": 6.623
+      },
+      "class_overview_seconds": 0.235,
+      "backup_restore": {
+        "verified": true,
+        "counts": {
+          "users": 145,
+          "students": 140,
+          "scores": 1000
+        }
+      },
+      "elapsed_seconds": 126.752
     },
-    "load": {
-      "distinct_users": 50,
-      "seconds": 60,
-      "requests": 1524,
-      "errors": 0,
-      "p95_seconds": 3.57,
-      "max_seconds": 6.623
+    "local_restart_persistence": {
+      "users": 145,
+      "students": 140,
+      "scores": 1000
     },
-    "class_overview_seconds": 0.235,
-    "backup_restore": {
-      "verified": true,
-      "counts": {
-        "users": 145,
-        "students": 140,
-        "scores": 1000
-      }
-    },
-    "elapsed_seconds": 126.752
+    "local_background_error_check": "passed; no worker/audit/SQLite lock/traceback found"
   },
-  "local_restart_persistence": {
-    "users": 145,
-    "students": 140,
-    "scores": 1000
+  "visual_acceptance": {
+    "pages": 46,
+    "operation_checks": 30,
+    "javascript_errors": 0,
+    "http_errors": 0,
+    "external_requests": 0,
+    "page_horizontal_overflow": 0
   },
-  "local_background_error_check": "passed; no worker/audit/SQLite lock/traceback found",
-  "school_acceptance": false
+  "local_final_network_none": {
+    "health": {
+      "status": "healthy",
+      "database": "connected",
+      "mode": "pilot",
+      "release_scope": "pilot-not-production-acceptance"
+    },
+    "counts": {
+      "users": 1,
+      "students": 0,
+      "scores": 0
+    },
+    "backup": {
+      "filename": "backup-20261004T052401-7313fcb1.enc",
+      "sha256": "222b72406f111222705c74e446032aa3031564f64cb40f1bfe560f0f5cca2004",
+      "size": 7628
+    },
+    "network": "none"
+  }
 }

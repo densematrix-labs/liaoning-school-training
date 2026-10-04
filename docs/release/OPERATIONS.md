@@ -2,7 +2,7 @@
 
 ## 交付与前提
 
-主包：`liaogui-offline-amd64-20261001.zip`。包含已构建镜像 `image.tar.gz`、SHA256SUMS、镜像元数据、依赖版本、源码提交号、安装/启动/停止/备份/恢复脚本和本文档。安装不执行 npm、pip、apt 或 docker pull。
+主包：`liaogui-offline-amd64-20261003.zip`。包含已构建镜像 `image.tar.gz`、SHA256SUMS、镜像元数据、依赖版本、源码提交号、安装/启动/停止/备份/恢复脚本和本文档。安装不执行 npm、pip、apt 或 docker pull。
 
 目标：Ubuntu 20 及以上，64 位 x86（amd64），已安装且可用的 Docker Engine。建议 4 核、8GB 内存、至少 40GB 可用磁盘；这是部署建议，不是正式性能保证。ARM64、国产架构或裸机没有 Docker 时，需先按实际系统准备对应离线介质。不能把应用镜像宣称为任意 Ubuntu 裸机通用安装盘。Docker daemon 权限接近系统管理权限，由校方分配。
 

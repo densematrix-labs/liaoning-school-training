@@ -1,11 +1,11 @@
 # Release 工程验证记录
 
-记录日期：2026-10-02 UTC（洛杉矶 10 月 1 日）。代码分支：release/onprem-20261001。运行代码提交：4d8b52214002b66f040d8dc4b0e688cb9444a3dd；此后的报告/归档提交不改变镜像应用代码。
+更新日期：2026-10-03（洛杉矶）。代码分支：release/onprem-20261001。运行代码提交：11c100cb2e674a04ef9bc39c361aa2e4ee3efcae；此后的验收脚本/报告/归档提交不改变镜像应用代码。
 
 ## 自动化与安全依赖
 
-- 后端：127 项通过，语句覆盖率 95.45%。命令：PYTHONPATH=backend .venv/bin/python -m pytest --cov=app --cov-config=backend/.coveragerc --cov-fail-under=95 -q backend/tests。
-- 前端：21 项通过，语句/行覆盖率 95.09%，TypeScript/Vite 构建通过。不是 95% 分支覆盖。
+- 后端：128 项通过，语句覆盖率 95.45%。命令：PYTHONPATH=backend .venv/bin/python -m pytest --cov=app --cov-config=backend/.coveragerc --cov-fail-under=95 -q backend/tests。
+- 前端：24 项通过，语句/行覆盖率 95.09%，TypeScript/Vite 构建通过。不是 95% 分支覆盖。
 - 覆盖内容包括：身份与权限、签名 OIDC、重放拒绝、真实导入校验/幂等/检查点、评分与历史快照、失败恢复、图片上传与复核、报告结构与历史证据、备份恢复和后台并发写入。
 - 依赖审计：39 个 Python 运行依赖已知漏洞为 0；前端生产依赖已知漏洞为 0；详见 DEPENDENCY-AUDIT.json。测试工具不安装到应用镜像。审计结果反映运行时查询的漏洞库，不代表永远无漏洞，也不包括 OS 全量安全测评。
 - 不覆盖已运行 180 天的真实审计留存；代码执行至少 180 天保留策略。
@@ -13,18 +13,18 @@
 ## 镜像与部署验证范围
 
 - 单镜像 linux/amd64，单容器、单 uvicorn worker；FastAPI 提供同源静态前端，SQLite WAL 持久化，不需要 Compose/Redis/独立数据库容器。
-- 交付镜像 ID：sha256:447943f22c3ad4e4e7c248eee3507968029faa2342a70c7a52561cc43db5b06b。
+- 交付镜像 ID：sha256:b2e7a4bfad68d88113c0e8c07236af939ab75b7fc7a071552b42fd0548c93598。
 - 空库初始化、禁止演示数据、持久化重启、加密备份与恢复、Docker --network none 下导入与查询均有验证。
 - Ubuntu CI 实际执行 docker save/load、安装脚本、无网络启动、备份、停止与重启；学校服务器没有 Docker 时仍需匹配 OS/架构的 Engine 离线介质。
 - 测试用数据和凭据只存在于独立容器数据卷，不进入镜像/交付包；交付后空库随机生成管理员口令与密钥。
-- HTTP API/组件自动测试已执行；浏览器工具拒绝 localhost 导航，真实浏览器视觉走查未完成，未绕过该限制。
+- 真实Chrome视觉及三角色操作验收完成：46个截图状态，30条操作检查，无脚本/HTTP错误和页面横向溢出。仅访问获授权隔离地址，证据与限制见VISUAL-ACCEPTANCE.md。
 
 ## 实测结果
 
-- 最新运行代码 Ubuntu CI 全部通过：https://github.com/densematrix-labs/liaoning-school-training/actions/runs/36973089695 。
-- Ubuntu 原生 amd64：1000 条导入成功 1000、错误 0，用时 5.911 秒；重复导入全部跳过、新增 0，用时 0.925 秒。50 个账号、60 秒、6000 次成功请求、错误 0，P95 0.210 秒、最大 0.358 秒；班级汇总 0.018 秒。
-- 交付镜像在 Mac ARM/amd64 仿真下：导入 47.451 秒、重复导入 15.126 秒；50 账号、60 秒、1524 次请求、零错误，P95 3.570 秒、最大 6.623 秒；班级汇总 0.235 秒。本组查询 P95 未达到 3 秒，不作为目标机器通过依据。
-- 两组均恢复并核对 users=145、students=140、scores=1000；本机最终镜像重启后数量不变。最终回归未发现后台 worker/审计/SQLite 锁错误；不抹去此前暴露并修复的并发问题。
+- 最新运行代码 Ubuntu CI 全部通过：https://github.com/densematrix-labs/liaoning-school-training/actions/runs/37179580747 。
+- Ubuntu 原生 amd64：1000 条导入成功 1000、错误 0，用时 8.597 秒；重复导入全部跳过、新增 0，用时 1.648 秒。50 个账号、60 秒、6000 次成功请求、错误 0，P95 0.329 秒、最大 0.424 秒；班级汇总 0.032 秒。
+- 上一版（4d8b522）镜像在 Mac ARM/amd64 仿真下：导入 47.451 秒、重复导入 15.126 秒；50 账号、60 秒、1524 次请求、零错误，P95 3.570 秒、最大 6.623 秒；班级汇总 0.235 秒。本组查询 P95 未达到 3 秒，不作为目标机器通过依据。
+- 上述新版本 Ubuntu 和旧版本本机两组均恢复并核对 users=145、students=140、scores=1000；本机最终镜像重启后数量不变。最终回归未发现后台 worker/审计/SQLite 锁错误；不抹去此前暴露并修复的并发问题。
 
 ## 性能数据解释
 
