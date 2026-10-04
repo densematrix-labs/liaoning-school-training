@@ -18,3 +18,11 @@ it('uploads real bytes with a selected owned record and shows asynchronous failu
   fireEvent.click(screen.getByText('提交环境检查'))
   expect(await screen.findByRole('alert')).toHaveTextContent('网络断开')
 })
+it('makes lab loading failures visible and recoverable',async()=>{
+  calls.get.mockRejectedValueOnce(new Error('服务不可用')).mockRejectedValueOnce(new Error('服务不可用'))
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><EnvironmentUpload studentId="student"/></QueryClientProvider>)
+  expect(await screen.findByRole('alert')).toHaveTextContent('服务不可用')
+  fireEvent.click(screen.getByRole('button',{name:'重新加载'}))
+  await screen.findByText('实训室')
+  await waitFor(()=>expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+})

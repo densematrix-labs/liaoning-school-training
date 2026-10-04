@@ -159,6 +159,19 @@ describe('all role workspaces render populated acceptance states', () => {
   })
   afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+  it('keeps demo import and legacy backup controls out of pilot configuration', () => {
+    const runtimeWindow = window as Window & { __SHIXUN_DEMO__?: boolean }
+    runtimeWindow.__SHIXUN_DEMO__ = false
+    try {
+      renderPage(<AdminConfig />)
+      expect(screen.getByRole('link', { name: '进入上线管理' })).toHaveAttribute('href', '/admin/release')
+      expect(screen.queryByText('下载演示数据')).not.toBeInTheDocument()
+      expect(screen.queryByText('执行导入验证')).not.toBeInTheDocument()
+      expect(screen.queryByText('保存更新计划')).not.toBeInTheDocument()
+      expect(screen.queryByText('立即生成数据备份')).not.toBeInTheDocument()
+    } finally { delete runtimeWindow.__SHIXUN_DEMO__ }
+  })
+
   it('renders public and student pages with populated data', async () => {
     const apiGet = vi.spyOn(api, 'get').mockResolvedValue({ data: new Blob(['report']) } as any)
     const pages = [<Dashboard />, <StudentHome />, <StudentScores />, <StudentAbility />, <StudentReports />, <StudentEnvironmentResults />]

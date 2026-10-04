@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, getErrorMessage } from '../../lib/api'
 
 export default function AdminConfig() {
+  const demoMode = (window as Window & { __SHIXUN_DEMO__?: boolean }).__SHIXUN_DEMO__ !== false
   const queryClient = useQueryClient()
   const abilities = useQuery({ queryKey: ['admin-abilities'], queryFn: async () => (await api.get('/api/v1/admin/abilities')).data })
   const labs = useQuery({ queryKey: ['admin-labs'], queryFn: async () => (await api.get('/api/v1/admin/labs')).data })
@@ -25,14 +26,14 @@ export default function AdminConfig() {
       <LabConfiguration labs={labs.data || []} />
     </div>
     <AccessControl data={access.data} />
-    <OperationsPanel />
-    <section className="railway-card overflow-hidden">
+    {demoMode ? <OperationsPanel /> : <section className="railway-card p-5"><h2 className="section-heading">正式数据与运行管理</h2><p className="mt-2 text-sm text-text-secondary">真实数据导入、同步、操作审计和加密备份请使用上线管理。</p><a className="btn-primary mt-4 inline-block" href="/admin/release">进入上线管理</a></section>}
+    {demoMode && <section className="railway-card overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-railway-600/50 p-5"><div><p className="eyebrow">演示工具</p><h2 className="section-heading">演示数据导入与验证</h2><p className="mt-1 text-xs text-text-muted">模拟外部实训记录导入 → 计分 → 能力更新 → 报告/环境任务；仅用于演示与联调验证，不影响核心教学业务操作。</p></div><div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadDemoRows}>下载演示数据</button><label className="railway-button cursor-pointer">{importFile.isPending ? '正在导入…' : '导入演示数据'}<input className="hidden" type="file" accept=".csv,text/csv" disabled={importFile.isPending} onChange={(e) => { const file = e.target.files?.[0]; if (file) importFile.mutate(file); e.currentTarget.value = '' }} /></label><button onClick={() => sync.mutate()} disabled={sync.isPending || importFile.isPending} className="btn-primary">{sync.isPending ? '验证中…' : '执行导入验证'}</button></div></div>
       {(sync.error || importFile.error) && <ErrorBox error={sync.error || importFile.error} />}
       {importFile.data && <div className="alert-success m-4 rounded p-3 text-sm">演示数据已导入：共 {importFile.data.row_count} 条，请点击「执行导入验证」开始处理</div>}
       {sync.data && <div className="alert-success m-4 rounded p-3 text-sm">同步完成：读取 {sync.data.read_count}，新增 {sync.data.success_count}，跳过 {sync.data.skipped_count}，异常 {sync.data.error_count}</div>}
       <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-railway-800/70 text-xs text-text-muted"><tr><th className="p-3">验证批次</th><th>读取</th><th>新增</th><th>跳过</th><th>异常</th><th>状态</th><th>操作</th></tr></thead><tbody>{history.data?.map((item: any, index: number) => <tr key={item.id} className="border-t border-railway-600/40"><td className="p-3"><p className="text-xs text-text-secondary">第 {history.data.length - index} 批</p><p className="text-xs text-text-muted">{new Date(item.started_at).toLocaleString('zh-CN')}</p></td><td>{item.read_count}</td><td className="text-status-success">{item.success_count}</td><td>{item.skipped_count}</td><td className="text-status-warning">{item.error_count}</td><td>{statusLabel(item.status)}</td><td><button className="railway-button !px-2 !py-1 text-xs" disabled={!item.error_count} onClick={() => downloadExceptions(item.id)}>导出异常</button></td></tr>)}</tbody></table></div>
-    </section>
+    </section>}
   </div>
 }
 

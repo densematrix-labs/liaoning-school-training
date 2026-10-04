@@ -451,3 +451,13 @@ async def test_worker_backup_concurrent_wal_writer(tmp_path,monkeypatch):
             assert (await setting(db,'release:worker'))['status']=='running'
     finally:
         await engine.dispose()
+
+async def test_minimal_catalog_lab_can_be_used_for_image_upload(client,auth_headers,release_mode):
+    created=await client.post('/api/v1/release/catalog/labs',headers=auth_headers,json={'name':'无设备清单的实训室'})
+    assert created.status_code==200,created.text
+    lab_id=created.json()['id']
+    labs=await client.get('/api/v1/environment/labs',headers=auth_headers)
+    assert labs.status_code==200,labs.text
+    assert next(row for row in labs.json() if row['id']==lab_id)['equipment']==[]
+    detail=await client.get('/api/v1/environment/labs/'+lab_id,headers=auth_headers)
+    assert detail.status_code==200 and detail.json()['equipment']==[]
