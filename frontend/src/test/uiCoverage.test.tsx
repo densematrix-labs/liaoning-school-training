@@ -159,6 +159,18 @@ describe('all role workspaces render populated acceptance states', () => {
   })
   afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+  it('counts and localizes records requiring teacher review', () => {
+    const previous=environmentResult.review_status
+    environmentResult.review_status='needs_review'
+    try {
+      renderPage(<EnvironmentCheckPage />)
+      expect(screen.queryByText('needs_review')).not.toBeInTheDocument()
+      const pending=screen.getAllByText('待复核')
+      expect(pending.length).toBe(2)
+      expect(pending[0].parentElement).toHaveTextContent('1')
+    } finally { environmentResult.review_status=previous }
+  })
+
   it('keeps demo import and legacy backup controls out of pilot configuration', () => {
     const runtimeWindow = window as Window & { __SHIXUN_DEMO__?: boolean }
     runtimeWindow.__SHIXUN_DEMO__ = false
