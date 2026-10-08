@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import ReferenceImageUpload from '../../components/ReferenceImageUpload'
 
 const categoryNames: Record<string, string> = {
   equipment_placement: '器材归位',
@@ -65,6 +66,8 @@ export default function EnvironmentCheckPage() {
         <div className="rounded border border-accent-blue/25 bg-accent-electric/5 px-4 py-3 text-xs text-text-secondary"><span className="text-accent-cyan">自动触发规则：</span>每条实训完成记录携带现场抓拍后，系统自动创建检测任务并关联实训成绩；本页只处理查看与复核。</div>
       </div>
     </section>
+
+    <ReferenceImageUpload />
 
     {!studentId && <section className="railway-card p-12 text-center"><div className="mx-auto grid h-16 w-16 place-content-center rounded-full border border-accent-blue/30 bg-accent-electric/10 font-mono text-xl text-accent-cyan">AUTO</div><h2 className="mt-5 section-heading">选择班级和学生查看自动检测记录</h2><p className="mt-2 text-sm text-text-muted">无需上传图片或点击生成，检测结果由实训完成事件自动写入。</p></section>}
 

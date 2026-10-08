@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./training.db"
     REPORT_BACKUP_DIR: str = "./data/private-backups"
+    REFERENCE_IMAGE_DIR: str = "./data/reference-images"
     
     # JWT
     SECRET_KEY: str = "liaoning-railway-training-demo-only-change-in-production"

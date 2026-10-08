@@ -1,9 +1,14 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pathlib import Path
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 
 from app.database import get_db
+from app.config import settings
 from app.routers.auth import get_current_user
 from app.services.environment import EnvironmentCheckService, process_environment_task
 from app.schemas.auth import UserResponse
@@ -12,6 +17,18 @@ from app.models.lab import EnvironmentCheck, Lab
 from app.routers.permissions import require_student_access
 
 router = APIRouter(prefix="/api/v1/environment", tags=["环境检查"])
+
+MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
+
+
+def _reference_image_extension(content: bytes) -> str:
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return ".webp"
+    raise ValueError("仅支持 JPG、PNG、WebP 图片")
 
 
 @router.post("/tasks", response_model=EnvironmentTaskResponse)
@@ -100,6 +117,60 @@ async def get_lab(
         status=lab.status.value,
         current_students=lab.current_students or 0,
     )
+
+
+@router.post("/labs/{lab_id}/reference", response_model=LabResponse)
+async def upload_lab_reference_image(
+    lab_id: str,
+    file: UploadFile = File(...),
+    current_user: UserResponse = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """教师或管理员上传并替换实训室标准状态图片。"""
+    if current_user.role not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可上传标准图片")
+    lab = (await db.execute(select(Lab).where(Lab.id == lab_id))).scalar_one_or_none()
+    if not lab:
+        raise HTTPException(status_code=404, detail="实训室不存在")
+
+    content = await file.read(MAX_REFERENCE_IMAGE_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="请选择标准图片")
+    if len(content) > MAX_REFERENCE_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="图片不得超过 10MB")
+    try:
+        extension = _reference_image_extension(content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    image_dir = Path(settings.REFERENCE_IMAGE_DIR).resolve()
+    image_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}{extension}"
+    image_path = image_dir / filename
+    image_path.write_bytes(content)
+    lab.reference_image_url = f"/api/v1/environment/reference-images/{filename}"
+    await db.commit()
+    await db.refresh(lab)
+    return LabResponse(
+        id=lab.id,
+        name=lab.name,
+        building=lab.building,
+        floor=lab.floor,
+        capacity=lab.capacity,
+        equipment=lab.equipment or [],
+        reference_image_url=lab.reference_image_url,
+        status=lab.status.value,
+        current_students=lab.current_students or 0,
+    )
+
+
+@router.get("/reference-images/{filename}", include_in_schema=False)
+async def get_reference_image(filename: str):
+    image_dir = Path(settings.REFERENCE_IMAGE_DIR).resolve()
+    image_path = image_dir / filename
+    if image_path.parent != image_dir or not image_path.is_file():
+        raise HTTPException(status_code=404, detail="标准图片不存在")
+    return FileResponse(image_path, headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @router.post("/check", response_model=EnvironmentCheckResponse)
