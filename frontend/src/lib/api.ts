@@ -6,6 +6,8 @@ export function getErrorMessage(error: any, fallback = '请求失败，请稍后
   if (Array.isArray(detail)) {
     return detail.map((item) => item?.msg).filter(Boolean).join('；') || fallback
   }
+  if (error?.response?.status === 413) return '图片超过服务器上传限制，请选择不超过 10MB 的图片；若仍失败请联系管理员'
+  if (typeof error?.message === 'string' && !error?.response) return error.message || fallback
   return fallback
 }
 

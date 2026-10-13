@@ -14,6 +14,9 @@ describe('API authentication helpers', () => {
     expect(getErrorMessage({ response: { data: { detail: [{ msg: '用户名必填' }, { msg: '密码必填' }] } } })).toBe('用户名必填；密码必填')
     expect(getErrorMessage({ response: { data: { detail: [] } }, }, '备用提示')).toBe('备用提示')
     expect(getErrorMessage(null)).toBe('请求失败，请稍后重试')
+    expect(getErrorMessage({ response: { status: 413, data: '<html>413</html>' } })).toContain('服务器上传限制')
+    expect(getErrorMessage(new Error('图片不得超过 10MB'))).toBe('图片不得超过 10MB')
+    expect(getErrorMessage(new Error(''), '备用提示')).toBe('备用提示')
   })
 
   it('adds persisted tokens and tolerates malformed storage', async () => {
