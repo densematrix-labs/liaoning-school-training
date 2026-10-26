@@ -73,7 +73,7 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
 }
 
 function Metric({ label, value, compact = false }: { label: string; value: string; compact?: boolean }) {
-  return <div className="metric-strip"><p>{label}</p><strong className={compact ? '!text-xs !leading-5 break-words text-accent-cyan' : '!text-xl !leading-tight break-words text-accent-cyan'}>{value}</strong></div>
+  return <div className="metric-strip"><p>{label}</p><strong className={compact ? '!text-base !leading-7 break-words text-accent-cyan' : '!text-xl !leading-tight break-words text-accent-cyan'}>{value}</strong></div>
 }
 
 function Info({ label, value }: { label: string; value: string }) {

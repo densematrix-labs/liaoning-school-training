@@ -393,3 +393,37 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .report-cover, .report-body { padding: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Role workspaces: readable at 100% zoom in a 1080p screen recording.
+   Keep the public data wall's independently tuned dense layout unchanged. */
+.recording-readable { font-size: 18px; line-height: 1.65; }
+.recording-readable :is(.text-sm, .text-base) { font-size: 18px; line-height: 1.65; }
+.recording-readable :is(.text-xs,
+  [class~="text-[9px]"], [class~="text-[10px]"], [class~="text-[11px]"], [class~="text-[12px]"],
+  small, .eyebrow, .role-badge, .metric-strip p, .metric-strip span, .report-footer, .report-seal small) {
+  font-size: 16px; line-height: 1.6;
+}
+.recording-readable .text-text-muted { color: #c7def5; }
+.recording-readable .text-accent-blue { color: #85efff; }
+.recording-readable .eyebrow { color: #c7def5; letter-spacing: .08em; }
+.recording-readable .role-intro p:last-child { font-size: 18px; }
+.recording-readable .section-heading { font-size: 22px; line-height: 1.5; }
+.recording-readable .metric-strip p,
+.recording-readable .metric-strip span,
+.recording-readable .report-footer { color: #c7def5; }
+.recording-readable .metric-strip strong { text-shadow: none; overflow-wrap: anywhere; }
+.recording-readable .report-document { font-size: 18px; line-height: 1.85; }
+.recording-readable .report-document h2 { font-size: 22px; }
+.recording-readable .report-document h3 { font-size: 20px; }
+.recording-readable table :is(th, td) { padding: 14px 12px; }
+.recording-readable .recharts-text { font-size: 16px; font-weight: 500; }
+.recording-readable .recharts-polar-angle-axis-tick-value { font-size: 16px; fill: #e3f2ff !important; }
+.recording-readable .recharts-label-list text { font-size: 18px; }
+.recording-readable .recharts-default-tooltip { font-size: 18px; line-height: 1.65; }
+.recording-readable .recharts-tooltip-item { color: #f5fbff !important; }
+.recording-readable .ability-chart-scroll { overflow-x: auto; }
+.recording-readable .ability-chart-canvas { min-width: 440px; height: 420px; }
+@media (max-width: 639px) {
+  .recording-readable .ability-chart-canvas { min-width: 360px; height: 380px; }
+  .recording-readable .role-intro { padding: 18px; }
+}

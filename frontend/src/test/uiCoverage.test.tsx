@@ -19,7 +19,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('recharts', async () => {
   const React = await import('react')
   const Box = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children)
-  return { RadarChart: Box, PolarGrid: Box, PolarAngleAxis: Box, PolarRadiusAxis: Box, Radar: Box, BarChart: Box, Bar: Box, XAxis: Box, YAxis: Box, Tooltip: Box, ResponsiveContainer: Box, AreaChart: Box, Area: Box, CartesianGrid: Box, Cell: Box, LineChart: Box, Line: Box }
+  return { RadarChart: Box, PolarGrid: Box, PolarAngleAxis: Box, PolarRadiusAxis: Box, Radar: Box, BarChart: Box, Bar: Box, XAxis: Box, YAxis: Box, Tooltip: Box, ResponsiveContainer: Box, AreaChart: Box, Area: Box, CartesianGrid: Box, Cell: Box, LabelList: Box, LineChart: Box, Line: Box }
 })
 
 vi.mock('framer-motion', async () => {

@@ -20,18 +20,18 @@ export default function Layout() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   return (
-    <div className="min-h-screen bg-railway-900 grid-bg">
+    <div className="recording-readable min-h-screen bg-railway-900 grid-bg">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-accent-cyan/50 bg-railway-700/95 shadow-[0_0_32px_rgba(0,200,255,.22)] backdrop-blur-xl">
-        <div className="grid h-20 grid-cols-[1fr_auto] items-center gap-4 px-4 lg:grid-cols-[260px_1fr_300px] lg:px-6">
+        <div className="grid h-20 grid-cols-[1fr_auto] items-center gap-4 px-4 xl:grid-cols-[300px_1fr_360px] lg:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="signal-mark" aria-hidden="true"><span /><span /><span /></div>
             <div className="min-w-0">
-              <p className="font-mono text-[9px] tracking-[.2em] text-accent-cyan">RAIL TRAINING · AI</p>
+              <p className="whitespace-nowrap font-mono text-[9px] tracking-[.08em] text-accent-cyan">RAIL TRAINING · AI</p>
               <p className="truncate text-xs font-medium text-text-secondary">辽宁铁道职业技术学院</p>
             </div>
           </div>
 
-          <div className="hidden text-center lg:block">
+          <div className="hidden text-center xl:block">
             <h1 className="text-gradient font-display text-2xl font-bold tracking-[.16em]">智能实训能力评估平台</h1>
             <div className="system-title-decoration mt-1"><span className="h-1.5 w-1.5 rotate-45 bg-accent-cyan shadow-[0_0_8px_#64ecff]" /></div>
           </div>

@@ -53,12 +53,12 @@ export default function AbilityRadar({
       </header>
       {data.length ? (
         <>
-          <div className={compact ? 'h-64 px-2 py-3' : 'h-80 px-3 py-4'}>
+          <div className={compact ? 'h-80 px-2 py-3' : 'h-96 px-3 py-4'}>
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={data} outerRadius={compact ? '64%' : '70%'}>
+              <RadarChart data={data} outerRadius={compact ? '54%' : '58%'}>
                 <PolarGrid stroke="rgba(100, 236, 255, 0.3)" />
-                <PolarAngleAxis dataKey="name" tick={{ fill: '#d8efff', fontSize: compact ? 10 : 12 }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#86aed2', fontSize: 9 }} tickCount={5} />
+                <PolarAngleAxis dataKey="name" tick={{ fill: '#d8efff', fontSize: 16 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#c7def5', fontSize: 16 }} tickCount={5} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)', borderRadius: 4 }}
                   labelStyle={{ color: '#f5fbff' }}

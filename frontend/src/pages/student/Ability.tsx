@@ -15,6 +15,7 @@ import {
   CartesianGrid,
   Tooltip,
   Cell,
+  LabelList,
   LineChart,
   Line,
 } from 'recharts'
@@ -72,7 +73,7 @@ export default function StudentAbility() {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={(trend?.points || []).map((point: any) => ({ ...point.abilities, date: new Date(point.date).toLocaleDateString('zh-CN') }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 236, 255, 0.14)" />
-              <XAxis dataKey="date" tick={{ fill: '#bedfff', fontSize: 11 }} />
+              <XAxis dataKey="date" tick={{ fill: '#bedfff', fontSize: 16 }} minTickGap={32} tickMargin={10} height={42} />
               <YAxis domain={[0, 100]} tick={{ fill: '#bedfff' }} />
               <Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)' }} />
               {trend?.abilities?.map((ability: any, index: number) => <Line key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#64ecff', '#39e58c', '#ffc04a', '#b8a8ff', '#ff7e98', '#77baff'][index % 6]} dot={false} />)}
@@ -107,7 +108,7 @@ export default function StudentAbility() {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Radar Chart */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -116,18 +117,18 @@ export default function StudentAbility() {
           className="railway-card p-6"
         >
           <h2 className="section-title mb-4">能力雷达图</h2>
-          <div className="h-96">
+          <div className="ability-chart-scroll"><div className="ability-chart-canvas">
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+              <RadarChart cx="50%" cy="50%" outerRadius="58%" data={radarData}>
                 <PolarGrid stroke="rgba(100, 236, 255, 0.3)" />
                 <PolarAngleAxis
                   dataKey="name"
-                  tick={{ fill: '#d8efff', fontSize: 12 }}
+                  tick={{ fill: '#d8efff', fontSize: 16 }}
                 />
                 <PolarRadiusAxis
                   angle={30}
                   domain={[0, 100]}
-                  tick={{ fill: '#86aed2', fontSize: 10 }}
+                  tick={{ fill: '#c7def5', fontSize: 16 }}
                   tickCount={5}
                 />
                 <Radar
@@ -148,7 +149,7 @@ export default function StudentAbility() {
                 />
               </RadarChart>
             </ResponsiveContainer>
-          </div>
+          </div></div>
         </motion.div>
 
         {/* Bar Chart */}
@@ -159,16 +160,18 @@ export default function StudentAbility() {
           className="railway-card p-6"
         >
           <h2 className="section-title mb-4">能力柱状图</h2>
-          <div className="h-96">
+          <div className="ability-chart-scroll"><div className="ability-chart-canvas">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} layout="vertical" margin={{ left: 80 }}>
+              <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 44, top: 12, bottom: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(100, 236, 255, 0.14)" />
                 <XAxis type="number" domain={[0, 100]} tick={{ fill: '#bedfff' }} />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  tick={{ fill: '#bedfff', fontSize: 12 }}
-                  width={80}
+                  tick={{ fill: '#bedfff', fontSize: 16 }}
+                  width={144}
+                  interval={0}
+                  tickMargin={10}
                 />
                 <Tooltip
                   contentStyle={{
@@ -178,7 +181,8 @@ export default function StudentAbility() {
                   }}
                   labelStyle={{ color: '#f5fbff' }}
                 />
-                <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                <Bar isAnimationActive={false} name="能力值" dataKey="score" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="score" position="right" fill="#f5fbff" fontSize={18} />
                   {barData.map((entry: any, index: number) => (
                     <Cell
                       key={`cell-${index}`}
@@ -188,7 +192,7 @@ export default function StudentAbility() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </div></div>
         </motion.div>
       </div>
 
@@ -248,7 +252,7 @@ export default function StudentAbility() {
           onClick={() => setSelectedAbility('')}
         >
           <section
-            className="glass-panel-bright max-h-[92vh] w-full max-w-4xl overflow-y-auto"
+            className="glass-panel-bright max-h-[92vh] w-full max-w-6xl overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-railway-600/50 bg-railway-800/95 p-5 backdrop-blur">
@@ -270,14 +274,14 @@ export default function StudentAbility() {
                 <article key={item.id} className="rounded-lg border border-railway-600/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-text-primary">{item.name}</p>
+                      <p className="text-lg font-semibold text-text-primary">{item.name}</p>
                       <p className="mt-1 text-xs text-text-muted">权重 {Math.round(item.weight * 100)}%</p>
                     </div>
                     <span className="font-mono text-2xl text-accent-cyan">{item.score}</span>
                   </div>
                   <div className="mt-4 space-y-2">
                     {item.evidence?.slice(0, 8).map((evidence: any) => (
-                      <div key={`${evidence.score_id}-${evidence.step_id}`} className="grid gap-2 rounded bg-railway-800/60 p-3 text-sm md:grid-cols-[1.2fr_1.4fr_auto]">
+                      <div key={`${evidence.score_id}-${evidence.step_id}`} className="grid gap-2 rounded bg-railway-800/60 p-4 text-sm lg:grid-cols-[1.2fr_1.4fr_auto]">
                         <div>
                           <p className="text-text-primary">{evidence.project_name}</p>
                           <p className="text-xs text-text-muted">实训记录：{evidence.record_reference || '编号待确认'}</p>
