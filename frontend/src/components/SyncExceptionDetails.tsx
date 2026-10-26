@@ -29,7 +29,7 @@ export default function SyncExceptionDetails({ batch, startedAt, exceptions, onC
   }, [])
   const query = search.trim().toLocaleLowerCase()
   const visible = exceptions.filter(item => `${item.row_number} ${item.source_record_id || ''} ${item.reason} ${JSON.stringify(item.raw_data)}`.toLocaleLowerCase().includes(query))
-  return <dialog ref={dialogRef} aria-labelledby="sync-exceptions-title" onCancel={(event) => { event.preventDefault(); onClose() }} className="glass-panel-bright m-auto max-h-[90vh] w-[calc(100%_-_1.5rem)] max-w-5xl overflow-y-auto p-0 text-text-primary backdrop:bg-railway-900/90 backdrop:backdrop-blur-sm">
+  return <dialog ref={dialogRef} aria-labelledby="sync-exceptions-title" onCancel={(event) => { event.preventDefault(); onClose() }} className="glass-panel-bright fixed inset-0 !m-auto max-h-[90vh] w-[calc(100%_-_1.5rem)] max-w-5xl overflow-y-auto p-0 text-text-primary backdrop:bg-railway-900/90 backdrop:backdrop-blur-sm">
     <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-railway-600/60 bg-railway-800 p-5">
       <div><h2 id="sync-exceptions-title" className="section-heading">第 {batch} 批 · 导入异常明细</h2><p className="mt-2 text-sm text-text-muted">{new Date(startedAt).toLocaleString('zh-CN')} · 共 {exceptions.length} 条异常；行号对应原始导入文件（含表头）。</p></div>
       <button type="button" className="railway-button shrink-0" onClick={onClose}>关闭</button>
