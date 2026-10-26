@@ -403,6 +403,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   small, .eyebrow, .role-badge, .metric-strip p, .metric-strip span, .report-footer, .report-seal small) {
   font-size: 16px; line-height: 1.6;
 }
+.recording-readable :is(.railway-button, .btn-primary, .btn-secondary) { flex-shrink: 0; white-space: nowrap; }
 .recording-readable .text-text-muted { color: #c7def5; }
 .recording-readable .text-accent-blue { color: #85efff; }
 .recording-readable .eyebrow { color: #c7def5; letter-spacing: .08em; }
