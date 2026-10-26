@@ -314,6 +314,12 @@ describe('all role workspaces render populated acceptance states', () => {
     fireEvent.click(screen.getByText('下载演示数据'))
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/admin/sync/demo-data.csv', { responseType: 'blob' }))
     expect(screen.getByText('导入演示数据')).toBeInTheDocument()
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
+    fireEvent.click(screen.getByRole('button', { name: '第 1 批异常 5 条，查看明细' }))
+    expect(screen.getByRole('dialog', { name: '第 1 批 · 导入异常明细' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '导出异常' }))
     expect(screen.getByText(/演示数据入口位于下方/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('保存更新计划'))
     fireEvent.click(screen.getByText('立即生成数据备份'))
