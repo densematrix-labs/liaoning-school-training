@@ -123,21 +123,80 @@ async def source_put(data:SourceConfig,admin=Depends(get_current_admin),db=Depen
             raise ValueError("缺少源记录标识、学号、项目、时间、步骤 JSON 或更新时间映射")
     except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc
-    from app.services.audit import record_audit
-    before=await setting(db,"release:source",{})
-    await put_setting(db,"release:source",data.model_dump(),admin.id)
-    await record_audit(db,actor_id=admin.id,actor_name=admin.name,action="configure_source",object_type="source",before=before,after=data.model_dump())
-    await db.commit()
-    return {"saved":True}
+    async with worker.lock:
+        from app.services.audit import record_audit
+        before=await setting(db,"release:source",{})
+        if any(before.get(key)!=data.model_dump().get(key) for key in ("source","table","fields")):
+            await put_setting(db,"release:last_sync",{})
+        await put_setting(db,"release:source",data.model_dump(),admin.id)
+        await record_audit(db,actor_id=admin.id,actor_name=admin.name,action="configure_source",object_type="source",before=before,after=data.model_dump())
+        await db.commit()
+        return {"saved":True}
 
 
 @router.post("/source/sync")
-async def source_sync(admin=Depends(get_current_admin)):
+async def source_sync(full:bool=False,admin=Depends(get_current_admin)):
     try:
         async with worker.lock:
+            if full:
+                return await worker.sync_source(force=True,actor=admin,reset_cursor=True)
             return await worker.sync_source(force=True,actor=admin)
     except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc
+
+
+@router.get("/source/evidence")
+async def source_evidence(db=Depends(get_db)):
+    """Actual source metadata and persisted provenance; never returns credentials."""
+    from app.services.mysql_evidence import inspect_source
+    from app.models.training import TrainingRecord, Score
+    from app.models.operations import SystemSetting
+    cfg=await setting(db,"release:source",{})
+    if not cfg.get('fields'):
+        raise HTTPException(400,"请先保存数据源映射")
+    try:
+        probe=await asyncio.to_thread(inspect_source,cfg)
+    except Exception as exc:
+        raise HTTPException(400,"MySQL 检查失败，请核对连接和只读权限") from exc
+    records=[]
+    rows=(await db.execute(select(TrainingRecord,Score,SystemSetting).join(Score,Score.record_id==TrainingRecord.id)
+        .join(SystemSetting,SystemSetting.key==('source:'+TrainingRecord.id))
+        .where(SystemSetting.value['source'].as_string()==cfg.get('source','school'))
+        .order_by(TrainingRecord.completed_at.desc(),TrainingRecord.id).limit(12))).all()
+    for record,score,provenance in rows:
+        evidence=provenance.value
+        if evidence:
+            records.append({"record_id":record.id,"score_id":score.id,"score":score.total_score,"max_score":score.max_score,
+                            "source":evidence.get('source'),"source_record_id":evidence.get('source_record_id'),
+                            "batch_id":evidence.get('batch_id'),"completed_at":evidence.get('completed_at'),"class_name":evidence.get('class_name')})
+    return {"source_database":probe,"business_database":db.bind.dialect.name,"records":records,
+            "last_run":await setting(db,'release:last_sync',{}),"last_error":await setting(db,'release:last_sync_error',{})}
+
+
+@router.post("/backups/verify")
+async def verify_backup(db=Depends(get_db)):
+    from app.services.operations_runtime import restore_to_new_directory
+    from pathlib import Path
+    import tempfile
+    last=await setting(db,'release:last_backup',{})
+    if not last.get('filename'):
+        raise HTTPException(400,'请先创建加密备份')
+    def verify():
+        with tempfile.TemporaryDirectory(prefix='shixun-restore-') as dest:
+            result=restore_to_new_directory(Path(os.getenv('BACKUP_DIR','/backups'))/last['filename'],dest,os.environ['BACKUP_ENCRYPTION_KEY'])
+            restored=json.loads((Path(dest)/'runtime-config.json').read_text())
+            if any(os.getenv(key)!=value for key,value in restored.items()):
+                raise ValueError('恢复的系统配置与备份时配置不一致')
+            import sqlite3
+            with sqlite3.connect(Path(dest)/'training.db') as check:
+                if check.execute('PRAGMA foreign_key_check').fetchall():
+                    raise ValueError('恢复数据库外键核验失败')
+            return {**result,'configuration_verified':True,'configuration_entries':len(restored),'foreign_keys_verified':True}
+    result=await asyncio.to_thread(verify)
+    result.update({'time':datetime.utcnow().isoformat(),'filename':last['filename'],'mode':'独立临时目录恢复，不覆盖运行库'})
+    await put_setting(db,'release:last_restore',result)
+    await db.commit()
+    return result
 
 
 @router.post("/records/import")

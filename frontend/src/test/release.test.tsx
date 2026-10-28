@@ -44,7 +44,7 @@ it('configures read-only fields, imports real records, queries audit and creates
   fireEvent.click(screen.getByText('校方数据源'))
   await screen.findByDisplayValue('records')
   fireEvent.change(screen.getByLabelText('表或只读视图名称'),{target:{value:'school_records'}})
-  fireEvent.change(screen.getByLabelText('student_no'),{target:{value:'student_number'}})
+  fireEvent.change(screen.getByLabelText(/学生唯一标识/),{target:{value:'student_number'}})
   fireEvent.change(screen.getByLabelText('自动同步间隔（小时）'),{target:{value:'12'}})
   fireEvent.click(screen.getByLabelText('启用定时同步'))
   fireEvent.click(screen.getByText('保存映射'))

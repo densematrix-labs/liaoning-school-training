@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.training import TrainingProject, TrainingRecord, Score
-from app.models.student import Student
+from app.models.student import Student, Class
 from app.models.operations import SystemSetting
 from app.models.workflow import MockSyncTask, MockSyncException, TaskStatus, EnvironmentTask
 from app.services.audit import record_audit
@@ -136,6 +136,10 @@ class ProductionIngest:
                     if not student or len(matched) != 1:
                         raise ValueError("学号或唯一项目编码无法匹配")
                     project = matched[0]
+                    if raw.get("class_name"):
+                        class_obj = await self.db.get(Class, student.class_id)
+                        if not class_obj or class_obj.name != str(raw["class_name"]):
+                            raise ValueError("源班级与学生所属班级不一致")
                     if not await enabled(self.db, "students", student.id) or not await enabled(self.db, "projects", project.id):
                         raise ValueError("学生或实训项目已停用")
                     details, total, maximum, failed = score_steps(project, raw.get("steps"))
@@ -147,7 +151,7 @@ class ProductionIngest:
                                   total_score=total, max_score=maximum, details=details, failed_abilities=failed, calculated_at=timestamp)
                     self.db.add(score)
                     await put_setting(self.db, f"source:{record.id}", {"source":source,"source_record_id":source_id,
-                                      "batch_id":task.id,"fingerprint":fingerprint,"completed_at":str(raw["completed_at"]),
+                                      "batch_id":task.id,"fingerprint":fingerprint,"completed_at":str(raw["completed_at"]),"class_name":raw.get("class_name"),
                                       "rules":project.scoring_rules,"mapping":project.ability_mapping,"steps":project.steps}, actor_id)
                     await self.db.flush()
                     if raw.get("environment_image") and project.lab_id:
@@ -204,7 +208,8 @@ def read_mysql(config, credentials, cursor=None):
     required = {"source_record_id", "student_no", "project_code", "completed_at", "steps", "updated_at"}
     if not required.issubset(columns):
         raise ValueError("字段映射缺少必填字段")
-    projection = ",".join(f"{identifier(columns[key])} AS {identifier(key)}" for key in sorted(required))
+    selected = required | ({"class_name"} if columns.get("class_name") else set())
+    projection = ",".join(f"{identifier(columns[key])} AS {identifier(key)}" for key in sorted(selected))
     table = identifier(config["table"])
     updated, unique = identifier(columns["updated_at"]), identifier(columns["source_record_id"])
     limit = min(max(int(config.get("batch_size", 1000)), 1), 5000)

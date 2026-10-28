@@ -206,7 +206,7 @@ class ReleaseWorker:
                 await db.commit()
             await self.sync_source()
 
-    async def sync_source(self, force=False, actor=None):
+    async def sync_source(self, force=False, actor=None, reset_cursor=False):
         async with AsyncSessionLocal() as db:
             cfg=await setting(db,"release:source",{})
             last=await setting(db,"release:last_sync",{})
@@ -231,7 +231,7 @@ class ReleaseWorker:
             credentials={k:os.getenv("SCHOOL_DB_"+k.upper(),"") for k in ("host","port","user","password","database","ssl_ca")}
             credentials["port"]=credentials["port"] or 3306
             try:
-                cursor=last.get("cursor")
+                cursor=None if reset_cursor else last.get("cursor")
                 totals={"read":0,"success":0,"errors":0,"skipped":0,"task_ids":[]}
                 # Drain pages, checkpoint each one; a bounded run resumes without
                 # waiting another full interval if a large backlog remains.
