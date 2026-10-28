@@ -181,13 +181,17 @@ class ProductionIngest:
                            after={"source":source,"read":task.read_count,"success":task.success_count,"skipped":task.skipped_count,"errors":task.error_count})
         await self.db.commit()
         from app.services.ability import AbilityService
+        batch_id=task.id
         for student_id in affected:
             try:
                 await AbilityService(self.db).recalculate_profile(student_id)
-            except Exception:
-                await self.db.rollback()
-                await put_setting(self.db, f"recalculate:{student_id}", {"status":"failed","batch_id":task.id})
+                await put_setting(self.db, f"recalculate:{student_id}", {"status":"completed","batch_id":batch_id,"updated_at":datetime.utcnow().isoformat()})
                 await self.db.commit()
+            except Exception as exc:
+                await self.db.rollback()
+                await put_setting(self.db, f"recalculate:{student_id}", {"status":"failed","batch_id":batch_id,"reason":"能力评价更新失败（"+type(exc).__name__+"）"})
+                await self.db.commit()
+        await self.db.refresh(task)
         return task
 
 

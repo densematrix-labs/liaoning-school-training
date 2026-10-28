@@ -240,6 +240,43 @@ async def versions(kind:str,item_id:str,db=Depends(get_db)):
     return [{"version":x.version,"before":x.before,"after":x.after,"changed_by":x.changed_by,"changed_at":x.changed_at} for x in rows]
 
 
+@router.get('/evaluations')
+async def evaluation_updates(db=Depends(get_db)):
+    from app.models.operations import SystemSetting
+    from app.models.student import Student
+    from app.models.ability import AbilityProfile
+    rows=(await db.execute(select(SystemSetting).where(SystemSetting.key.like('recalculate:%')).order_by(SystemSetting.updated_at.desc()).limit(100))).scalars().all()
+    result=[]
+    for row in rows:
+        student_id=row.key.split(':',1)[1]
+        student=await db.get(Student,student_id)
+        profile=(await db.execute(select(AbilityProfile).where(AbilityProfile.student_id==student_id))).scalar_one_or_none()
+        result.append({'student_id':student_id,'student_name':student.name if student else student_id,**row.value,'recorded_at':row.updated_at,'profile_updated_at':profile.updated_at if profile else None})
+    return result
+
+
+@router.post('/evaluations/{student_id}/recalculate')
+async def retry_evaluation(student_id:str,admin=Depends(get_current_admin),db=Depends(get_db)):
+    from app.models.student import Student
+    from app.services.ability import AbilityService
+    from app.services.audit import record_audit
+    if not await db.get(Student,student_id):
+        raise HTTPException(404,'学生不存在')
+    actor_id,actor_name=admin.id,admin.name
+    try:
+        profile=await AbilityService(db).recalculate_profile(student_id)
+        if not profile:
+            raise ValueError('没有可计算的实训记录')
+        result={'status':'completed','reason':None,'updated_at':datetime.utcnow().isoformat()}
+    except Exception as exc:
+        await db.rollback()
+        result={'status':'failed','reason':'能力评价更新失败（'+type(exc).__name__+'）'}
+    await put_setting(db,'recalculate:'+student_id,result,actor_id)
+    await record_audit(db,actor_id=actor_id,actor_name=actor_name,action='ability_recalculate',object_type='student',object_id=student_id,result='success' if result['status']=='completed' else 'failed',after=result)
+    await db.commit()
+    return result
+
+
 @router.get("/status")
 async def runtime_status(db=Depends(get_db)):
     from sqlalchemy import text

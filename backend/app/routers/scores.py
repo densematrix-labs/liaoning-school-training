@@ -144,6 +144,24 @@ async def export_class_scores(
     )
 
 
+@router.get("/{score_id}/steps.csv")
+async def export_score_steps(score_id: str, current_user: UserResponse = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await ScoreService(db).get_score_detail(score_id)
+    if not result:
+        raise HTTPException(404, "成绩不存在")
+    await require_student_access(current_user, result.student_id, db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["学生", "班级", "实训项目", "实训记录编号", "步骤", "状态", "得分", "满分", "规则版本", "关联能力"])
+    for step in result.details:
+        row = step.model_dump() if hasattr(step, 'model_dump') else step
+        writer.writerow([result.student_name, result.class_name, result.project_name, result.record_reference,
+                         row.get('step_name'), row.get('source_status'), row.get('score'), row.get('max_score'),
+                         (row.get('applied_rule') or {}).get('rule_version'), '、'.join(row.get('related_ability_names') or [])])
+    return StreamingResponse(io.BytesIO(output.getvalue().encode('utf-8-sig')), media_type='text/csv',
+                             headers={'Content-Disposition': f'attachment; filename="score-{score_id}-steps.csv"'})
+
+
 @router.get("/{score_id}", response_model=ScoreDetailResponse)
 async def get_score_detail(
     score_id: str,

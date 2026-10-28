@@ -18,6 +18,12 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  const downloadSteps = async () => {
+    const response = await api.get(`/api/v1/scores/${scoreId}/steps.csv`, {responseType:'blob'})
+    const url=URL.createObjectURL(response.data)
+    const link=document.createElement('a');link.href=url;link.download='逐步骤成绩明细.csv';link.click();URL.revokeObjectURL(url)
+  }
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-railway-900/90 p-3 backdrop-blur-sm"
@@ -63,6 +69,7 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
               ))}
             </div>
             <div className="flex justify-end border-t border-railway-600/50 pt-5">
+              <button type="button" className="railway-button mr-3" onClick={downloadSteps}>导出逐步骤成绩 CSV</button>
               <button type="button" className="railway-button" onClick={onClose}>关闭</button>
             </div>
           </div>

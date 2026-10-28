@@ -24,6 +24,10 @@ import { useAuthStore } from '../../store/auth'
 export default function StudentAbility() {
   const { user } = useAuthStore()
   const [selectedAbility, setSelectedAbility] = useState<string>('')
+  const [projectId, setProjectId] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const projects = useQuery({queryKey:['ability-projects'],queryFn:async()=>(await api.get('/api/v1/scores/projects')).data})
   const { data: abilityMap, isLoading } = useQuery({
     queryKey: ['studentAbility'],
     queryFn: async () => {
@@ -32,8 +36,8 @@ export default function StudentAbility() {
     },
   })
   const { data: trend } = useQuery({
-    queryKey: ['studentAbilityTrend', user?.student_id],
-    queryFn: async () => (await api.get(`/api/v1/abilities/student/${user!.student_id}/trend`)).data,
+    queryKey: ['studentAbilityTrend', user?.student_id, projectId, dateFrom, dateTo],
+    queryFn: async () => (await api.get(`/api/v1/abilities/student/${user!.student_id}/trend`, {params:{project_id:projectId||undefined,date_from:dateFrom||undefined,date_to:dateTo?`${dateTo}T23:59:59`:undefined}})).data,
     enabled: Boolean(user?.student_id),
   })
 
@@ -68,6 +72,8 @@ export default function StudentAbility() {
 
       <section className="railway-card p-6">
         <h2 className="section-title mb-4">能力变化趋势</h2>
+        <div className="mb-4 grid gap-3 md:grid-cols-3"><label>实训项目<select className="input-field" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">全部项目</option>{projects.data?.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>开始日期<input type="date" className="input-field" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label><label>结束日期<input type="date" className="input-field" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label></div>
+        {trend?.points?.length===0&&<p role="status" className="text-text-muted">当前筛选范围没有实训记录</p>}
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={(trend?.points || []).map((point: any) => ({ ...point.abilities, date: new Date(point.date).toLocaleDateString('zh-CN') }))}>
