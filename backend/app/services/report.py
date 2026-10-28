@@ -302,6 +302,24 @@ class ReportService:
         else:
             summary_lines.append(f"- **覆盖范围：** {date_from.isoformat()} 至 {date_to.isoformat()}，共 {len(scores)} 次实训" if date_from and date_to else f"- **覆盖范围：** 最近 {len(scores)} 次实训")
         content = "\n".join(summary_lines) + "\n\n" + content
+        if settings.RELEASE_MODE:
+            # The factual reconciliation is rendered from frozen business data,
+            # never reconstructed by a language model.
+            verified = ["## 结构化数据核对"]
+            for row in scores_data:
+                failed = [step["step_name"] for step in row["steps"] if not step["passed"]]
+                verified.append(f"- {row['project_name']}：{row['total_score']:g}/{row['max_score']:g} 分；未通过步骤：{'、'.join(failed) or '无'}。")
+            for row in environment_data:
+                if row.get("review_status") == "rejected":
+                    verified.append("- 环境检查：教师已驳回，原始机器分数不作为最终评价。")
+                else:
+                    label = "人工复核后" if row.get("review_status") in {"confirmed", "modified"} else "AI 原始结果，需人工复核"
+                    verified.append(f"- 环境检查（{label}）：{row['total_score']:g} 分。")
+            if not environment_data:
+                verified.append("- 本报告范围内无关联环境检查记录，不推定环境达标。")
+            for row in ability_data:
+                verified.append(f"- 当前能力 {row['name']}：{row['score']:g}；达标线 {row['threshold']:g}。")
+            content += "\n\n" + "\n".join(verified)
         
         # Save report
         if report_type == "single":
@@ -326,6 +344,9 @@ class ReportService:
             await put_setting(self.db, "report_meta:"+report.id, {"model":getattr(self,"last_model",settings.LLM_MODEL),
                 "date_from":date_from.isoformat() if date_from else None,"date_to":date_to.isoformat() if date_to else None,
                 "score_ids":[item.id for item in scores],"input_abilities":ability_data,
+                "input_scores":scores_data,"input_environment":environment_data,
+                "validated_facts":getattr(self,"validated_facts",{}),
+                "validated_evidence":getattr(self,"validated_evidence",[]),
                 "snapshot":{"student_name":student.name,"class_id":student.class_id,"class_name":class_obj.name if class_obj else None,
                 "project_name":selected_project.name if selected_project and report_type=="single" else None,
                 "score_total":scores[0].total_score if report_type=="single" else None,"score_max":scores[0].max_score if report_type=="single" else None,
@@ -348,13 +369,17 @@ class ReportService:
         
         if settings.RELEASE_MODE:
             from app.services.ai_gateway import completion, validate_report
-            facts = {}
+            facts = {"record_count":len(scores_data), "ability_count":len(ability_data), "environment_count":len(environment_data)}
             for i, row in enumerate(scores_data):
                 facts[f"record_{i}.total_score"] = row["total_score"]
                 facts[f"record_{i}.max_score"] = row["max_score"]
                 facts[f"record_{i}.percentage"] = row["percentage"]
+                facts[f"record_{i}.step_count"] = len(row["steps"])
+                facts[f"record_{i}.failed_step_count"] = sum(not step["passed"] for step in row["steps"])
+                facts[f"record_{i}.passed_step_count"] = sum(bool(step["passed"]) for step in row["steps"])
                 for j, step in enumerate(row["steps"]):
                     facts[f"record_{i}.step_{j}.score"] = step["score"]
+                    facts[f"record_{i}.step_{j}.max_score"] = step["max_score"]
                     facts[f"record_{i}.step_{j}.passed"] = step["passed"]
             for i, row in enumerate(ability_data):
                 facts[f"ability_{i}.score"] = row["score"]
@@ -362,10 +387,33 @@ class ReportService:
                 if "range_change" in row:
                     facts[f"ability_{i}.range_first_score"]=row["range_first_score"]
                     facts[f"ability_{i}.range_change"]=row["range_change"]
+            for i, row in enumerate(environment_data):
+                facts[f"environment_{i}.review_status"] = row.get("review_status", "需人工复核")
+                if row.get("review_status") != "rejected":
+                    facts[f"environment_{i}.total_score"] = row["total_score"]
             instruction = "你是铁路实训教师。只依据给定匿名数据诊断，无数据明确写无数据。输出 JSON，必须包含 overview, score_analysis, weaknesses, environment, suggestions, training_plan 六个非空中文字符串及 evidence 数组。evidence 每项为 key,value，必须原样引用 facts 中的键和值。前四个事实章节只允许出现 facts 中已有数字，不输出序号或日期数字，不捏造能力趋势；后两章是训练建议。环境已驳回的机器结论不得当作最终评价。"
+            required = {"record_0.total_score"}
+            required.update(key for key in facts if key.startswith("environment_"))
+            ability_key = next((key for key in facts if key.startswith("ability_") and key.endswith(".score")), None)
+            failed_key = next((key for key, value in facts.items() if ".step_" in key and key.endswith(".passed") and value is False), None)
+            required.update(key for key in (ability_key, failed_key) if key)
+            instruction += " evidence 必须包含以下每一个指定的 key，且 value 原样使用 facts 值：" + json.dumps(sorted(required)) + "。环境分数使用提供的人工最终分，不得改写为原始满分。"
+            instruction += " 为避免重复计算或错引数字，overview、score_analysis、weaknesses、environment 四章正文完全不写阿拉伯数字，使用给定业务名称作定性描述；具体分数、阈值与逐步骤核对表由系统自动附加，不需要你重写。没有环境数据必须明确写无数据，不可推定环境合格。"
             result, self.last_model = await completion([{"role":"system","content":instruction},
                 {"role":"user","content":json.dumps({"scores":scores_data,"abilities":ability_data,"environment":environment_data,"facts":facts,"type":report_type},ensure_ascii=False)}],db=self.db)
-            return validate_report(result,facts)
+            # No model may turn absent evidence into a positive environment
+            # conclusion or substitute the original AI score for a review.
+            result["environment"] = "；".join(
+                "教师已驳回，不采用原始机器结论" if row.get("review_status")=="rejected" else
+                ("人工复核最终分" if row.get("review_status") in {"confirmed","modified"} else "未复核的AI原始分") + f"：{row['total_score']:g} 分"
+                for row in environment_data
+            ) if environment_data else "本报告范围内无关联环境检查记录，无法判断环境是否达标。"
+            content = validate_report(result,facts)
+            if required - {item["key"] for item in result["evidence"]}:
+                raise ValueError("AI 报告缺少成绩、薄弱步骤、能力或环境复核的必需证据")
+            self.validated_facts = facts
+            self.validated_evidence = result["evidence"]
+            return content
 
         prompt = f"""你是一位专业的职业教育指导老师。请根据以下数据为学生生成诊断报告。
 

@@ -242,6 +242,42 @@ async def test_real_environment_student_upload_review_and_report_snapshot(client
         assert '2020-01-01' in periodic.content
         with pytest.raises(ValueError):await service.generate_report(ids['student'],'periodic',date_from=datetime(1990,1,1),date_to=datetime(1991,1,1))
 
+
+async def test_report_uses_final_review_facts_and_rejects_wrong_ai_evidence(test_db, acceptance_data, monkeypatch, release_mode):
+    from app.models.lab import EnvironmentCheck
+    from app.models.workflow import EnvironmentReview
+    from app.services.report import ReportService
+    import app.services.ai_gateway as gateway
+    ids = acceptance_data
+    async with test_db() as db:
+        for index, final in enumerate([89, 100, 94, None]):
+            check = EnvironmentCheck(id=f'review-fact-{index}', student_id=ids['student'], lab_id=ids['lab'], score_id=ids['score'], total_score=100, summary='原始机器判断', details={})
+            db.add(check)
+            await db.flush()
+            db.add(EnvironmentReview(check_id=check.id, reviewer_id='test-user-1', status='modified' if final is not None else 'rejected', reviewed_summary='人工最终评价', reviewed_details={'equipment': {'score': final}} if final is not None else {}))
+        await db.commit()
+        captured = {}
+        async def complete(messages, **kwargs):
+            captured.update(json.loads(messages[1]['content']))
+            facts = captured['facts']
+            return {**{key:'依据归档数据分析，不补造未记录事实。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan']}, 'evidence':[{'key':key,'value':value} for key,value in facts.items()]}, 'test-text'
+        monkeypatch.setattr(gateway, 'completion', complete)
+        report = await ReportService(db).generate_report(ids['student'], 'single', ids['score'])
+        assert sorted(row['total_score'] for row in captured['environment'] if row.get('review_status')=='modified') == [89,94,100]
+        assert any(row['review_status']=='rejected' and 'total_score' not in row for row in captured['environment'])
+        assert '89 分' in report.content and '94 分' in report.content and '教师已驳回' in report.content
+        meta = await setting(db, 'report_meta:'+report.id)
+        assert meta['input_environment'] == captured['environment']
+        assert meta['validated_facts'] == captured['facts']
+        async def incorrect(messages, **kwargs):
+            result,model = await complete(messages, **kwargs)
+            item = next(item for item in result['evidence'] if item['value']==89)
+            item['value']=100
+            return result,model
+        monkeypatch.setattr(gateway,'completion',incorrect)
+        with pytest.raises(ValueError, match='不一致'):
+            await ReportService(db).generate_report(ids['student'],'single',ids['score'])
+
 async def test_real_import_replay_and_connectivity_apis(client,test_db,auth_headers,acceptance_data,monkeypatch):
     import csv
     import app.routers.release as release
