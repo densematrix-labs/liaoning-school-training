@@ -223,9 +223,9 @@ async def test_real_environment_student_upload_review_and_report_snapshot(client
     async def complete(messages,**kwargs):
         if kwargs.get('vision'):
             assert image in json.dumps(messages)
-            return {'total_score':100,'summary':'整洁','suggestions':[],'categories':{k:{'score':v,'max_score':v,'issues':[],'confidence':.95} for k,v in CATEGORIES.items()}},'test-vision'
+            return {'total_score':100,'summary':'整洁','suggestions':['保持台面整洁'],'leftover_items':{'status':'none_visible','issues':['未见明显遗留杂物']},'categories':{k:{'score':v,'max_score':v,'issues':[],'confidence':.95} for k,v in CATEGORIES.items()}},'test-vision'
         facts=json.loads(messages[1]['content'])['facts']
-        return {**{key:'依据实训记录分析。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan']},'evidence':[{'key':k,'value':v} for k,v in facts.items()]},'test-text'
+        return {**{key:'依据实训记录分析。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan','possible_causes']},'evidence':[{'key':k,'value':v} for k,v in facts.items()]},'test-text'
     monkeypatch.setattr(gateway,'completion',complete);monkeypatch.setattr(env,'AsyncSessionLocal',test_db)
     await env.process_environment_task(task.json()['id'])
     completed=(await client.get('/api/v1/environment/tasks/'+task.json()['id'],headers=student)).json()
@@ -260,7 +260,7 @@ async def test_report_uses_final_review_facts_and_rejects_wrong_ai_evidence(test
         async def complete(messages, **kwargs):
             captured.update(json.loads(messages[1]['content']))
             facts = captured['facts']
-            return {**{key:'依据归档数据分析，不补造未记录事实。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan']}, 'evidence':[{'key':key,'value':value} for key,value in facts.items()]}, 'test-text'
+            return {**{key:'依据归档数据分析，不补造未记录事实。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan','possible_causes']}, 'evidence':[{'key':key,'value':value} for key,value in facts.items()]}, 'test-text'
         monkeypatch.setattr(gateway, 'completion', complete)
         report = await ReportService(db).generate_report(ids['student'], 'single', ids['score'])
         assert sorted(row['total_score'] for row in captured['environment'] if row.get('review_status')=='modified') == [89,94,100]

@@ -70,8 +70,15 @@ def validate_report(data, facts):
     numbers|={str(float(x)) for x in numbers}|{str(int(float(x))) for x in numbers if float(x).is_integer()}
     for key in sections[:4]:
         # These are factual sections, not recommendation durations or goals.
-        for number in re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?",data[key]):
+        factual_text=re.sub(r'(?<![A-Za-z0-9])[56]S(?![A-Za-z0-9])','现场整理规范',data[key])
+        for number in re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?",factual_text):
             if number not in numbers:
                 raise ValueError("AI 事实章节出现无证据数字，需要人工核查")
-    labels=["能力概况","成绩与步骤分析","薄弱环节","环境规范情况","改进建议","阶段训练建议"]
-    return "\n\n".join("## "+label+"\n"+data[key] for key,label in zip(sections,labels))
+    labels=["诊断结论","成绩与步骤分析","薄弱能力","环境规范情况","改进建议","训练建议"]
+    content = "\n\n".join("## "+label+"\n"+data[key] for key,label in zip(sections,labels))
+    causes=data.get('possible_causes')
+    if causes is not None:
+        if not isinstance(causes,str) or not causes.strip():
+            raise ValueError('可能原因内容为空')
+        content += '\n\n## 可能原因\n'+causes
+    return content + '\n\n## 处理状态\n已完成 · 结构化字段与证据引用校验通过。'

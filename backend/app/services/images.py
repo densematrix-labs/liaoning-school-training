@@ -53,10 +53,19 @@ async def image_data_url(source):
         async with httpx.AsyncClient(timeout=10,follow_redirects=False,trust_env=False) as client:
             async with client.stream("GET",source) as response:
                 response.raise_for_status()
+                multipart=response.headers.get('content-type','').lower().startswith('multipart/x-mixed-replace')
                 async for chunk in response.aiter_bytes():
                     content.extend(chunk)
                     if len(content)>MAX_IMAGE:
                         raise ValueError("图片超过 10MB")
+                    if multipart:
+                        start=content.find(b'\xff\xd8')
+                        end=content.find(b'\xff\xd9',max(start,0))
+                        if start>=0 and end>start:
+                            content=content[start:end+2]
+                            break
+                if multipart and not (content.startswith(b'\xff\xd8') and content.endswith(b'\xff\xd9')):
+                    raise ValueError('图像流未返回完整 JPEG 帧')
         content=bytes(content)
     mime=validate_bytes(content)
     return "data:"+mime+";base64,"+base64.b64encode(content).decode()

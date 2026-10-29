@@ -11,12 +11,13 @@ export default function EnvironmentUpload({studentId}:{studentId:string}) {
   const submit=async()=>{
     setBusy(true);setError('')
     try {
-      if(!file||file.size>10*1024*1024)throw new Error('请选择不超过 10MB 的图片')
+      if(!file||file.size>10*1024*1024)throw new Error('图片大小校验失败：请选择不超过 10MB 的图片')
+      if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('图片格式校验失败：仅支持 JPEG、PNG、WebP')
       const image=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('图片读取失败'));reader.readAsDataURL(file)})
       setTask((await api.post('/api/v1/environment/tasks',{student_id:studentId,score_id:score,lab_id:lab,image_base64:image})).data)
-    } catch(e) {setError(getErrorMessage(e))} finally {setBusy(false)}
+    } catch(e) {setError(e instanceof Error && !(e as any).response ? e.message : getErrorMessage(e))} finally {setBusy(false)}
   }
-  return <section className="railway-card space-y-4 p-5"><h2 className="section-heading">上传实训现场图片</h2><p className="text-sm text-text-muted">选择对应实训及实训室。系统与标准图片对比，结果由教师复核；任务失败可重新提交。仅检查图片中可见的环境状态。</p>
+  return <section className="railway-card space-y-4 p-5"><h2 className="section-heading">上传实训现场图片</h2><p className="text-sm text-text-muted">支持 JPEG / PNG / WebP，单张不超过 10MB；服务端核验实际图片内容。选择对应实训及实训室。系统与标准图片对比，结果由教师复核；任务失败可重新提交。仅检查图片中可见的环境状态。</p>
     {(scores.isError||labs.isError)&&<p role="alert">加载实训记录或实训室失败：{getErrorMessage(scores.error||labs.error)}<button type="button" className="btn-secondary ml-2" onClick={()=>{scores.refetch();labs.refetch()}}>重新加载</button></p>}
     <label>关联实训<select className="input-field" value={score} onChange={e=>setScore(e.target.value)}><option value="">选择已完成实训</option>{scores.data?.scores?.map((x:any)=><option key={x.id} value={x.id}>{x.project_name} · {x.training_completed_at||x.calculated_at}</option>)}</select></label>
     <label>对应实训室<select className="input-field" value={lab} onChange={e=>setLab(e.target.value)}><option value="">选择实训室</option>{labs.data?.map((x:any)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>

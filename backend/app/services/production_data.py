@@ -44,7 +44,8 @@ def score_steps(project, raw):
     expected = {str(step.get("id", "")) for step in steps}
     if not steps or "" in expected or len(expected) != len(steps):
         raise ValueError("评分规则没有有效且唯一的步骤")
-    if set(raw) != expected:
+    known = {str(step.get('id','')) for step in (project.steps or [])}
+    if expected-set(raw) or set(raw)-known:
         raise ValueError("源步骤与评分规则不一致；缺少或未知步骤不得生成成绩")
     details, total, maximum, failed = {}, 0.0, 0.0, set()
     for step in steps:

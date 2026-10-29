@@ -17,6 +17,7 @@ import {
   Cell,
   LineChart,
   Line,
+  Legend,
 } from 'recharts'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../../store/auth'
@@ -81,7 +82,8 @@ export default function StudentAbility() {
               <XAxis dataKey="date" tick={{ fill: '#bedfff', fontSize: 11 }} />
               <YAxis domain={[0, 100]} tick={{ fill: '#bedfff' }} />
               <Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)' }} />
-              {trend?.abilities?.map((ability: any, index: number) => <Line key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#64ecff', '#39e58c', '#ffc04a', '#b8a8ff', '#ff7e98', '#77baff'][index % 6]} dot={false} />)}
+              <Legend />
+              {trend?.abilities?.map((ability: any, index: number) => <Line isAnimationActive={false} key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#64ecff', '#39e58c', '#ffc04a', '#b8a8ff', '#ff7e98', '#77baff'][index % 6]} dot={{r:3}} />)}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -269,6 +271,7 @@ export default function StudentAbility() {
                   </p>
                 )}
               </div>
+              <p className="text-xs text-text-muted">计算时间：{abilityMap?.updated_at ? new Date(abilityMap.updated_at).toLocaleString('zh-CN') : '尚未计算'}</p>
               <button type="button" className="railway-button" onClick={() => setSelectedAbility('')}>关闭</button>
             </header>
             <div className="space-y-4 p-5">

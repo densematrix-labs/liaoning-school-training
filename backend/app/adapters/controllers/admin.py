@@ -705,7 +705,7 @@ async def update_project_configuration(
 
     project.steps = data.steps
     project.ability_mapping = data.ability_mapping
-    project.max_score = round(sum(float(item.get("score", 0)) for item in data.steps), 2)
+    project.max_score = round(sum(float(item.get("score", 0))*float(item.get("weight",1)) for item in data.steps if item.get("enabled",True)), 2)
     project.scoring_rules = {
         **(project.scoring_rules or {}),
         "mode": "passed_or_failed",

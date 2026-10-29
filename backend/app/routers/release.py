@@ -25,6 +25,88 @@ from app.services.operations_runtime import METRICS, worker, backup_database
 router=APIRouter(prefix="/api/v1/release",tags=["校内部署管理"],dependencies=[Depends(get_current_admin)])
 
 
+@router.post('/camera/capture')
+async def capture_stream(data:dict,admin=Depends(get_current_admin),db=Depends(get_db)):
+    import base64,hashlib
+    from app.services.images import image_data_url
+    from app.services.environment import EnvironmentCheckService
+    try:
+        source=str(data.get('stream_url',''))
+        if not source.startswith(('http://','https://')):
+            raise ValueError('当前适配 HTTP(S) MJPEG 图像流或设备抓图接口；RTSP 需独立网关适配')
+        image=await image_data_url(source)
+        task=await EnvironmentCheckService(db).create_task(data['student_id'],data['lab_id'],image,data['score_id'],admin.id)
+        raw=base64.b64decode(image.split(',',1)[1])
+        return {'task_id':task.id,'status':task.status,'lab_id':data['lab_id'],'frame_bytes':len(raw),'frame_sha256':hashlib.sha256(raw).hexdigest(),'captured_at':datetime.utcnow().isoformat(),'image_url':image,'adapter':'HTTP(S) MJPEG 首个完整 JPEG 帧 / 单张抓图'}
+    except (ValueError,KeyError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@router.post('/mappings/import')
+async def import_mappings(file:UploadFile=File(...),admin=Depends(get_current_admin),db=Depends(get_db)):
+    from app.models.training import TrainingProject
+    from app.models.ability import SubAbility
+    from app.services.production_data import truth
+    try:
+        rows=parse_upload(file.filename or '',await file.read(20*1024*1024+1))
+    except (ValueError,UnicodeError,StopIteration) as exc:
+        raise HTTPException(400,str(exc)) from exc
+    results=[]
+    for n,row in enumerate(rows,2):
+        try:
+            async with db.begin_nested():
+                pid=str(row.get('project_id',''));sid=str(row.get('step_id',''));aid=str(row.get('sub_ability_id',''))
+                p=await db.get(TrainingProject,pid)
+                if not p or sid not in {str(s['id']) for s in p.steps or []}:
+                    raise ValueError('项目或步骤不存在')
+                if not await db.get(SubAbility,aid):
+                    raise ValueError('子能力不存在')
+                on=truth(row.get('enabled','true'))
+                mapping={k:list(v) for k,v in (p.ability_mapping or {}).items()}
+                current=list(mapping.get(sid,[]))
+                mapping[sid]=sorted(set(current+[aid])) if on else [x for x in current if x!=aid]
+                await save_item(db,'projects',{'ability_mapping':mapping},admin,pid)
+                results.append({'row':n,'status':'success','step_id':sid,'sub_ability_id':aid,'enabled':on})
+        except (ValueError,TypeError,IntegrityError) as exc:
+            results.append({'row':n,'status':'error','reason':str(exc) if not isinstance(exc,IntegrityError) else '关联校验失败'})
+    await db.commit()
+    return {'total':len(rows),'success':sum(x['status']=='success' for x in results),'errors':sum(x['status']=='error' for x in results),'results':results}
+
+
+@router.post('/score-verification')
+async def verify_scores(admin=Depends(get_current_admin),db=Depends(get_db)):
+    import copy,hashlib,time
+    from app.models.training import TrainingProject,TrainingRecord
+    from app.services.production_data import score_steps
+    from app.services.audit import record_audit
+    projects={p.id:p for p in (await db.execute(select(TrainingProject))).scalars()}
+    rows=list((await db.execute(select(TrainingRecord).order_by(TrainingRecord.id).limit(5000))).scalars())
+    frozen=[];errors=[]
+    for row in rows:
+        p=projects.get(row.project_id)
+        if p:
+            frozen.append((row.id,row.external_id,copy.deepcopy(row.steps_data),TrainingProject(steps=copy.deepcopy(p.steps),scoring_rules=copy.deepcopy(p.scoring_rules),ability_mapping=copy.deepcopy(p.ability_mapping))))
+    input_hash=hashlib.sha256(json.dumps([(r,e,raw,p.steps,p.scoring_rules,p.ability_mapping) for r,e,raw,p in frozen],ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    outputs=[];times=[]
+    for turn in range(2):
+        start=time.perf_counter();result={}
+        for rid,source,raw,p in frozen:
+            try:
+                result[rid]=score_steps(p,copy.deepcopy(raw))
+            except (ValueError,TypeError,KeyError) as exc:
+                if turn==0:errors.append({'source':source or rid,'reason':str(exc)})
+        times.append(round(time.perf_counter()-start,6));outputs.append(result)
+    first,second=outputs;matched=sum(first[k]==second.get(k) for k in first)
+    if not first:
+        raise HTTPException(400,'没有可计算的逐步骤实训记录')
+    result={'records':len(first),'steps':sum(len(x[0]) for x in first.values()),'matched':matched,'mismatched':len(first)-matched,'consistency_percent':round(matched/len(first)*100,6),
+        'first_seconds':times[0],'second_seconds':times[1],'input_sha256':input_hash,'first_sha256':hashlib.sha256(json.dumps(first,sort_keys=True).encode()).hexdigest(),'second_sha256':hashlib.sha256(json.dumps(second,sort_keys=True).encode()).hexdigest(),
+        'checked_at':datetime.utcnow().isoformat(),'errors':errors,'sample':[{'source':source or rid,'steps':len(first[rid][0]),'first_total':first[rid][1],'second_total':second[rid][1],'same':first[rid]==second.get(rid)} for rid,source,raw,p in frozen if rid in first][:8]}
+    await record_audit(db,actor_id=admin.id,actor_name=admin.name,action='verify_score_consistency',object_type='scores',after={k:v for k,v in result.items() if k not in {'sample','errors'}})
+    await put_setting(db,'release:last_score_verification',result,admin.id);await db.commit()
+    return result
+
+
 class SourceConfig(BaseModel):
     enabled: bool=False
     source: str=Field(default="school",min_length=1,max_length=40)
@@ -135,11 +217,18 @@ async def source_put(data:SourceConfig,admin=Depends(get_current_admin),db=Depen
 
 
 @router.post("/source/sync")
-async def source_sync(full:bool=False,admin=Depends(get_current_admin)):
+async def source_sync(full:bool=False,admin=Depends(get_current_admin),db=Depends(get_db)):
     try:
         async with worker.lock:
             if full:
-                return await worker.sync_source(force=True,actor=admin,reset_cursor=True)
+                from sqlalchemy import func
+                from app.models.training import TrainingRecord,Score
+                async def counts():
+                    return {'records':(await db.execute(select(func.count()).select_from(TrainingRecord))).scalar_one(),'scores':(await db.execute(select(func.count()).select_from(Score))).scalar_one()}
+                before=await counts();await db.commit()
+                result=await worker.sync_source(force=True,actor=admin,reset_cursor=True)
+                after=await counts()
+                return {**result,'records_before':before['records'],'records_after':after['records'],'scores_before':before['scores'],'scores_after':after['scores'],'new_records':after['records']-before['records'],'new_scores':after['scores']-before['scores']}
             return await worker.sync_source(force=True,actor=admin)
     except ValueError as exc:
         raise HTTPException(400,str(exc)) from exc

@@ -234,7 +234,7 @@ def test_ai_evidence_validation_and_review_thresholds():
     from app.services.environment_validation import validate_result,CATEGORIES
     result={key:'基于本次实训结果分析。' for key in ['overview','score_analysis','weaknesses','environment','suggestions','training_plan']}
     result['evidence']=[{'key':'score','value':50}]
-    assert '能力概况' in validate_report(result,{'score':50})
+    assert '诊断结论' in validate_report(result,{'score':50})
     result['evidence'][0]['value']=99
     with pytest.raises(ValueError):validate_report(result,{'score':50})
     result['evidence'][0]['value']=50;result['overview']='成绩为 99 分'

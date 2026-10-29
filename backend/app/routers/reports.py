@@ -15,6 +15,38 @@ from app.routers.permissions import require_student_access
 router = APIRouter(prefix="/api/v1/reports", tags=["诊断报告"])
 
 
+@router.get('/{report_id}/download.docx')
+async def download_docx(report_id:str,current_user:UserResponse=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
+    import io,re
+    from docx import Document
+    from docx.shared import Pt
+    from docx.oxml.ns import qn
+    result=await ReportService(db).get_report(report_id)
+    if not result:
+        raise HTTPException(404,'报告不存在')
+    await require_student_access(current_user,result.student_id,db)
+    doc=Document();style=doc.styles['Normal'];style.font.name='宋体';style.font.size=Pt(11)
+    style.element.rPr.rFonts.set(qn('w:eastAsia'),'宋体');doc.add_heading(result.title,0)
+    lines=result.content.splitlines();i=0
+    while i<len(lines):
+        line=lines[i]
+        if line.startswith('|') and i+1<len(lines) and re.match(r'^\|[\s:|\-]+\|$',lines[i+1]):
+            cells=[x.strip() for x in line.strip('|').split('|')];table=doc.add_table(rows=1,cols=len(cells));table.style='Table Grid'
+            for c,t in zip(table.rows[0].cells,cells):c.text=t
+            i+=2
+            while i<len(lines) and lines[i].startswith('|'):
+                row=table.add_row().cells
+                for c,t in zip(row,lines[i].strip('|').split('|')):c.text=t.strip()
+                i+=1
+            continue
+        clean=re.sub(r'\*\*(.*?)\*\*',r'\1',line)
+        if clean.startswith('#'):doc.add_heading(clean.lstrip('#').strip(),min(3,len(clean)-len(clean.lstrip('#'))))
+        elif clean.strip():doc.add_paragraph(clean.lstrip('- ') if clean.startswith('- ') else clean)
+        i+=1
+    stream=io.BytesIO();doc.save(stream)
+    return Response(stream.getvalue(),media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':f'attachment; filename="{result.report_reference or "diagnostic-report"}.docx"'})
+
+
 @router.post("/generate", response_model=ReportTaskResponse)
 async def generate_report(
     request: GenerateReportRequest,

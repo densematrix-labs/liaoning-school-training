@@ -33,11 +33,11 @@ export default function StudentReports() {
 }
 
 async function downloadReport(reportId: string) {
-  const response = await api.get(`/api/v1/reports/${reportId}/download.doc`, { responseType: 'blob' })
+  const response = await api.get(`/api/v1/reports/${reportId}/download.docx`, { responseType: 'blob' })
   const url = URL.createObjectURL(response.data)
   const link = document.createElement('a')
   link.href = url
-  link.download = '诊断报告.doc'
+  link.download = '诊断报告.docx'
   link.click()
   URL.revokeObjectURL(url)
 }

@@ -68,14 +68,14 @@ it('configures read-only fields, imports real records, queries audit and creates
   await waitFor(()=>expect(requests.post).toHaveBeenCalledWith('/api/v1/release/backups'))
 })
 
-it('supports JSON rules and standard-photo upload from the selected lab',async()=>{
-  requests.get.mockImplementation(async(path:string)=>({data:path.includes('/projects')?{fields:['steps','scoring_rules','ability_mapping'],required:[],items:[]}:{fields:['name'],required:[],items:[{id:'lab1',name:'第四实训室'}]}}))
+it('supports step enable controls and standard-photo upload from the selected lab',async()=>{
+  requests.get.mockImplementation(async(path:string)=>({data:path.includes('/projects')?{fields:['steps','scoring_rules','ability_mapping'],required:[],items:[{id:'p1',name:'接线实训',steps:[{id:'one',name:'检查',score:10,enabled:true}]}]}:{fields:['name'],required:[],items:[{id:'lab1',name:'第四实训室'}]}}))
   render(<Release/>);await screen.findByText('第四实训室')
   fireEvent.change(screen.getByLabelText('数据类型'),{target:{value:'projects'}})
-  const steps=await screen.findByLabelText('操作步骤（JSON）')
-  fireEvent.change(steps,{target:{value:'[{"id":"one","score":10}]'}})
+  fireEvent.click(await screen.findByText('接线实训'))
+  fireEvent.click(await screen.findByLabelText('启用步骤one'))
   fireEvent.click(screen.getByRole('button',{name:'保存'}))
-  await waitFor(()=>expect(requests.post).toHaveBeenCalledWith('/api/v1/release/catalog/projects',expect.objectContaining({steps:[{id:'one',score:10}]})))
+  await waitFor(()=>expect(requests.put).toHaveBeenCalledWith('/api/v1/release/catalog/projects/p1',expect.objectContaining({steps:[expect.objectContaining({id:'one',score:10,enabled:false})]})))
   fireEvent.change(screen.getByLabelText('数据类型'),{target:{value:'labs'}})
   fireEvent.click(await screen.findByText('第四实训室'))
   fireEvent.change(screen.getByLabelText('标准状态图片'),{target:{files:[new File(['image'],'reference.png')]}})

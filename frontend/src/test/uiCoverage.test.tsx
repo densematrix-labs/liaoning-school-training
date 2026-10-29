@@ -19,7 +19,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('recharts', async () => {
   const React = await import('react')
   const Box = ({ children }: { children?: React.ReactNode }) => React.createElement('div', null, children)
-  return { RadarChart: Box, PolarGrid: Box, PolarAngleAxis: Box, PolarRadiusAxis: Box, Radar: Box, BarChart: Box, Bar: Box, XAxis: Box, YAxis: Box, Tooltip: Box, ResponsiveContainer: Box, AreaChart: Box, Area: Box, CartesianGrid: Box, Cell: Box, LineChart: Box, Line: Box }
+  return { RadarChart: Box, PolarGrid: Box, PolarAngleAxis: Box, PolarRadiusAxis: Box, Radar: Box, BarChart: Box, Bar: Box, XAxis: Box, YAxis: Box, Tooltip: Box, ResponsiveContainer: Box, AreaChart: Box, Area: Box, CartesianGrid: Box, Cell: Box, LineChart: Box, Legend: Box, Line: Box }
 })
 
 vi.mock('framer-motion', async () => {
@@ -210,7 +210,7 @@ describe('all role workspaces render populated acceptance states', () => {
     renderPage(<StudentReports />)
     fireEvent.click(screen.getByText('实训项目 · 2026-09-17 08:00 · 学生甲诊断报告'))
     fireEvent.click(screen.getByText('下载 Word'))
-    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/reports/report-1/download.doc', { responseType: 'blob' }))
+    await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/api/v1/reports/report-1/download.docx', { responseType: 'blob' }))
   })
 
   it('uses a compact explicit empty state when the seven-day trend has no data', () => {

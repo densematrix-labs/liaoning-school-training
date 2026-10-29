@@ -320,6 +320,13 @@ class ReportService:
             for row in ability_data:
                 verified.append(f"- 当前能力 {row['name']}：{row['score']:g}；达标线 {row['threshold']:g}。")
             content += "\n\n" + "\n".join(verified)
+            if report_type == 'periodic':
+                trend_lines=['## 时间范围内能力变化趋势',f'统计范围：{date_from.isoformat()} 至 {date_to.isoformat()}；范围内 {len(scores)} 次实训。',
+                    '| 能力维度 | 范围首条记录能力值 | 范围累计能力值 | 变化（百分点） | 达标线 |','| --- | --- | --- | --- | --- |']
+                for row in ability_data:
+                    trend_lines.append(f"| {row['name']} | {row['range_first_score']:g} | {row['score']:g} | {row['range_change']:+g} | {row['threshold']:g} |")
+                trend_lines.append('首值依据范围内首条实训，累计值依据范围内全部记录及当前重复计分策略；不代表单次训练的因果效果。')
+                content+='\n\n'+'\n'.join(trend_lines)
         
         # Save report
         if report_type == "single":
@@ -399,6 +406,8 @@ class ReportService:
             required.update(key for key in (ability_key, failed_key) if key)
             instruction += " evidence 必须包含以下每一个指定的 key，且 value 原样使用 facts 值：" + json.dumps(sorted(required)) + "。环境分数使用提供的人工最终分，不得改写为原始满分。"
             instruction += " 为避免重复计算或错引数字，overview、score_analysis、weaknesses、environment 四章正文完全不写阿拉伯数字，使用给定业务名称作定性描述；具体分数、阈值与逐步骤核对表由系统自动附加，不需要你重写。没有环境数据必须明确写无数据，不可推定环境合格。"
+            instruction += ' 另必须返回 possible_causes 非空中文字符串：仅描述证据支持的可能原因，明确标为推测，不把推测写成事实；没有依据则写暂无足够数据判断原因。薄弱能力、改进建议和训练建议须分别输出。'
+            instruction += ' 只有环境 review_status 为 confirmed 或 modified 才能写教师已确认或人工复核；其他环境记录只能称为未复核的AI初步判断。禁止引入输入中不存在的实训项目或设备名称。'
             result, self.last_model = await completion([{"role":"system","content":instruction},
                 {"role":"user","content":json.dumps({"scores":scores_data,"abilities":ability_data,"environment":environment_data,"facts":facts,"type":report_type},ensure_ascii=False)}],db=self.db)
             # No model may turn absent evidence into a positive environment
@@ -409,6 +418,11 @@ class ReportService:
                 for row in environment_data
             ) if environment_data else "本报告范围内无关联环境检查记录，无法判断环境是否达标。"
             content = validate_report(result,facts)
+            if not any(row.get('review_status') in {'confirmed','modified'} for row in environment_data):
+                if any(term in '\n'.join(str(result.get(k,'')) for k in ['overview','score_analysis','weaknesses']) for term in ['人工复核确认','经人工复核','教师已确认','教师复核确认']):
+                    raise ValueError('AI 将未复核环境误写为人工确认')
+            if not isinstance(result.get('possible_causes'),str) or not result['possible_causes'].strip():
+                raise ValueError('AI 报告缺少可能原因字段')
             if required - {item["key"] for item in result["evidence"]}:
                 raise ValueError("AI 报告缺少成绩、薄弱步骤、能力或环境复核的必需证据")
             self.validated_facts = facts

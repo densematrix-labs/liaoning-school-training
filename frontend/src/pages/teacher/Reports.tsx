@@ -8,6 +8,7 @@ import { api } from '../../lib/api'
 import { ReportTaskStatus, useReportTask } from '../../lib/useReportTask'
 
 export default function TeacherReports() {
+  const [wide,setWide]=useState(false)
   const [periodFrom,setPeriodFrom] = useState('')
   const [periodTo,setPeriodTo] = useState('')
   const [params] = useSearchParams()
@@ -71,8 +72,8 @@ export default function TeacherReports() {
       <Field label="筛选关联实训记录"><select className="input-field" value={historyScoreId} disabled={historyType !== 'single'} onChange={(e) => setHistoryScoreId(e.target.value)}><option value="">全部单次记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
     </section>}
 
-    <div className="grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)_360px]">
-      <section className="railway-card overflow-hidden xl:sticky xl:top-28">
+    <button className="railway-button" onClick={()=>setWide(!wide)}>{wide?'返回报告工作台':'专注阅读报告'}</button><div className={wide?'mx-auto max-w-5xl':'grid items-start gap-5 xl:grid-cols-[300px_minmax(0,1fr)_360px]'}>
+      <section className={wide?'hidden':'railway-card overflow-hidden xl:sticky xl:top-28'}>
         <div className="border-b border-railway-600/50 p-5"><p className="eyebrow">REPORT ARCHIVE</p><h2 className="section-heading">{selectedStudent ? `${selectedStudent.name}的报告` : '历史报告'}</h2><p className="mt-1 text-xs text-text-muted">当前筛选 {filteredReports.length} 条</p></div>
         <div className="max-h-[620px] divide-y divide-railway-600/50 overflow-y-auto">{filteredReports.map((item: any) => <button key={item.id} className={`w-full p-4 text-left transition hover:bg-railway-700/50 ${activeReport?.id === item.id ? 'bg-accent-electric/10' : ''}`} onClick={() => showReport(item)}><span className={item.report_type === 'single' ? 'text-[10px] text-accent-cyan' : 'text-[10px] text-status-warning'}>{item.report_type === 'single' ? '单次诊断' : '阶段诊断'}</span><p className="mt-1 font-medium text-text-primary">{item.title}</p><p className="mt-2 text-[10px] text-text-muted">{item.report_type === 'single' && item.score_percentage != null ? `${item.score_percentage} 分 · ` : ''}报告生成于 {new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{studentId && !filteredReports.length && <p className="p-5 text-sm text-text-muted">当前筛选条件下没有报告</p>}{!studentId && <p className="p-5 text-sm text-text-muted">选择班级和学生后载入报告档案</p>}</div>
       </section>
@@ -85,7 +86,7 @@ export default function TeacherReports() {
         />
       </section>
 
-      <aside className="space-y-5 xl:sticky xl:top-28">
+      <aside className={wide?'hidden':'space-y-5 xl:sticky xl:top-28'}>
         <AbilityRadar items={ability.data?.radar_data || []} title={selectedStudent ? `${selectedStudent.name} · 能力画像` : '学生能力画像'} description="报告结论应与能力证据和毕业达标线保持一致" compact />
         {ability.data && <section className="railway-card p-5"><p className="eyebrow">DIAGNOSTIC SIGNALS</p><h2 className="section-heading">诊断信号</h2><div className="mt-4 grid gap-3"><Signal label="综合能力" value={`${ability.data.total_score || 0} 分`} tone="cyan" /><Signal label="优势能力" value={ability.data.strongest_ability || '—'} tone="good" /><Signal label="薄弱能力" value={ability.data.weakest_ability || '—'} tone="warn" /></div></section>}
       </aside>
@@ -99,11 +100,11 @@ function HeaderMetric({ label, value }: { label: string; value: string | number 
 function Signal({ label, value, tone }: { label: string; value: string; tone: 'cyan' | 'good' | 'warn' }) { return <div className="rounded border border-railway-600/60 bg-railway-700/35 p-3"><p className="text-[10px] text-text-muted">{label}</p><p className={`mt-1 font-medium ${tone === 'good' ? 'text-status-success' : tone === 'warn' ? 'text-status-warning' : 'text-accent-cyan'}`}>{value}</p></div> }
 
 async function downloadReport(reportId: string) {
-  const response = await api.get(`/api/v1/reports/${reportId}/download.doc`, { responseType: 'blob' })
+  const response = await api.get(`/api/v1/reports/${reportId}/download.docx`, { responseType: 'blob' })
   const url = URL.createObjectURL(response.data)
   const link = document.createElement('a')
   link.href = url
-  link.download = '诊断报告.doc'
+  link.download = '诊断报告.docx'
   link.click()
   URL.revokeObjectURL(url)
 }

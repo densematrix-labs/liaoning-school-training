@@ -58,12 +58,16 @@ class EnvironmentCheckResponse(BaseModel):
     student_id: str
     lab_id: str
     lab_name: Optional[str] = None
+    score_id: Optional[str] = None
+    project_name: Optional[str] = None
+    record_reference: Optional[str] = None
     total_score: int
     final_score: Optional[int]
     max_score: int = 100
     details: dict
     summary: str
     suggestions: List[str] = Field(default_factory=list)
+    leftover_items: Optional[dict] = None
     checked_at: Optional[datetime] = None
     uploaded_image_url: Optional[str] = None
     reference_image_url: Optional[str] = None

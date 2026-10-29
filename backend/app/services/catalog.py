@@ -78,6 +78,12 @@ async def save_item(db, kind, data, actor, item_id=None):
             if len(data["password"])<12:
                 raise ValueError("密码至少 12 位")
             values["password_hash"] = AuthService.get_password_hash(data["password"])
+    if kind == 'labs' and 'status' in values:
+        from app.models.lab import LabStatus
+        try:
+            values['status']=LabStatus(values['status'])
+        except ValueError as exc:
+            raise ValueError('实训室状态仅支持 available / in_use / maintenance') from exc
     if kind == "students":
         user, cls = await db.get(User,merged["user_id"]), await db.get(Class,merged["class_id"])
         if user.role != UserRole.STUDENT or cls.major_id != merged["major_id"]:
