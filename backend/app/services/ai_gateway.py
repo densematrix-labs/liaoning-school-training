@@ -18,7 +18,10 @@ async def completion(messages, *, vision=False, db=None):
         routes.append({"url":route["url"],"key":os.getenv(route["key_env"],""),
                        "model":route["vision_model"] if vision else route["model"]})
     digest=hashlib.sha256(json.dumps(messages,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
-    deadline=time.monotonic()+(25 if vision else 50)
+    # Image comparisons may need longer than text-only calls. Keep the
+    # operator-configurable budget bounded rather than disabling timeouts.
+    budget=max(5,min(120,settings.VLM_TIMEOUT_SECONDS)) if vision else 50
+    deadline=time.monotonic()+budget
     failures=[]
     for route in routes:
         if not route["key"]:

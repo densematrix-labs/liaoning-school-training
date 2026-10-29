@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "qwen-plus"
     VLM_MODEL: str = "qwen-vl-plus"
+    VLM_TIMEOUT_SECONDS: float = 60
     PUBLIC_BASE_URL: str = "https://shixun.demo.densematrix.ai"
 
     # Legacy proxy settings retained for the training controller adapter.
