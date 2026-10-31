@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
@@ -79,7 +80,7 @@ export default function StudentAbility() {
 
       <section className="railway-card p-6">
         <h2 className="section-title mb-4">能力变化趋势</h2>
-        <div className="mb-4 grid gap-3 md:grid-cols-3"><label>实训项目<select className="input-field" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">全部项目</option>{projects.data?.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>开始日期<input type="date" className="input-field" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label><label>结束日期<input type="date" className="input-field" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label></div>
+        <div className="mb-4 grid gap-3 md:grid-cols-3"><label>实训项目<select className="input-field" value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">全部项目</option>{projects.data?.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>开始日期<ChineseDateInput type="date" className="input-field" value={dateFrom} onValueChange={value=>setDateFrom(value)}/></label><label>结束日期<ChineseDateInput type="date" className="input-field" value={dateTo} onValueChange={value=>setDateTo(value)}/></label></div>
         {trend?.points?.length===0&&<p role="status" className="text-text-muted">当前筛选范围没有实训记录</p>}
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">

@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -64,8 +65,8 @@ export default function TeacherScores() {
       <Field label="班级"><select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}><option value="">选择授权班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">全部学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="实训项目"><select className="input-field" value={projectId} onChange={(e) => setProjectId(e.target.value)}><option value="">全部项目</option>{projects.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-      <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
-      <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
+      <Field label="开始日期"><ChineseDateInput className="input-field" type="date" value={dateFrom} onValueChange={value=> setDateFrom(value)} /></Field>
+      <Field label="结束日期"><ChineseDateInput className="input-field" type="date" value={dateTo} onValueChange={value=> setDateTo(value)} /></Field>
     </section>
     {classId && <div className={`grid gap-3 ${studentId ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>{!studentId && <Metric label="学生数" value={summary.data?.student_count ?? '—'} />}<Metric label="实训记录" value={scores.data?.total ?? '—'} /><Metric label={studentId ? '个人平均' : '班级平均'} value={studentId ? (scores.data?.average_score ?? '—') : (summary.data?.average_score ?? '—')} /><Metric label={studentId ? '个人及格率' : '及格率'} value={`${studentId ? visiblePassRate : (summary.data?.pass_rate ?? '—')}%`} /></div>}
     <CsvImportPanel

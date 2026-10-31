@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ReportDocument from '../../components/ReportDocument'
@@ -22,7 +23,7 @@ export default function StudentReports() {
       <button className="btn-secondary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'single', score_id: scoreId || undefined })}>生成单次报告</button>
       <button className="btn-primary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'periodic', date_from: periodFrom || undefined, date_to: periodTo ? periodTo + 'T23:59:59' : undefined })}>生成阶段报告</button>
     </section>
-    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<input type="date" className="input-field" value={periodFrom} onChange={e=>setPeriodFrom(e.target.value)}/></label><label className="text-sm">阶段结束日期<input type="date" className="input-field" value={periodTo} onChange={e=>setPeriodTo(e.target.value)}/></label></div>
+    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<ChineseDateInput type="date" className="input-field" value={periodFrom} onValueChange={value=>setPeriodFrom(value)}/></label><label className="text-sm">阶段结束日期<ChineseDateInput type="date" className="input-field" value={periodTo} onValueChange={value=>setPeriodTo(value)}/></label></div>
     <ReportTaskStatus task={reportTask.task} />
     {reports.isLoading&&<p role="status">正在读取报告档案…</p>}
     {reportTask.create.error && <p className="alert-warning rounded p-4">报告任务提交失败</p>}

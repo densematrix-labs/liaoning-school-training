@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -64,7 +65,7 @@ export default function TeacherReports() {
       <Field label="生成依据记录"><select className="input-field" value={scoreId} disabled={reportType !== 'single' || !studentId} onChange={(e) => setScoreId(e.target.value)}><option value="">选择记录</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></Field>
       <button className="btn-primary" disabled={!studentId || (reportType === 'single' && !scoreId) || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: studentId, report_type: reportType, score_id: reportType === 'single' ? scoreId : undefined, date_from: reportType === 'periodic' ? periodFrom || undefined : undefined, date_to: reportType === 'periodic' && periodTo ? periodTo + 'T23:59:59' : undefined })}>{reportTask.create.isPending ? '正在生成…' : '生成诊断报告'}</button>
     </section>
-    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<input type="date" className="input-field" value={periodFrom} onChange={e=>setPeriodFrom(e.target.value)}/></label><label className="text-sm">阶段结束日期<input type="date" className="input-field" value={periodTo} onChange={e=>setPeriodTo(e.target.value)}/></label></div>
+    <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<ChineseDateInput type="date" className="input-field" value={periodFrom} onValueChange={value=>setPeriodFrom(value)}/></label><label className="text-sm">阶段结束日期<ChineseDateInput type="date" className="input-field" value={periodTo} onValueChange={value=>setPeriodTo(value)}/></label></div>
     <ReportTaskStatus task={reportTask.task} onView={() => reportTask.task?.report && showReport(reportTask.task.report)} />
 
     {studentId && <section className="railway-card grid gap-4 p-4 sm:grid-cols-2">

@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
@@ -30,8 +31,8 @@ export default function TeacherClasses() {
     <header><h1 className="page-title">班级实训概览</h1></header>
     <section className="railway-card grid gap-4 p-5 md:grid-cols-4">
       <Field label="授权班级"><select className="input-field" value={classId} onChange={(e) => { setClassId(e.target.value); setStudentId('') }}><option value="">请选择班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}（{item.student_count}人）</option>)}</select></Field>
-      <Field label="统计开始"><input className="input-field" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></Field>
-      <Field label="统计结束"><input className="input-field" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></Field>
+      <Field label="统计开始"><ChineseDateInput className="input-field" type="date" value={dateFrom} onValueChange={value=> setDateFrom(value)} /></Field>
+      <Field label="统计结束"><ChineseDateInput className="input-field" type="date" value={dateTo} onValueChange={value=> setDateTo(value)} /></Field>
       <Field label="毕业达标筛选"><select className="input-field" value={graduationFilter} onChange={(e) => setGraduationFilter(e.target.value as any)}><option value="all">全部学生</option><option value="ready">已达标</option><option value="risk">存在毕业风险</option></select></Field>
     </section>
     {!classId && <section className="railway-card p-12 text-center text-text-muted">选择班级后查看成绩分布、能力分布与毕业达标情况</section>}

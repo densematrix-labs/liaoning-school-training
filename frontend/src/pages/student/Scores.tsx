@@ -1,3 +1,4 @@
+import ChineseDateInput from '../../components/ChineseDateInput'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -21,8 +22,8 @@ export default function StudentScores() {
     <header><h1 className="page-title">我的实训成绩</h1></header>
     <section className="railway-card grid gap-4 p-5 md:grid-cols-3">
       <Field label="实训项目"><select className="input-field" value={projectId} onChange={(e) => { setProjectId(e.target.value); setPage(1) }}><option value="">全部项目</option>{projects.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
-      <Field label="开始日期"><input className="input-field" type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} /></Field>
-      <Field label="结束日期"><input className="input-field" type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} /></Field>
+      <Field label="开始日期"><ChineseDateInput className="input-field" type="date" value={dateFrom} onValueChange={value=> { setDateFrom(value); setPage(1) }} /></Field>
+      <Field label="结束日期"><ChineseDateInput className="input-field" type="date" value={dateTo} onValueChange={value=> { setDateTo(value); setPage(1) }} /></Field>
     </section>
     <div className="grid gap-3">
       {scores.isLoading && null}
