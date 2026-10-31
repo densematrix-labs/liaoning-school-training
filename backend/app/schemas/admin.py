@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class ProjectRuleUpdate(BaseModel):
+    scoring_rules: dict[str, Any] | None = None
     steps: list[dict[str, Any]]
     ability_mapping: dict[str, list[str]] = Field(default_factory=dict)
 

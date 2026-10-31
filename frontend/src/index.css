@@ -393,3 +393,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .report-cover, .report-body { padding: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+/* Flat business presentation: no luminous text, panels or chart accents. */
+*, *::before, *::after { text-shadow: none !important; box-shadow: none !important; }
+.text-gradient { background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--text-primary); filter: none; }
+[class*="drop-shadow"] { filter: none !important; }

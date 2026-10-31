@@ -1,3 +1,4 @@
+import PermissionProbe from './pages/PermissionProbe'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuthStore } from './store/auth'
@@ -58,6 +59,7 @@ export default function App() {
 
           <Route path="admin" element={<RoleRoute roles={['admin']}><AdminHome /></RoleRoute>} />
           <Route path="admin/release" element={<RoleRoute roles={['admin']}><Release /></RoleRoute>} />
+          <Route path="permission-check" element={<RoleRoute roles={['student','teacher','admin']}><PermissionProbe /></RoleRoute>} />
           <Route path="admin/config" element={<RoleRoute roles={['admin']}><AdminConfig /></RoleRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

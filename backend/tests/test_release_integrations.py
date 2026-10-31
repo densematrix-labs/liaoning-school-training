@@ -267,7 +267,9 @@ async def test_report_uses_final_review_facts_and_rejects_wrong_ai_evidence(test
         assert any(row['review_status']=='rejected' and 'total_score' not in row for row in captured['environment'])
         assert '89 分' in report.content and '94 分' in report.content and '教师已驳回' in report.content
         meta = await setting(db, 'report_meta:'+report.id)
-        assert meta['input_environment'] == captured['environment']
+        assert [{k:v for k,v in item.items() if k not in {'check_id','score_id','checked_at'}} for item in meta['input_environment']] == captured['environment']
+        assert all(item.get('check_id') and item.get('score_id') for item in meta['input_environment'])
+        assert all('check_id' not in item and 'score_id' not in item for item in captured['environment'])
         assert meta['validated_facts'] == captured['facts']
         async def incorrect(messages, **kwargs):
             result,model = await complete(messages, **kwargs)
@@ -368,7 +370,7 @@ async def test_class_export_matches_shared_evaluator_and_disabled_schema(client,
     overview=await client.get('/api/v1/students/classes/'+ids['class']+'/overview',headers=auth_headers)
     assert overview.status_code==200 and overview.json()['ability_distribution'][0]['average']==50
     exported=await client.get('/api/v1/students/classes/'+ids['class']+'/overview.csv',headers=auth_headers)
-    assert exported.status_code==200 and 'ability_distribution' in exported.text and 'ACCEPT001' in exported.text
+    assert exported.status_code==200 and '能力维度均值与达标人数' in exported.text and 'ACCEPT001' in exported.text
     async with test_db() as db:
         await put_setting(db,'state:abilities:'+ids['ability'],{'enabled':False});await db.commit()
     assert (await client.get('/api/v1/abilities/schema',headers=auth_headers)).json()==[]

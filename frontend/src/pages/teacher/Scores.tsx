@@ -58,7 +58,8 @@ export default function TeacherScores() {
     : 0
 
   return <div className="space-y-6">
-    <header><p className="eyebrow">CLASS SCORE EVIDENCE</p><h1 className="page-title">班级成绩总览</h1><p className="mt-2 text-sm text-text-muted">按班级、学生、项目和时间检索，并核对单次成绩汇总证据</p></header>
+    <header><h1 className="page-title">班级成绩总览</h1></header>
+    {user?.role === 'teacher' && <section aria-label="教师授权范围" className="railway-card grid gap-4 p-4 md:grid-cols-[220px_1fr]"><div><p className="mt-1 font-semibold">{user.name}</p></div><div><div className="mt-1 flex flex-wrap gap-2">{classes.data?.map((item:any)=><span className="rounded border border-railway-500 px-3 py-1 text-sm" key={item.id}>{item.name}</span>)}</div></div></section>}
     <section className="railway-card grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-5">
       <Field label="班级"><select className="input-field" value={classId} onChange={(e) => setClassId(e.target.value)}><option value="">选择授权班级</option>{classes.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="学生"><select className="input-field" value={studentId} disabled={!classId} onChange={(e) => setStudentId(e.target.value)}><option value="">全部学生</option>{students.data?.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
@@ -85,11 +86,11 @@ export default function TeacherScores() {
       onConfirm={() => importCandidate && importFile.mutate({ file: importCandidate.file })}
       onCancel={() => { setImportCandidate(null); if (importInput.current) importInput.current.value = '' }}
     />
-    <div className="flex justify-end"><button className="railway-button" disabled={!classId} onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出当前筛选 CSV</button></div>
+    <div className="flex justify-end"><button className="railway-button" disabled={!classId || scores.isLoading} onClick={() => downloadClassScores(classId, { student_id: studentId || undefined, project_id: projectId || undefined, date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59` : undefined })}>导出成绩列表 CSV（当前筛选）</button></div>
     <section className="space-y-3">
       {scores.data?.scores.map((score: any) => <button key={score.id} onClick={() => setSelectedScore(score.id)} className="railway-card grid w-full gap-3 p-4 text-left hover:border-accent-blue/60 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-center"><div><p className="font-semibold text-text-primary">{score.student_name}</p><p className="text-xs text-text-muted">{score.project_name}</p></div><p className="text-sm text-text-muted">{new Date(score.calculated_at).toLocaleString('zh-CN')}</p><span className="font-mono text-xl text-accent-cyan">{score.percentage}</span><span className="text-sm text-accent-blue">核对明细 →</span></button>)}
-      {!classId && <p className="railway-card p-10 text-center text-text-muted">请选择班级开始检索</p>}
-      {classId && !scores.isLoading && !scores.data?.scores.length && <p className="railway-card p-10 text-center text-text-muted">当前筛选条件下没有成绩</p>}
+      {!classId && null}
+      {classId && !scores.isLoading && !scores.data?.scores.length && null}
     </section>
     {selectedScore && <ScoreEvidenceModal scoreId={selectedScore} onClose={() => setSelectedScore('')} />}
   </div>
@@ -111,9 +112,10 @@ function CsvImportPanel({ isAdmin, inputRef, candidate, previewPending, importPe
   onConfirm: () => void
   onCancel: () => void
 }) {
+  if (!isAdmin) return null
   return <section className="railway-card overflow-hidden">
     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-railway-600/50 p-5">
-      <div><p className="eyebrow">CSV IMPORT</p><h2 className="section-heading">批量导入实训记录</h2><p className="mt-1 text-xs text-text-muted">先校验并预览，再确认写入；完成后成绩列表与汇总会自动刷新。</p></div>
+      <div><h2 className="section-heading">批量导入实训记录</h2></div>
       {isAdmin ? <div className="flex flex-wrap gap-2"><button type="button" className="railway-button" onClick={downloadImportTemplate}>下载 CSV 模板</button><input ref={inputRef} className="hidden" type="file" accept=".csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) onSelect(file) }} /><button type="button" className="btn-primary" disabled={previewPending || importPending} onClick={() => inputRef.current?.click()}>{previewPending ? '正在校验…' : '选择 CSV 文件'}</button></div> : <span className="rounded border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning">仅管理员可执行导入</span>}
     </div>
     <div className="grid gap-3 p-5 text-xs text-text-muted md:grid-cols-4">
@@ -122,7 +124,7 @@ function CsvImportPanel({ isAdmin, inputRef, candidate, previewPending, importPe
       <FieldHint name="project_name" description="推荐；实训项目名称，必须与系统一致" />
       <FieldHint name="completed_at" description="必填；如 2026-09-17T08:30:00" />
     </div>
-    {!isAdmin && <p className="border-t border-railway-600/40 px-5 py-4 text-xs text-text-muted">教师可继续使用右侧导出功能；全校数据写入由管理员在此处完成，避免越权修改其他班级成绩。</p>}
+    {!isAdmin && null}
     {(previewError || importError) && <p role="alert" className="alert-warning m-4 rounded p-3 text-sm">{getErrorMessage(previewError || importError, 'CSV 校验或导入失败')}</p>}
     {candidate && <div className="border-t border-railway-600/40 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-text-primary">{candidate.file.name}</p><p className="mt-1 text-xs text-text-muted">共 {candidate.preview.row_count} 条 · 可导入 {candidate.preview.valid_count} 条 · 异常 {candidate.preview.error_count} 条</p></div><div className="flex gap-2"><button type="button" className="railway-button" disabled={importPending} onClick={onCancel}>取消</button><button type="button" className="btn-primary" disabled={!candidate.preview.can_import || importPending} onClick={onConfirm}>{importPending ? '正在导入并刷新…' : '确认导入并更新成绩'}</button></div></div>
@@ -140,7 +142,7 @@ async function downloadClassScores(classId: string, params: Record<string, strin
   const url = URL.createObjectURL(response.data)
   const link = document.createElement('a')
   link.href = url
-  link.download = `class-${classId}-scores.csv`
+  link.download = `成绩列表-${classId}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }

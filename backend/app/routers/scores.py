@@ -41,7 +41,7 @@ async def get_scores(
     """获取当前学生的成绩列表"""
     if current_user.role != "student" or not current_user.student_id:
         raise HTTPException(status_code=403, detail="仅学生可访问")
-    
+
     service = ScoreService(db)
     return await service.get_student_scores(
         student_id=current_user.student_id,
@@ -63,7 +63,7 @@ async def get_student_scores(
 ):
     """获取指定学生的成绩列表（教师/管理员）"""
     await require_student_access(current_user, student_id, db)
-    
+
     service = ScoreService(db)
     return await service.get_student_scores(
         student_id=student_id,
@@ -86,7 +86,7 @@ async def get_class_scores(
 ):
     """获取班级成绩列表"""
     await require_class_access(current_user, class_id, db)
-    
+
     service = ScoreService(db)
     return await service.get_class_scores(
         class_id=class_id,
@@ -107,7 +107,7 @@ async def get_class_summary(
 ):
     """获取班级成绩汇总"""
     await require_class_access(current_user, class_id, db)
-    
+
     service = ScoreService(db)
     return await service.get_class_summary(class_id)
 
@@ -123,7 +123,8 @@ async def export_class_scores(
     db: AsyncSession = Depends(get_db),
 ):
     await require_class_access(current_user, class_id, db)
-    data = await ScoreService(db).get_class_scores(
+    service = ScoreService(db)
+    data = await service.get_class_scores(
         class_id=class_id,
         page=1,
         page_size=200,
@@ -134,9 +135,17 @@ async def export_class_scores(
     )
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["学生", "实训项目", "成绩", "满分", "完成时间"])
-    for item in data.scores:
-        writer.writerow([item.student_name or item.student_id, item.project_name or item.project_id, item.total_score, item.max_score, item.calculated_at.isoformat() if item.calculated_at else ""])
+    writer.writerow(["学生", "实训项目", "成绩", "满分", "完成时间", "成绩ID"])
+    while True:
+        for item in data.scores:
+            writer.writerow([item.student_name or item.student_id, item.project_name or item.project_id, item.total_score, item.max_score, item.calculated_at.isoformat() if item.calculated_at else "", item.id])
+        if not data.scores or data.page * data.page_size >= data.total:
+            break
+        data = await service.get_class_scores(
+            class_id=class_id, page=data.page + 1, page_size=200,
+            student_id=student_id, project_id=project_id,
+            date_from=date_from, date_to=date_to,
+        )
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8-sig")),
         media_type="text/csv",
@@ -171,11 +180,11 @@ async def get_score_detail(
     """获取成绩详情"""
     service = ScoreService(db)
     result = await service.get_score_detail(score_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="成绩不存在")
-    
+
     # Check permission
     await require_student_access(current_user, result.student_id, db)
-    
+
     return result

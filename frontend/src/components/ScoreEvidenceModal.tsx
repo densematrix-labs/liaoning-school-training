@@ -34,10 +34,10 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
     >
       <section className="glass-panel-bright max-h-[92vh] w-full max-w-5xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <header className="sticky top-0 z-10 flex items-start justify-between border-b border-railway-600/60 bg-railway-800/95 p-5 backdrop-blur">
-          <div><p className="eyebrow">TRACEABLE SCORE EVIDENCE</p><h2 id="score-evidence-title" className="section-heading">单次实训成绩证据</h2></div>
+          <div><h2 id="score-evidence-title" className="section-heading">单次实训成绩证据</h2></div>
           <button ref={closeButtonRef} type="button" className="railway-button !px-3" aria-label="关闭实训成绩证据" onClick={onClose}>×</button>
         </header>
-        {isLoading && <p className="p-8 text-text-muted">正在读取步骤证据…</p>}
+        {isLoading && null}
         {error && <p className="m-6 alert-warning p-4">成绩明细加载失败</p>}
         {data && (
           <div className="space-y-6 p-5 sm:p-7">
@@ -59,6 +59,10 @@ export default function ScoreEvidenceModal({ scoreId, onClose }: { scoreId: stri
                     <div><p className="text-xs text-text-muted">步骤 {index + 1}</p><h3 className="mt-1 font-semibold text-text-primary">{step.step_name}</h3></div>
                     <div className="text-right"><span className={step.passed ? 'text-status-success' : 'text-status-danger'}>{step.source_status}</span><p className="font-mono text-lg text-accent-cyan">{step.score}/{step.max_score}</p></div>
                   </div>
+                  <details className="mt-3 rounded border border-railway-600/50 p-3">
+                    <summary className="cursor-pointer text-sm text-accent-cyan">展开步骤说明</summary>
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-text-primary">{step.step_description || '该步骤未配置说明正文'}</p>
+                  </details>
                   <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
                     <Info label="适用规则" value={`通过 ${step.applied_rule?.passed_score ?? step.max_score} 分 / 未通过 ${step.applied_rule?.failed_score ?? 0} 分`} />
                     <Info label="规则版本" value={`v${step.applied_rule?.rule_version ?? 1}`} />

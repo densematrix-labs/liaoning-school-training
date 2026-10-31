@@ -55,11 +55,11 @@ export default function Login() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_38%_24%,rgba(100,236,255,.2),transparent_28%),linear-gradient(135deg,rgba(17,103,192,.64),rgba(3,45,105,.92))]" />
           <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(100,236,255,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(100,236,255,.12)_1px,transparent_1px)] [background-size:28px_28px]" />
           <div className="relative z-10">
-            <div className="flex items-center gap-4"><div className="signal-mark" aria-hidden="true"><span /><span /><span /></div><div><p className="font-mono text-[10px] tracking-[.24em] text-accent-cyan">LIAONING RAILWAY · AI LAB</p><p className="mt-1 text-sm text-text-secondary">辽宁铁道职业技术学院</p></div></div>
+            <div className="flex items-center gap-4"><div className="signal-mark" aria-hidden="true"><span /><span /><span /></div><div><p className="font-mono text-[10px] tracking-[.24em] text-accent-cyan">LIAONING RAILWAY · AI LAB</p></div></div>
             <div className="mt-24 max-w-xl">
               <p className="font-mono text-xs tracking-[.22em] text-accent-cyan">INTELLIGENT TRAINING OS</p>
               <h1 className="text-gradient mt-5 text-5xl font-bold leading-[1.16] tracking-[.06em]">智能实训<br />能力评估平台</h1>
-              <p className="mt-7 max-w-lg text-base leading-8 text-text-secondary">贯通实训成绩、能力图谱、环境检测与 AI 诊断报告，让每一步操作形成可追溯的成长证据。</p>
+
             </div>
           </div>
           <div className="relative z-10 grid grid-cols-3 gap-3">
@@ -72,7 +72,7 @@ export default function Login() {
           <div>
             <p className="font-mono text-[10px] tracking-[.24em] text-accent-cyan">SECURE ACCESS</p>
             <h2 className="mt-3 text-3xl font-bold text-white">进入实训工作台</h2>
-            <p className="mt-2 text-sm text-text-muted">使用学号或工号登录对应角色空间</p>
+
           </div>
 
           {ssoEnabled && <a className="btn-secondary mt-6 text-center" href="/api/v1/sso/login">校园统一身份登录</a>}
@@ -84,7 +84,7 @@ export default function Login() {
           </form>
 
           {demoMode && <div className="mt-8 border-t border-accent-cyan/20 pt-6">
-            <div className="flex items-center justify-between"><p className="text-xs text-text-muted">演示账号 · 密码均为 123456</p><span className="font-mono text-[9px] text-status-success">● READY</span></div>
+            <div className="flex items-center justify-between"><span className="font-mono text-[9px] text-status-success">● READY</span></div>
             <div className="mt-3 grid min-w-0 grid-cols-3 gap-2">
               {demoAccounts.map((account) => <button key={account.code} type="button" aria-label={account.label} onClick={() => { setUsername(account.username); setPassword('123456') }} className="group min-w-0 overflow-hidden rounded border border-accent-cyan/20 bg-accent-cyan/5 px-2 py-3 text-left transition hover:border-accent-cyan/60 hover:bg-accent-cyan/10"><span className="block truncate text-sm font-semibold text-text-primary">{account.label}</span><span className="mt-1 hidden truncate text-[9px] text-text-muted sm:block">{account.description}</span></button>)}
             </div>

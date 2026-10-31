@@ -24,6 +24,10 @@ class SubAbilityResponse(BaseModel):
     name: str
     description: Optional[str] = None
     weight: float
+    full_score: float = 100
+    graduation_threshold: Optional[float] = None
+    threshold_source: Optional[str] = None
+    threshold_inherited_from: Optional[str] = None
 
 
 class MajorAbilityCreate(BaseModel):
@@ -49,6 +53,7 @@ class MajorAbilityResponse(BaseModel):
     name: str
     description: Optional[str] = None
     weight: float
+    full_score: float = 100
     graduation_threshold: float
     icon: Optional[str] = None
     display_order: float = 0
@@ -90,9 +95,11 @@ class AbilityProfileResponse(BaseModel):
     strongest_ability: Optional[str] = None
     weakest_ability: Optional[str] = None
     improvement_suggestions: Optional[list[str]] = None
-    total_score: float = 0
+    total_score: Optional[float] = None
     weak_abilities: list[dict[str, Any]] = Field(default_factory=list)
     sub_ability_details: list[dict[str, Any]] = Field(default_factory=list)
+    history_scope: dict[str, Any] = Field(default_factory=dict)
+    major_ability_calculations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ClassAbilityDistribution(BaseModel):

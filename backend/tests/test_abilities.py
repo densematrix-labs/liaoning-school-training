@@ -31,7 +31,7 @@ async def test_get_ability_schema(client: AsyncClient, db_session: AsyncSession)
         display_order=0,
     )
     db_session.add(ma)
-    
+
     sa = SubAbility(
         id="test-sa-001",
         major_ability_id="test-ma-001",
@@ -41,10 +41,10 @@ async def test_get_ability_schema(client: AsyncClient, db_session: AsyncSession)
     )
     db_session.add(sa)
     await db_session.commit()
-    
+
     response = await client.get("/api/v1/abilities/schema")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert len(data) == 1
     assert data[0]["name"] == "测试能力"
@@ -130,5 +130,5 @@ async def test_profile_rebuilds_from_step_scores_not_seeded_values(db_session: A
     assert result is not None
     assert result.sub_abilities["ability-sub-check"] == 50
     assert result.major_abilities["ability-major-safety"] == 50
-    assert result.total_score == 50
+    assert result.total_score is None
     assert result.graduation_ready is False

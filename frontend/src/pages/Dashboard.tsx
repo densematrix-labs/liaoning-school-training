@@ -185,7 +185,7 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-railway-900">
-        <div className="text-center"><div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-accent-blue/30 border-t-accent-blue" /><p className="text-text-muted">数据加载中</p></div>
+        <div className="text-center"><div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-accent-blue/30 border-t-accent-blue" /></div>
       </div>
     )
   }

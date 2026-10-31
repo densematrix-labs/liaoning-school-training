@@ -151,7 +151,7 @@ async def test_catalog_all_types_and_relationship_validation(test_db,acceptance_
         "labs":{"name":"第四实训室","capacity":30},
         "abilities":{"name":"新能力","weight":1,"graduation_threshold":0.6},
         "sub-abilities":{"name":"新子能力","major_ability_id":ids["ability"],"weight":1},
-        "projects":{"name":"新项目","major_id":ids["major"],"lab_id":ids["lab"],"steps":[{"id":"x","score":10,"weight":2}],"ability_mapping":{"x":[ids["sub"]]},"scoring_rules":{"code":"new-project","repeat_mode":"highest"}}}
+        "projects":{"name":"新项目","major_id":ids["major"],"lab_id":ids["lab"],"steps":[{"id":"x","score":20}],"ability_mapping":{"x":[ids["sub"]]},"scoring_rules":{"code":"new-project","repeat_mode":"highest"}}}
     for kind,data in payloads.items():
         response=await client.post(base+kind,headers=auth_headers,json=data)
         assert response.status_code==200,(kind,response.text)

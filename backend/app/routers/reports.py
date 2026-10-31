@@ -15,6 +15,17 @@ from app.routers.permissions import require_student_access
 router = APIRouter(prefix="/api/v1/reports", tags=["诊断报告"])
 
 
+@router.get('/{report_id}/sources')
+async def get_report_sources(report_id: str, current_user: UserResponse = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models.report import DiagnosticReport
+    from app.services.report_sources import report_sources
+    report = await db.get(DiagnosticReport, report_id)
+    if not report:
+        raise HTTPException(404, '报告不存在')
+    await require_student_access(current_user, report.student_id, db)
+    return await report_sources(db, report)
+
+
 @router.get('/{report_id}/download.docx')
 async def download_docx(report_id:str,current_user:UserResponse=Depends(get_current_user),db:AsyncSession=Depends(get_db)):
     import io,re
@@ -26,7 +37,14 @@ async def download_docx(report_id:str,current_user:UserResponse=Depends(get_curr
         raise HTTPException(404,'报告不存在')
     await require_student_access(current_user,result.student_id,db)
     doc=Document();style=doc.styles['Normal'];style.font.name='宋体';style.font.size=Pt(11)
-    style.element.rPr.rFonts.set(qn('w:eastAsia'),'宋体');doc.add_heading(result.title,0)
+    style.element.rPr.rFonts.set(qn('w:eastAsia'),'宋体')
+    from docx.shared import RGBColor
+    for name, size in [('Title',20),('Heading 1',16),('Heading 2',14),('Heading 3',12)]:
+        heading=doc.styles[name];heading.font.name='黑体';heading.font.size=Pt(size)
+        heading.font.color.rgb=RGBColor(0,0,0)
+        heading.element.get_or_add_rPr().get_or_add_rFonts().set(qn('w:eastAsia'),'黑体')
+    title=doc.add_heading(result.title,0);title.alignment=1
+
     lines=result.content.splitlines();i=0
     while i<len(lines):
         line=lines[i]
@@ -56,9 +74,9 @@ async def generate_report(
 ):
     """生成诊断报告"""
     await require_student_access(current_user, request.student_id, db)
-    
+
     service = ReportService(db)
-    
+
     try:
         task = await service.create_task(
             student_id=request.student_id,
@@ -99,7 +117,7 @@ async def get_my_reports(
     """获取当前学生的诊断报告列表"""
     if current_user.role != "student" or not current_user.student_id:
         raise HTTPException(status_code=403, detail="仅学生可访问")
-    
+
     service = ReportService(db)
     return await service.get_student_reports(current_user.student_id, limit)
 
@@ -115,7 +133,7 @@ async def get_student_reports(
 ):
     """获取指定学生的诊断报告列表（教师/管理员）"""
     await require_student_access(current_user, student_id, db)
-    
+
     service = ReportService(db)
     try:
         return await service.get_student_reports(
@@ -137,12 +155,12 @@ async def get_report(
     """获取报告详情"""
     service = ReportService(db)
     result = await service.get_report(report_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="报告不存在")
-    
+
     await require_student_access(current_user, result.student_id, db)
-    
+
     return result
 
 

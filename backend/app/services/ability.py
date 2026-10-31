@@ -19,7 +19,7 @@ from app.services.presentation import training_record_reference
 class AbilityService:
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_all_abilities(self) -> List[MajorAbilityResponse]:
         result = await self.db.execute(
             select(MajorAbility).order_by(MajorAbility.display_order)
@@ -29,7 +29,7 @@ class AbilityService:
         if settings.RELEASE_MODE:
             from app.services.evaluation import active_schema
             major_abilities, active_subs = await active_schema(self.db)
-        
+
         responses = []
         for ma in major_abilities:
             sub_result = await self.db.execute(
@@ -38,7 +38,7 @@ class AbilityService:
             subs = sub_result.scalars().all()
             if settings.RELEASE_MODE:
                 subs=[x for x in active_subs if x.major_ability_id==ma.id]
-            
+
             responses.append(MajorAbilityResponse(
                 id=ma.id,
                 name=ma.name,
@@ -54,12 +54,15 @@ class AbilityService:
                         name=s.name,
                         description=s.description,
                         weight=s.weight,
+                        full_score=s.weight,
+                        graduation_threshold=None,
+                        threshold_inherited_from=None,
                     ) for s in subs
                 ]
             ))
-        
+
         return responses
-    
+
     async def get_student_profile(self, student_id: str) -> Optional[AbilityProfileResponse]:
         # Get student info
         student_result = await self.db.execute(
@@ -68,32 +71,32 @@ class AbilityService:
         student = student_result.scalar_one_or_none()
         if not student:
             return None
-        
+
         # Always rebuild from traceable score details so stale or seeded values
         # can never become the source of truth for the ability graph.
         from app.config import settings
         profile = await self.recalculate_profile(student_id, persist=not settings.RELEASE_MODE)
-        
+
         if not profile:
             return None
-        
+
         # Build radar data
         radar_data = []
         major_abilities_result = await self.db.execute(
             select(MajorAbility).order_by(MajorAbility.display_order)
         )
         major_abilities = major_abilities_result.scalars().all()
-        
+
         if settings.RELEASE_MODE:
             from app.services.evaluation import active_schema
-            major_abilities,_ = await active_schema(self.db)
+            major_abilities,active_subs = await active_schema(self.db)
         major_ability_scores = profile.major_abilities or {}
-        
+
         strongest = None
         strongest_score = 0
         weakest = None
         weakest_score = 100
-        
+
         for ma in major_abilities:
             score = major_ability_scores.get(ma.id, 0) * 100  # Convert to percentage
             radar_data.append(RadarDataPoint(
@@ -105,31 +108,22 @@ class AbilityService:
                 weight=ma.weight,
                 threshold=ma.graduation_threshold * 100,
             ))
-            
+
             if score > strongest_score:
                 strongest_score = score
                 strongest = ma.name
             if score < weakest_score:
                 weakest_score = score
                 weakest = ma.name
-        
+
         # Generate suggestions
         suggestions = []
         for ma in major_abilities:
             score = major_ability_scores.get(ma.id, 0)
             if score < ma.graduation_threshold:
                 suggestions.append(f"建议加强「{ma.name}」的训练，当前达成率 {round(score * 100, 1)}%，目标 {round(ma.graduation_threshold * 100)}%")
-        
-        weighted_scores = [
-            (major_ability_scores.get(ma.id, 0), ma.weight)
-            for ma in major_abilities
-            if ma.weight > 0
-        ]
-        total_weight = sum(weight for _, weight in weighted_scores)
-        total_score = round(
-            sum(score * weight for score, weight in weighted_scores) / total_weight * 100,
-            1,
-        ) if total_weight else 0
+
+        total_score = None
         weak_abilities = [
             {"ability_id": item.ability_id, "name": item.ability_name, "score": item.score}
             for item in radar_data
@@ -144,19 +138,29 @@ class AbilityService:
 
         sub_ability_result = await self.db.execute(select(SubAbility))
         sub_abilities = sub_ability_result.scalars().all()
-        evidence_by_ability = await self._build_evidence(student_id)
+        if settings.RELEASE_MODE:
+            active_ids = {sub.id for sub in active_subs}
+            sub_abilities = [sub for sub in sub_abilities if sub.id in active_ids]
+        evidence_by_ability, aggregation_by_ability, history_scope = await self._build_evidence(student_id)
+        parent_map = {ma.id: ma for ma in major_abilities}
         sub_ability_details = [
             {
                 "id": sub.id,
                 "major_ability_id": sub.major_ability_id,
                 "name": sub.name,
-                "weight": sub.weight,
-                "score": round((profile.sub_abilities or {}).get(sub.id, 0) * 100, 1),
+                "full_score": sub.weight,
+                "earned_score": round((profile.sub_abilities or {}).get(sub.id,0)*sub.weight,2),
+                "parent_name": parent_map[sub.major_ability_id].name,
+                "score": round((profile.sub_abilities or {}).get(sub.id,0)*sub.weight,2),
+                "has_evidence": bool(evidence_by_ability.get(sub.id)),
                 "evidence": evidence_by_ability.get(sub.id, []),
+                "aggregation": aggregation_by_ability.get(sub.id),
             }
-            for sub in sub_abilities
+            for sub in sub_abilities if sub.major_ability_id in parent_map
         ]
 
+        from app.services.evaluation import summarize_major_abilities
+        _, major_calculations = summarize_major_abilities(profile.sub_abilities or {}, major_abilities, sub_abilities)
         return AbilityProfileResponse(
             id=profile.id,
             student_id=student_id,
@@ -175,9 +179,11 @@ class AbilityService:
             total_score=total_score,
             weak_abilities=weak_abilities,
             sub_ability_details=sub_ability_details,
+            history_scope=history_scope,
+            major_ability_calculations=major_calculations,
         )
 
-    async def _build_evidence(self, student_id: str) -> dict[str, list[dict]]:
+    async def _build_evidence(self, student_id: str) -> tuple[dict[str, list[dict]], dict, dict]:
         rows = await self.db.execute(
             select(Score, TrainingProject, TrainingRecord)
             .join(TrainingProject, TrainingProject.id == Score.project_id)
@@ -185,28 +191,55 @@ class AbilityService:
             .where(Score.student_id == student_id)
             .order_by(Score.calculated_at.desc())
         )
+        from app.config import settings
+        from app.services.evaluation import select_repeated, summarize_sub_abilities
+        from app.services.production_data import setting
+        selected_rows = rows.all()
+        history_count = len(selected_rows)
+        decay = 1.0
+        if settings.RELEASE_MODE:
+            chosen = {pair[0].id for pair in select_repeated([(score, project) for score, project, _ in selected_rows])}
+            selected_rows = [(score, project, record) for score, project, record in selected_rows if score.id in chosen]
+            decay = 1.0
+        _, aggregation = summarize_sub_abilities([score for score, _, _ in selected_rows], decay, settings.RELEASE_MODE)
+        dates = [record.completed_at.isoformat() for _, _, record in selected_rows if record.completed_at]
+        history_scope = {'mode': '全部历史实训', 'available_records': history_count, 'selected_records': len(selected_rows),
+            'date_from': min(dates) if dates else None, 'date_to': max(dates) if dates else None,
+            'projects': list({project.id: {'id': project.id, 'name': project.name, 'repeat_mode': (project.scoring_rules or {}).get('repeat_mode', 'all')} for _, project, _ in selected_rows}.values()),
+            'score_ids': [score.id for score, _, _ in selected_rows], 'decay': decay,
+            'note': '按各项目重复实训策略选用；上方趋势筛选不改变本页全历史能力结果。'}
+        contributions = {(sub_id, row['score_id'], row['step_id']): row for sub_id, summary in aggregation.items() for row in summary['contributions']}
         evidence: dict[str, list[dict]] = defaultdict(list)
-        for score, project, record in rows.all():
+        for score, project, record in selected_rows:
             step_map = {str(step.get("id")): step for step in (project.steps or [])}
             mapping = project.ability_mapping or {}
             for step_id, detail in (score.details or {}).items():
-                related = detail.get("related_abilities") or mapping.get(str(step_id), [])
+                if float(detail.get('max_score', 0)) <= 0:
+                    continue
+                related = detail.get('related_abilities', []) if settings.RELEASE_MODE else detail.get('related_abilities', mapping.get(str(step_id), []))
                 step = step_map.get(str(step_id), {})
                 item = {
                     "score_id": score.id,
                     "record_reference": training_record_reference(record.completed_at, record.id),
                     "project_name": project.name,
                     "step_id": str(step_id),
-                    "step_name": step.get("name", str(step_id)),
+                    "step_name": detail.get('step_name') or step.get("name", str(step_id)),
                     "passed": bool(detail.get("passed", False)),
                     "score": detail.get("score", 0),
                     "max_score": detail.get("max_score", step.get("score", 0)),
                     "calculated_at": score.calculated_at.isoformat() if score.calculated_at else None,
+                    "step_weight": (detail.get('applied_rule') or {}).get('weight'),
+                    "rule_version": (detail.get('applied_rule') or {}).get('rule_version'),
+                    "mapping_source": '计分时能力映射快照' if 'related_abilities' in detail else '当前项目映射',
                 }
                 for ability_id in related:
-                    evidence[str(ability_id)].append(item)
-        return evidence
-    
+                    contribution = contributions.get((ability_id, score.id, str(step_id)), {})
+                    evidence[str(ability_id)].append({**item, 'mapping_target_id': ability_id,
+                        'contribution_points': contribution.get('contribution_points'),
+                        'recency_factor': contribution.get('recency_factor'), 'effective_weight': contribution.get('weight'),
+                        'weighted_earned': contribution.get('weighted_earned')})
+        return evidence, aggregation, history_scope
+
     async def recalculate_profile(self, student_id: str, persist: bool = True) -> Optional[AbilityProfile]:
         """Calculate ability profile from all scores"""
         scores_result = await self.db.execute(
@@ -215,13 +248,13 @@ class AbilityService:
             .where(Score.student_id == student_id)
         )
         score_rows = scores_result.all()
-        
+
         if not score_rows:
             return None
-        
+
         # Aggregate ability scores
         ability_scores = defaultdict(list)
-        
+
         for score, project in score_rows:
             if score.details:
                 for step_id, detail in score.details.items():
@@ -229,48 +262,51 @@ class AbilityService:
                     step_score = detail.get("score", 0)
                     max_score = detail.get("max_score", 10)
                     normalized = step_score / max_score if max_score > 0 else 0
-                    
+
                     for ability_id in abilities:
                         ability_scores[ability_id].append(normalized)
-        
+
         # Calculate sub-ability averages
         sub_ability_avgs = {}
         for ability_id, scores_list in ability_scores.items():
             sub_ability_avgs[ability_id] = sum(scores_list) / len(scores_list)
-        
+        if any('ability_mapping_points' in detail for score, _ in score_rows for detail in (score.details or {}).values()):
+            from app.services.evaluation import summarize_sub_abilities
+            sub_ability_avgs, _ = summarize_sub_abilities([score for score, _ in score_rows])
+
         # Calculate major ability averages
         major_abilities_result = await self.db.execute(select(MajorAbility))
         major_abilities = major_abilities_result.scalars().all()
-        
+
         major_ability_avgs = {}
         all_ready = True
-        
+
         for ma in major_abilities:
             sub_result = await self.db.execute(
                 select(SubAbility).where(SubAbility.major_ability_id == ma.id)
             )
             subs = sub_result.scalars().all()
-            
+
             sub_scores = []
             for sub in subs:
                 if sub.id in sub_ability_avgs:
                     sub_scores.append(sub_ability_avgs[sub.id] * sub.weight)
-            
+
             if sub_scores:
                 major_ability_avgs[ma.id] = sum(sub_scores) / sum(s.weight for s in subs if s.id in sub_ability_avgs)
             else:
                 major_ability_avgs[ma.id] = 0
-            
+
             if major_ability_avgs[ma.id] < ma.graduation_threshold:
                 all_ready = False
-        
+
         from app.config import settings
         if settings.RELEASE_MODE:
             from app.services.evaluation import evaluate, select_repeated, active_schema
             from app.services.production_data import setting
             config = await setting(self.db, "release:evaluation", {"decay":1.0})
             major_abilities, all_subs = await active_schema(self.db)
-            result = evaluate([pair[0] for pair in select_repeated(score_rows)], major_abilities, all_subs, float(config.get("decay",1.0)))
+            result = evaluate([pair[0] for pair in select_repeated(score_rows)], major_abilities, all_subs, 1.0)
             sub_ability_avgs, major_ability_avgs, all_ready = result["sub"], result["major"], result["ready"]
 
         if not persist:
@@ -283,7 +319,7 @@ class AbilityService:
             select(AbilityProfile).where(AbilityProfile.student_id == student_id)
         )
         profile = profile_result.scalar_one_or_none()
-        
+
         if profile:
             profile.sub_abilities = sub_ability_avgs
             profile.major_abilities = major_ability_avgs
@@ -298,7 +334,7 @@ class AbilityService:
                 graduation_ready=all_ready,
             )
             self.db.add(profile)
-        
+
         if settings.RELEASE_MODE:
             from app.services.production_data import put_setting
             from datetime import datetime
@@ -311,19 +347,19 @@ class AbilityService:
                 "sub":sub_ability_avgs,"major":major_ability_avgs,"ready":all_ready})
         await self.db.commit()
         await self.db.refresh(profile)
-        
+
         return profile
-    
+
     async def get_class_distribution(self, class_id: str) -> ClassAbilityDistribution:
         """Get ability distribution for a class"""
         from app.models.student import Class
-        
+
         # Get class info
         class_result = await self.db.execute(
             select(Class).where(Class.id == class_id)
         )
         class_obj = class_result.scalar_one_or_none()
-        
+
         # Get students
         students_result = await self.db.execute(
             select(Student).where(Student.class_id == class_id)
@@ -338,35 +374,35 @@ class AbilityService:
             value = await self.recalculate_profile(student.id,persist=not settings.RELEASE_MODE)
             if value:
                 calculated.append(value)
-        
+
         # Get profiles
         student_ids = [s.id for s in students]
         profiles_result = await self.db.execute(
             select(AbilityProfile).where(AbilityProfile.student_id.in_(student_ids))
         )
         profiles = calculated if settings.RELEASE_MODE else profiles_result.scalars().all()
-        
+
         # Aggregate
         abilities_data = defaultdict(lambda: {"scores": [], "distribution": [0, 0, 0, 0, 0]})
         graduation_ready_count = 0
-        
+
         for profile in profiles:
             if profile.graduation_ready:
                 graduation_ready_count += 1
-            
+
             for ability_id, score in (profile.major_abilities or {}).items():
                 score_pct = score * 100
                 abilities_data[ability_id]["scores"].append(score_pct)
-                
+
                 # Distribution buckets: 0-20, 20-40, 40-60, 60-80, 80-100
                 bucket = min(int(score_pct / 20), 4)
                 abilities_data[ability_id]["distribution"][bucket] += 1
-        
+
         # Get ability names
         major_abilities_result = await self.db.execute(select(MajorAbility))
         major_abilities = major_abilities_result.scalars().all()
         ability_names = {ma.id: ma.name for ma in major_abilities}
-        
+
         abilities_response = {}
         for ability_id, data in abilities_data.items():
             avg = sum(data["scores"]) / len(data["scores"]) if data["scores"] else 0
@@ -375,7 +411,7 @@ class AbilityService:
                 "avg": round(avg, 1),
                 "distribution": data["distribution"],
             }
-        
+
         return ClassAbilityDistribution(
             class_id=class_id,
             class_name=class_obj.name if class_obj else "",

@@ -54,6 +54,8 @@ class RecalculationService:
             failed_score = float(step.get("failed_score", 0) or 0)
             step_score = step_max if passed else min(failed_score, step_max)
             related = list(mapping.get(step_id) or step.get("abilities") or [])
+            from app.services.mapping_points import step_mapping_points
+            points = step_mapping_points(project.scoring_rules, step_id, related, step_max)
             if not passed:
                 failed_abilities.update(related)
             total_score += step_score
@@ -66,6 +68,7 @@ class RecalculationService:
                 "deduction": round(step_max - step_score, 2),
                 "reason": source.get("reason"),
                 "related_abilities": related,
+                "ability_mapping_points": points,
                 "applied_rule": {
                     "passed_score": step_max,
                     "failed_score": failed_score,

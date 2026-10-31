@@ -22,6 +22,7 @@ class DiagnosticReportResponse(BaseModel):
     score_id: Optional[str] = None
     title: str
     content: str
+    structured: Optional[dict] = None
     content_html: Optional[str] = None
     pdf_url: Optional[str] = None
     generated_at: Optional[datetime] = None

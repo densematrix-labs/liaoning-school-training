@@ -17,11 +17,11 @@ export default function EnvironmentUpload({studentId}:{studentId:string}) {
       setTask((await api.post('/api/v1/environment/tasks',{student_id:studentId,score_id:score,lab_id:lab,image_base64:image})).data)
     } catch(e) {setError(e instanceof Error && !(e as any).response ? e.message : getErrorMessage(e))} finally {setBusy(false)}
   }
-  return <section className="railway-card space-y-4 p-5"><h2 className="section-heading">上传实训现场图片</h2><p className="text-sm text-text-muted">支持 JPEG / PNG / WebP，单张不超过 10MB；服务端核验实际图片内容。选择对应实训及实训室。系统与标准图片对比，结果由教师复核；任务失败可重新提交。仅检查图片中可见的环境状态。</p>
+  return <section className="railway-card space-y-4 p-5"><h2 className="section-heading">上传实训现场图片</h2>
     {(scores.isError||labs.isError)&&<p role="alert">加载实训记录或实训室失败：{getErrorMessage(scores.error||labs.error)}<button type="button" className="btn-secondary ml-2" onClick={()=>{scores.refetch();labs.refetch()}}>重新加载</button></p>}
     <label>关联实训<select className="input-field" value={score} onChange={e=>setScore(e.target.value)}><option value="">选择已完成实训</option>{scores.data?.scores?.map((x:any)=><option key={x.id} value={x.id}>{x.project_name} · {x.training_completed_at||x.calculated_at}</option>)}</select></label>
     <label>对应实训室<select className="input-field" value={lab} onChange={e=>setLab(e.target.value)}><option value="">选择实训室</option>{labs.data?.map((x:any)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
     <input aria-label="现场图片" type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>setFile(e.target.files?.[0]??null)}/><button className="btn-primary" disabled={!score||!lab||!file||busy} onClick={submit}>提交环境检查</button>
-    {error&&<p role="alert">{error}</p>}{task&&<p role="status">处理状态：{status.data?.status||task.status}{status.data?.error_message&&` · ${status.data.error_message}`}{status.data?.status==='completed'&&' · 已生成，请刷新检查记录查看'}</p>}
+    {error&&<p role="alert">{error}</p>}{task&&<div role="status" className="space-y-2 rounded border border-accent-cyan/30 p-4"><p>处理状态：{({pending:'已提交，等待处理',running:'正在分析',completed:'处理完成，已生成检查结果',failed:'处理失败，记录已保留'} as Record<string,string>)[status.data?.status||task.status] || task.status}{status.data?.error_message&&` · ${status.data.error_message}`}</p><p className="break-all text-xs">任务ID：{task.id}{status.data?.check_id&&` · 检查ID：${status.data.check_id}`}</p>{status.data?.status==='completed'&&status.data?.result&&<><p>AI 原始结果：{status.data.result.total_score}/100 · 待教师复核，不等同于人工最终结论</p><p className="text-sm">{status.data.result.summary}</p></>}</div>}
   </section>
 }

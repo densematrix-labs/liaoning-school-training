@@ -22,9 +22,9 @@ CATALOG = {
     "majors": (Major,["code","name","description"],["code","name"]),
     "classes": (Class,["name","major_id","teacher_id","year"],["name","major_id","year"]),
     "students": (Student,["user_id","student_no","name","major_id","class_id","enrollment_year"],["user_id","student_no","name","major_id","class_id","enrollment_year"]),
-    "labs": (Lab,["name","building","floor","capacity","reference_image_url","equipment","status","current_students"],["name"]),
-    "abilities": (MajorAbility,["name","description","weight","graduation_threshold","display_order","icon"],["name"]),
-    "sub-abilities": (SubAbility,["major_ability_id","name","description","weight"],["major_ability_id","name"]),
+    "labs": (Lab,["name","building","floor","capacity","reference_image_url","equipment","status"],["name"]),
+    "abilities": (MajorAbility,["name","description","pass_score","display_order","icon"],["name"]),
+    "sub-abilities": (SubAbility,["major_ability_id","name","description","full_score"],["major_ability_id","name"]),
     "projects": (TrainingProject,["name","major_id","lab_id","duration","steps","scoring_rules","ability_mapping"],["name","major_id"]),
 }
 
@@ -38,6 +38,14 @@ def as_dict(item, fields):
 
 
 async def save_item(db, kind, data, actor, item_id=None):
+    data=dict(data)
+    # Legacy admin endpoints translate old storage fields; current catalog exposes only points.
+    if kind=='abilities':
+        if float(data.get('weight',0))<0:raise ValueError('分值不能为负数')
+        data.pop('weight',None)
+        if 'graduation_threshold' in data:data['pass_score']=float(data.pop('graduation_threshold'))*100
+    elif kind=='sub-abilities' and 'weight' in data:
+        data['full_score']=data.pop('weight')
     if kind not in CATALOG:
         raise ValueError("不支持的数据类型")
     model, fields, required = CATALOG[kind]
@@ -61,11 +69,15 @@ async def save_item(db, kind, data, actor, item_id=None):
             values[key] = int(values[key])
             if not -10 <= values[key] <= 10000:
                 raise ValueError(f"{key} 超出范围")
-    for key in ["weight","graduation_threshold","display_order"]:
+    for key in ["weight","graduation_threshold","display_order","full_score","pass_score"]:
         if key in values:
             values[key] = float(values[key])
             if not math.isfinite(values[key]) or values[key]<0 or (key=="graduation_threshold" and values[key]>1):
                 raise ValueError(f"{key} 超出范围")
+    if "full_score" in values and values["full_score"] <= 0:
+        raise ValueError("子能力满分必须大于零")
+    if "pass_score" in values and values["pass_score"] > 100:
+        raise ValueError("达标分必须在0到100之间")
     foreign = {"major_id":Major,"class_id":Class,"teacher_id":User,"user_id":User,"lab_id":Lab,"major_ability_id":MajorAbility}
     for key, cls in foreign.items():
         if merged.get(key) and not await db.get(cls,merged[key]):
@@ -78,6 +90,13 @@ async def save_item(db, kind, data, actor, item_id=None):
             if len(data["password"])<12:
                 raise ValueError("密码至少 12 位")
             values["password_hash"] = AuthService.get_password_hash(data["password"])
+    if kind == 'labs' and 'equipment' in values:
+        equipment = values['equipment']
+        if isinstance(equipment, str):
+            equipment = json.loads(equipment)
+        if not isinstance(equipment, list) or any(not isinstance(x, str) for x in equipment):
+            raise ValueError('设备清单必须为设备名称列表')
+        values['equipment'] = [x.strip() for x in equipment if x.strip()]
     if kind == 'labs' and 'status' in values:
         from app.models.lab import LabStatus
         try:
@@ -99,6 +118,12 @@ async def save_item(db, kind, data, actor, item_id=None):
             merged[key] = values.get(key,merged.get(key) or default)
         if not isinstance(merged["steps"],list) or not isinstance(merged["ability_mapping"],dict) or not isinstance(merged["scoring_rules"],dict):
             raise ValueError("步骤、规则和映射结构错误")
+        if merged['scoring_rules'].get('scoring_mode', 'absolute') != 'absolute':
+            raise ValueError('仅支持绝对分值计分')
+        if any(float(step.get('weight', 1)) != 1 for step in merged['steps']):
+            raise ValueError('请配置步骤绝对分值，不配置步骤权重')
+        merged['scoring_rules'] = {k:v for k,v in merged['scoring_rules'].items() if k not in {'total_score','decay','time_decay'}}
+        merged['scoring_rules']['scoring_mode'] = 'absolute'
         steps = merged["steps"]
         ids = [str(step.get("id", "")) for step in steps]
         if steps and (not all(ids) or len(set(ids)) != len(ids)):
@@ -108,9 +133,14 @@ async def save_item(db, kind, data, actor, item_id=None):
         for refs in merged["ability_mapping"].values():
             if not isinstance(refs,list):
                 raise ValueError("能力映射必须为数组")
+            if len(refs) != len(set(refs)):
+                raise ValueError('同一步骤不能重复关联同一子能力')
             for sub_id in refs:
                 if not await db.get(SubAbility,sub_id):
                     raise ValueError("映射引用不存在的子能力")
+        from app.services.mapping_points import validate_mapping_points
+        merged['scoring_rules']['ability_mapping_points'] = validate_mapping_points(
+            merged['ability_mapping'], merged['scoring_rules'].get('ability_mapping_points', {}))
         if any(step.get("enabled",True) for step in steps):
             from app.services.production_data import score_steps
             temporary = TrainingProject(steps=steps,ability_mapping=merged["ability_mapping"],scoring_rules={**merged["scoring_rules"],"enabled":True})
@@ -160,6 +190,33 @@ async def save_item(db, kind, data, actor, item_id=None):
     await record_audit(db,actor_id=actor.id,actor_name=actor.name,action="update" if before else "create",object_type=kind,object_id=item.id,
                        before=before,after={**after,**state})
     return {**after,**state}
+
+
+async def ability_hierarchy(db):
+    """Read configured parents/children, including disabled nodes and inherited thresholds."""
+    from app.models.operations import SystemSetting
+    states = {row.key: row.value for row in (await db.execute(
+        select(SystemSetting).where(SystemSetting.key.like('state:%'))
+    )).scalars()}
+    parents = (await db.execute(select(MajorAbility).order_by(MajorAbility.display_order, MajorAbility.id))).scalars().all()
+    children = (await db.execute(select(SubAbility).order_by(SubAbility.id))).scalars().all()
+    result = []
+    for parent in parents:
+        state = states.get(f'state:abilities:{parent.id}', {})
+        row = {**as_dict(parent, CATALOG['abilities'][1]), **state,
+               'level': 1, 'level_name': '一级 · 大类能力',
+               'enabled': state.get('enabled', True), 'threshold_source': '本级配置', 'children': []}
+        for child in children:
+            if child.major_ability_id != parent.id:
+                continue
+            child_state = states.get(f'state:sub-abilities:{child.id}', {})
+            row['children'].append({**as_dict(child, CATALOG['sub-abilities'][1]), **child_state,
+                'level': 2, 'level_name': '二级 · 子能力',
+                'parent_name': parent.name, 'parent_code': state.get('code'),
+                'enabled': child_state.get('enabled', True),
+                'effective_enabled': child_state.get('enabled', True) and row['enabled']})
+        result.append(row)
+    return {'items':result,'active_dimensions':sum(row['enabled'] for row in result)}
 
 
 def parse_upload(filename, content):

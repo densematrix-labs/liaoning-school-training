@@ -104,6 +104,7 @@ class OperationalMiddleware:
             return await self.app(scope,receive,send)
         started, status, request_id = time.monotonic(),500,uuid.uuid4().hex
         path, method = scope["path"],scope["method"]
+        scope.setdefault("state",{})["request_id"]=request_id
         async def wrapped(message):
             nonlocal status
             if message["type"]=="http.response.start":
@@ -118,7 +119,7 @@ class OperationalMiddleware:
             METRICS["errors"]+=int(status>=500)
             METRICS["latency_seconds"]+=elapsed
             logger.info(json.dumps({"event":"http","request_id":request_id,"path":path,"method":method,"status":status,"seconds":round(elapsed,4)}))
-            if path.startswith("/api/") and (method not in {"GET","HEAD","OPTIONS"} or "export" in path or "download" in path):
+            if path.startswith("/api/") and (method not in {"GET","HEAD","OPTIONS"} or "export" in path or "download" in path or path.endswith(".csv")):
                 try:
                     from app.services.auth import AuthService
                     actor=None
@@ -131,7 +132,17 @@ class OperationalMiddleware:
                         await db.execute(text("BEGIN IMMEDIATE"))
                         if actor and not await db.get(User,actor):
                             actor=None
-                        db.add(AuditLog(actor_id=actor,action=method,object_type="api",object_id=path[:100],
+                        user=await db.get(User,actor) if actor else None
+                        action=method
+                        if path.endswith('/auth/login'): action='user_login'
+                        elif path.endswith('.csv') or '/download' in path: action='data_export'
+                        elif '/review' in path: action='environment_review'
+                        elif '/reports/generate' in path: action='report_generate'
+                        elif '/environment/' in path and method=='POST': action='environment_check'
+                        elif '/recalculate' in path: action='score_recalculate'
+                        elif '/sync' in path or '/records/import' in path or '/exceptions/' in path: action='data_sync'
+                        elif '/catalog/' in path or '/mappings/' in path or '/permissions' in path: action='configuration_update'
+                        db.add(AuditLog(actor_id=actor,actor_name=user.name if user else None,action=action,object_type="api",object_id=path[:100],
                             result="success" if status<400 else "failed",reason=None if status<400 else str(status),
                             after={"request_id":request_id,"ip":scope.get("client",[None])[0],"status":status}))
                         await db.commit()
@@ -222,8 +233,13 @@ class ReleaseWorker:
                 scheduled=local.replace(hour=int(cfg["hour"]),minute=0,second=0,microsecond=0)
                 if local < scheduled and not last.get("time"):
                     return
+            first_run=cfg.get('next_run_at')
+            next_due=datetime.fromisoformat(first_run) if first_run else None
+            scheduled_due=next_due is not None and now>=next_due and (not last.get('time') or datetime.fromisoformat(last['time'])<next_due)
+            if not force and next_due is not None and now<next_due:
+                return
             hours=max(1,float(cfg.get("frequency_hours",24)))
-            if not force and not last.get("backlog") and last.get("time") and now-datetime.fromisoformat(last["time"])<timedelta(hours=hours):
+            if not force and not scheduled_due and not last.get("backlog") and last.get("time") and now-datetime.fromisoformat(last["time"])<timedelta(hours=hours):
                 return
             admin=actor or (await db.execute(select(User).where(User.role==UserRole.ADMIN).limit(1))).scalar_one_or_none()
             if not admin:
@@ -240,6 +256,7 @@ class ReleaseWorker:
                 for _ in range(100):
                     rows=await asyncio.to_thread(read_mysql,cfg,credentials,cursor)
                     task=await ProductionIngest(db).run(rows,actor_id=admin.id,actor_name=admin.name,source=cfg.get("source","school"))
+                    await put_setting(db,'release:sync_run:'+task.id,{'id':task.id,'trigger':'manual' if force else 'automatic','started_at':task.started_at.isoformat(),'completed_at':task.completed_at.isoformat() if task.completed_at else datetime.utcnow().isoformat(),'status':task.status.value,'read':task.read_count,'success':task.success_count,'skipped':task.skipped_count,'errors':task.error_count})
                     new_cursor=[rows[-1]["updated_at"],rows[-1]["source_record_id"]] if rows else cursor
                     if rows and new_cursor==cursor:
                         raise ValueError("校方增量游标没有推进")

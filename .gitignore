@@ -49,3 +49,6 @@ Thumbs.db
 artifacts/
 # Internal procurement review is delivered privately, not to this public repo.
 docs/release/internal/
+
+# Local dependency symlink used by linked worktrees
+/frontend/node_modules

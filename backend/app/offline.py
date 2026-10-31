@@ -120,13 +120,15 @@ class PilotBoundary:
                     if path.startswith("/api/v1/dashboard") and current.role != "admin":
                         raise HTTPException(403,"校内大屏仅限管理员，学生和教师请使用各自统计页面")
             except HTTPException as exc:
-                await JSONResponse(status_code=exc.status_code,content={"detail":exc.detail})(scope,receive,send)
+                from app.services.error_contract import error_response
+                await error_response(exc.status_code,exc.detail,scope.get("state",{}).get("request_id"))(scope,receive,send)
                 return
         if blocked and scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
             return
         if blocked and scope["type"] == "http":
-            response = JSONResponse(status_code=409, content={"detail": "校内部署禁止演示同步和删除历史对象；请使用上线管理中的真实导入或停用功能。"})
+            from app.services.error_contract import error_response
+            response = error_response(409,"校内部署禁止演示同步和删除历史对象；请使用上线管理中的真实导入或停用功能。",scope.get("state",{}).get("request_id"))
             await response(scope, receive, send)
             return
         await self.app(scope, receive, send)
@@ -153,6 +155,9 @@ async def static_site(path: str):
     runtime = "<script>window.__SHIXUN_DEMO__=" + json.dumps(MODE == "demo") + ";</script>"
     return HTMLResponse(index.replace("<head>", "<head>" + runtime), headers={"Cache-Control": "no-store"})
 
+
+from app.services.error_contract import install_errors
+install_errors(site)
 
 from app.services.operations_runtime import OperationalMiddleware
 app = OperationalMiddleware(PilotBoundary(site))

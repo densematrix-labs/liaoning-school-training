@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from sqlalchemy.exc import IntegrityError
 
 from app.adapters.controllers.auth import get_current_admin
@@ -23,6 +23,24 @@ from app.services.production_data import setting, put_setting, ProductionIngest,
 from app.services.operations_runtime import METRICS, worker, backup_database
 
 router=APIRouter(prefix="/api/v1/release",tags=["校内部署管理"],dependencies=[Depends(get_current_admin)])
+
+
+@router.get('/scoring-exceptions')
+async def scoring_exceptions(db=Depends(get_db)):
+    import hashlib
+    from app.models.operations import SystemSetting
+    from app.models.training import TrainingRecord, Score
+    entries = (await db.execute(select(SystemSetting).where(SystemSetting.key.like('scoring_exception:%')))).scalars().all()
+    result = []
+    for entry in sorted(entries, key=lambda item: item.value.get('checked_at',''), reverse=True)[:100]:
+        item = dict(entry.value)
+        external = 'src:' + hashlib.sha256(f"{item['source']}:{item['source_record_id']}".encode()).hexdigest()
+        scores = (await db.execute(select(Score.id).join(TrainingRecord, TrainingRecord.id==Score.record_id).where(TrainingRecord.external_id==external))).scalars().all()
+        item.update(id=entry.key.split(':',1)[1], formal_score_ids=list(scores), formal_score_count=len(scores),
+                    formal_result='已生成正式成绩（异常后已有成功处理）' if scores else '未生成正式成绩',
+                    current_status='resolved' if scores else item['status'])
+        result.append(item)
+    return {'items':result, 'checked_at':datetime.utcnow().isoformat()}
 
 
 @router.post('/camera/capture')
@@ -65,8 +83,17 @@ async def import_mappings(file:UploadFile=File(...),admin=Depends(get_current_ad
                 mapping={k:list(v) for k,v in (p.ability_mapping or {}).items()}
                 current=list(mapping.get(sid,[]))
                 mapping[sid]=sorted(set(current+[aid])) if on else [x for x in current if x!=aid]
-                await save_item(db,'projects',{'ability_mapping':mapping},admin,pid)
-                results.append({'row':n,'status':'success','step_id':sid,'sub_ability_id':aid,'enabled':on})
+                import copy
+                rules=copy.deepcopy(p.scoring_rules or {})
+                points=rules.setdefault('ability_mapping_points', {})
+                if not on:
+                    points.get(sid, {}).pop(aid, None)
+                elif row.get('contribution_points') not in (None, ''):
+                    from app.services.mapping_points import contribution_points
+                    points.setdefault(sid, {})[aid]=contribution_points(row['contribution_points'])
+                await save_item(db,'projects',{'ability_mapping':mapping,'scoring_rules':rules},admin,pid)
+                results.append({'row':n,'status':'success','step_id':sid,'sub_ability_id':aid,'enabled':on,
+                                'contribution_points':points.get(sid, {}).get(aid)})
         except (ValueError,TypeError,IntegrityError) as exc:
             results.append({'row':n,'status':'error','reason':str(exc) if not isinstance(exc,IntegrityError) else '关联校验失败'})
     await db.commit()
@@ -108,6 +135,7 @@ async def verify_scores(admin=Depends(get_current_admin),db=Depends(get_db)):
 
 
 class SourceConfig(BaseModel):
+    next_run_at: str | None = None
     enabled: bool=False
     source: str=Field(default="school",min_length=1,max_length=40)
     table: str
@@ -115,6 +143,12 @@ class SourceConfig(BaseModel):
     frequency_hours: int=Field(default=24,ge=1,le=24)
     batch_size: int=Field(default=1000,ge=1,le=5000)
     hour: int|None=Field(default=None,ge=0,le=23)
+
+
+@router.get('/ability-hierarchy')
+async def get_ability_hierarchy(db=Depends(get_db)):
+    from app.services.catalog import ability_hierarchy
+    return await ability_hierarchy(db)
 
 
 @router.get("/catalog/{kind}")
@@ -195,9 +229,20 @@ async def source_get(db=Depends(get_db)):
             "last_error":await setting(db,"release:last_sync_error",{}),"credentials_configured":all(os.getenv("SCHOOL_DB_"+k) for k in ("HOST","USER","PASSWORD","DATABASE"))}
 
 
+@router.get('/source/history')
+async def source_history(db=Depends(get_db)):
+    from app.models.operations import SystemSetting
+    rows=(await db.execute(select(SystemSetting).where(SystemSetting.key.like('release:sync_run:%')))).scalars().all()
+    return sorted([x.value for x in rows],key=lambda x:x['started_at'],reverse=True)[:30]
+
+
 @router.put("/source")
 async def source_put(data:SourceConfig,admin=Depends(get_current_admin),db=Depends(get_db)):
     try:
+        if data.next_run_at:
+            scheduled=datetime.fromisoformat(data.next_run_at)
+            if scheduled.tzinfo is not None:
+                raise ValueError('首次同步时间请使用UTC时间')
         identifier(data.table)
         for field in data.fields.values():
             identifier(field)
@@ -282,7 +327,7 @@ async def verify_backup(db=Depends(get_db)):
                     raise ValueError('恢复数据库外键核验失败')
             return {**result,'configuration_verified':True,'configuration_entries':len(restored),'foreign_keys_verified':True}
     result=await asyncio.to_thread(verify)
-    result.update({'time':datetime.utcnow().isoformat(),'filename':last['filename'],'mode':'独立临时目录恢复，不覆盖运行库'})
+    result.update({'id':__import__('uuid').uuid4().hex,'time':datetime.utcnow().isoformat(),'filename':last['filename'],'mode':'独立临时目录恢复，不覆盖运行库'})
     await put_setting(db,'release:last_restore',result)
     await db.commit()
     return result
@@ -295,7 +340,8 @@ async def import_records(file:UploadFile=File(...),source:str="school-file",admi
         task=await ProductionIngest(db).run(rows,actor_id=admin.id,actor_name=admin.name,source=source)
     except (ValueError,UnicodeError) as exc:
         raise HTTPException(400,str(exc)) from exc
-    return {"task_id":task.id,"read":task.read_count,"success":task.success_count,"skipped":task.skipped_count,"errors":task.error_count}
+    failures=(await db.execute(select(MockSyncException).where(MockSyncException.task_id==task.id))).scalars().all()
+    return {"task_id":task.id,"read":task.read_count,"success":task.success_count,"skipped":task.skipped_count,"errors":task.error_count,"error_details":[{"row":x.row_number,"source_record_id":x.source_record_id,"reason":x.reason} for x in failures]}
 
 
 @router.post("/exceptions/{exception_id}/retry")
@@ -305,14 +351,17 @@ async def retry_exception(exception_id:str,source:str|None=None,data:dict|None=N
         raise HTTPException(404)
     source=source or (await setting(db,"sync_task_source:"+item.task_id,{})).get("source","school-file")
     task=await ProductionIngest(db).run([data or item.raw_data],actor_id=admin.id,actor_name=admin.name,source=source)
-    return {"task_id":task.id,"success":task.success_count,"errors":task.error_count,"skipped":task.skipped_count}
+    result={"exception_id":item.id,"original_batch_id":item.task_id,"source_record_id":item.source_record_id,"task_id":task.id,"success":task.success_count,"errors":task.error_count,"skipped":task.skipped_count,"status":"resolved" if task.success_count or task.skipped_count else "failed","processed_at":datetime.utcnow().isoformat()}
+    await put_setting(db,'exception_resolution:'+item.id,result,admin.id)
+    await db.commit()
+    return result
 
 
 @router.get("/audit")
-async def audit(actor_id:str|None=None,object_type:str|None=None,result:str|None=None,date_from:datetime|None=None,date_to:datetime|None=None,
+async def audit(object_id:str|None=None,actor_id:str|None=None,object_type:str|None=None,result:str|None=None,date_from:datetime|None=None,date_to:datetime|None=None,
                 limit:int=Query(100,ge=1,le=1000),offset:int=Query(0,ge=0),db=Depends(get_db)):
     query=select(AuditLog)
-    for column,value in [(AuditLog.actor_id,actor_id),(AuditLog.object_type,object_type),(AuditLog.result,result)]:
+    for column,value in [(AuditLog.object_id,object_id),(AuditLog.actor_id,actor_id),(AuditLog.object_type,object_type),(AuditLog.result,result)]:
         if value:
             query=query.where(column==value)
     if date_from:
@@ -320,7 +369,10 @@ async def audit(actor_id:str|None=None,object_type:str|None=None,result:str|None
     if date_to:
         query=query.where(AuditLog.created_at<=utc_boundary(date_to))
     rows=(await db.execute(query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit))).scalars().all()
-    return [{c.name:getattr(row,c.name) for c in AuditLog.__table__.columns} for row in rows]
+    from app.models.user import User
+    actor_ids={row.actor_id for row in rows if row.actor_id}
+    names=dict((await db.execute(select(User.id,User.name).where(User.id.in_(actor_ids)))).all()) if actor_ids else {}
+    return [{**{c.name:getattr(row,c.name) for c in AuditLog.__table__.columns},'actor_name':row.actor_name or names.get(row.actor_id)} for row in rows]
 
 
 @router.get("/versions/{kind}/{item_id}")
@@ -359,7 +411,7 @@ async def retry_evaluation(student_id:str,admin=Depends(get_current_admin),db=De
         result={'status':'completed','reason':None,'updated_at':datetime.utcnow().isoformat()}
     except Exception as exc:
         await db.rollback()
-        result={'status':'failed','reason':'能力评价更新失败（'+type(exc).__name__+'）'}
+        result={'status':'failed','reason':'没有可计算的实训记录' if isinstance(exc,ValueError) and str(exc)=='没有可计算的实训记录' else '能力评价更新失败，请重新计算或联系管理员','error_type':type(exc).__name__}
     await put_setting(db,'recalculate:'+student_id,result,actor_id)
     await record_audit(db,actor_id=actor_id,actor_name=actor_name,action='ability_recalculate',object_type='student',object_id=student_id,result='success' if result['status']=='completed' else 'failed',after=result)
     await db.commit()
@@ -375,6 +427,37 @@ async def runtime_status(db=Depends(get_db)):
     return {"database":"connected","worker":{**heartbeat,"stale":stale},"last_backup":await setting(db,"release:last_backup",{}),
             "backup_error":await setting(db,"release:backup_error",{}),"sync_error":await setting(db,"release:last_sync_error",{}),
             "ai":"configured-not-probed" if os.getenv("LLM_API_KEY") else "not_configured","metrics":METRICS}
+
+
+@router.get('/ai-operations')
+async def ai_operations(result: str | None = None, limit: int = Query(6, ge=1, le=50), db=Depends(get_db)):
+    if result not in (None, 'success', 'failed'):
+        raise HTTPException(400, '结果仅支持success或failed')
+    query = select(AuditLog).where(AuditLog.action == 'ai_call')
+    if result:
+        query = query.where(AuditLog.result == result)
+    rows = (await db.execute(query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit))).scalars().all()
+    counts = dict((await db.execute(select(AuditLog.result, func.count()).where(AuditLog.action == 'ai_call').group_by(AuditLog.result))).all())
+    calls = []
+    safe_reasons = {'ReadTimeout', 'ConnectTimeout', 'WriteTimeout', 'PoolTimeout', 'ConnectError', 'ReadError',
+        'WriteError', 'CloseError', 'RemoteProtocolError', 'LocalProtocolError', 'ProxyError', 'HTTPStatusError',
+        'UnsupportedProtocol', 'DecodingError', 'TooManyRedirects', 'ValueError', 'KeyError', 'TypeError', 'not_configured'}
+    for row in rows:
+        after = row.after if isinstance(row.after, dict) else {}
+        usage = after.get('usage') if isinstance(after.get('usage'), dict) else {}
+        calls.append({'id': row.id, 'created_at': row.created_at,
+            'kind': '图片检查' if after.get('vision') else '文本诊断', 'result': row.result,
+            'reason': row.reason if row.reason and set(row.reason.split(',')).issubset(safe_reasons) else None,
+            })
+    status = await runtime_status(db)
+    connection = await setting(db, 'release:connectivity', {})
+    backup = status['last_backup']
+    return {'checked_at': datetime.utcnow().isoformat(), 'counts': counts, 'calls': calls,
+        'maintenance': {'database': status['database'], 'worker': status['worker'],
+            'last_backup': {key: backup.get(key) for key in ('time', 'status', 'size_bytes', 'sha256') if key in backup},
+            'backup_error': {key: status['backup_error'].get(key) for key in ('time', 'status') if key in status['backup_error']},
+            'sync_error': {key: status['sync_error'].get(key) for key in ('time', 'status', 'reason') if key in status['sync_error']},
+            'connectivity': {'time': connection.get('time'), 'ai': connection.get('ai'), 'school_database': connection.get('school_database')}}}
 
 
 @router.get("/metrics")
@@ -396,10 +479,12 @@ async def backup(db=Depends(get_db)):
 @router.post("/labs/{lab_id}/reference")
 async def upload_reference(lab_id:str,file:UploadFile=File(...),admin=Depends(get_current_admin),db=Depends(get_db)):
     import base64
+    from app.services.reference_limits import reserve_reference_slot
     from app.services.images import validate_bytes
     lab=await db.get(Lab,lab_id)
     if not lab:
         raise HTTPException(404)
+    await reserve_reference_slot(db, lab_id)
     content=await file.read(10*1024*1024+1)
     try:
         mime=validate_bytes(content)
@@ -461,3 +546,19 @@ async def reference_state(reference_id:str,data:dict,admin=Depends(get_current_a
     await record_audit(db,actor_id=admin.id,actor_name=admin.name,action='reference_state',object_type='reference',object_id=reference_id,before=before,after={'enabled':active,'label':reference.label})
     await db.commit()
     return {'id':reference_id,'enabled':active,'label':reference.label}
+
+
+@router.get('/operations-evidence')
+async def operations_evidence(db=Depends(get_db)):
+    from app.models.workflow import MockSyncTask
+    latest=(await db.execute(select(MockSyncTask).order_by(MockSyncTask.started_at.desc()).limit(1))).scalar_one_or_none()
+    errors=(await db.execute(select(MockSyncException).where(MockSyncException.task_id==latest.id))).scalars().all() if latest else []
+    await db.execute(text('SELECT 1'))
+    return {'checked_at':datetime.utcnow().isoformat(),'application':'healthy','database':'connected',
+        'sync':{'id':latest.id if latest else None,'status':latest.status.value if latest else 'not_run','started_at':latest.started_at if latest else None,'completed_at':latest.completed_at if latest else None,'reason':'；'.join(x.reason for x in errors[:3])},
+        'connectivity':await setting(db,'release:connectivity',{}),'backup':await setting(db,'release:last_backup',{}),'restore':await setting(db,'release:last_restore',{})}
+
+
+@router.get('/exceptions/{exception_id}/resolution')
+async def exception_resolution(exception_id:str,db=Depends(get_db)):
+    return await setting(db,'exception_resolution:'+exception_id,{'status':'unresolved','exception_id':exception_id})

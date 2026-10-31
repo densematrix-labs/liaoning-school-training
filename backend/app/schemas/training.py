@@ -31,6 +31,8 @@ class ScoreListResponse(BaseModel):
 class StepScoreDetail(BaseModel):
     step_id: str
     step_name: str
+    step_description: Optional[str] = None
+    description_source: Optional[str] = None
     passed: bool
     score: float
     max_score: float

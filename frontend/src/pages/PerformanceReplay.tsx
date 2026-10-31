@@ -72,7 +72,7 @@ export default function PerformanceReplay() {
         {lines.slice(0, visibleCount).map((line, index) => <div key={`${index}-${line}`} className={line.startsWith('PASS') ? 'font-semibold text-emerald-300' : line.startsWith('NOTICE') ? 'text-amber-200' : line.startsWith('===') ? 'mt-2 text-cyan-200' : 'whitespace-pre-wrap break-words'}>{line || '\u00a0'}</div>)}
         {visibleCount < lines.length && <span className="inline-block h-5 w-2 animate-pulse bg-emerald-300 align-middle" aria-hidden="true" />}
       </div>
-      <footer className="border-t border-emerald-400/15 bg-[#0b1712] px-5 py-3 text-xs text-slate-400">Demo 工程验证，不替代正式验收。正式验收须由双方确认测试环境、标准业务脚本、原始日志和汇总报告。</footer>
+      <footer className="border-t border-emerald-400/15 bg-[#0b1712] px-5 py-3 text-xs text-slate-400">测试环境、脚本与统计结果见测试记录。</footer>
     </section>
   </main>
 }

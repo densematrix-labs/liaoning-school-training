@@ -42,13 +42,13 @@ export default function AbilityRadar({
     <section className="railway-card ability-radar-panel overflow-hidden">
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-railway-600/50 px-5 py-4">
         <div>
-          <p className="eyebrow">COMPETENCY PROFILE</p>
+
           <h2 className="section-heading">{title}</h2>
           <p className="mt-1 text-xs text-text-muted">{description}</p>
         </div>
         <div className="text-right">
           <p className="font-mono text-2xl text-accent-cyan">{readyCount}/{data.length}</p>
-          <p className="text-[10px] text-text-muted">达标维度</p>
+
         </div>
       </header>
       {data.length ? (

@@ -26,7 +26,9 @@ async def test_ability_retry_keeps_failure_reason_and_restricts_access(client,au
     path=f"/api/v1/release/evaluations/{acceptance_data['student']}/recalculate"
     failure=await client.post(path,headers=auth_headers)
     assert failure.status_code==200 and failure.json()['status']=='failed'
-    assert 'RuntimeError' in failure.json()['reason']
+    assert failure.json()['error_type']=='RuntimeError'
+    assert failure.json()['reason']=='能力评价更新失败，请重新计算或联系管理员'
+    assert 'injected failure' not in failure.text
     rows=(await client.get('/api/v1/release/evaluations',headers=auth_headers)).json()
     assert rows[0]['status']=='failed' and rows[0]['student_id']==acceptance_data['student']
     monkeypatch.setattr(AbilityService,'recalculate_profile',original)

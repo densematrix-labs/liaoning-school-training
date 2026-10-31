@@ -268,7 +268,7 @@ async def list_major_abilities(
         select(MajorAbility).order_by(MajorAbility.display_order)
     )
     abilities = result.scalars().all()
-    
+
     response = []
     for ability in abilities:
         # 获取子能力
@@ -276,7 +276,7 @@ async def list_major_abilities(
             select(SubAbility).where(SubAbility.major_ability_id == ability.id)
         )
         sub_abilities = sub_result.scalars().all()
-        
+
         response.append(MajorAbilityResponse(
             id=ability.id,
             name=ability.name,
@@ -291,12 +291,14 @@ async def list_major_abilities(
                     major_ability_id=sa.major_ability_id,
                     name=sa.name,
                     description=sa.description,
-                    weight=sa.weight
+                    weight=sa.weight,
+                    graduation_threshold=None,
+                    threshold_inherited_from=None,
                 )
                 for sa in sub_abilities
             ]
         ))
-    
+
     return response
 
 
@@ -319,7 +321,7 @@ async def create_major_ability(
     db.add(ability)
     await db.commit()
     await db.refresh(ability)
-    
+
     return MajorAbilityResponse(
         id=ability.id,
         name=ability.name,
@@ -344,10 +346,10 @@ async def update_major_ability(
         select(MajorAbility).where(MajorAbility.id == ability_id)
     )
     ability = result.scalar_one_or_none()
-    
+
     if not ability:
         raise HTTPException(status_code=404, detail="能力不存在")
-    
+
     if settings.RELEASE_MODE:
         from app.services.catalog import save_item
         await save_item(db,"abilities",data.model_dump(exclude_none=True),admin,ability.id)
@@ -364,16 +366,16 @@ async def update_major_ability(
         ability.icon = data.icon
     if data.display_order is not None:
         ability.display_order = data.display_order
-    
+
     await db.commit()
     await db.refresh(ability)
-    
+
     # 获取子能力
     sub_result = await db.execute(
         select(SubAbility).where(SubAbility.major_ability_id == ability.id)
     )
     sub_abilities = sub_result.scalars().all()
-    
+
     return MajorAbilityResponse(
         id=ability.id,
         name=ability.name,
@@ -388,7 +390,9 @@ async def update_major_ability(
                 major_ability_id=sa.major_ability_id,
                 name=sa.name,
                 description=sa.description,
-                weight=sa.weight
+                weight=sa.weight,
+                graduation_threshold=None,
+                threshold_inherited_from=None,
             )
             for sa in sub_abilities
         ]
@@ -406,12 +410,12 @@ async def delete_major_ability(
     await db.execute(
         delete(SubAbility).where(SubAbility.major_ability_id == ability_id)
     )
-    
+
     # 删除大类能力
     await db.execute(
         delete(MajorAbility).where(MajorAbility.id == ability_id)
     )
-    
+
     await db.commit()
     return {"message": "删除成功"}
 
@@ -430,9 +434,10 @@ async def create_sub_ability(
     result = await db.execute(
         select(MajorAbility).where(MajorAbility.id == ability_id)
     )
-    if not result.scalar_one_or_none():
+    parent = result.scalar_one_or_none()
+    if not parent:
         raise HTTPException(status_code=404, detail="大类能力不存在")
-    
+
     sub_ability = SubAbility(
         id=str(uuid.uuid4()),
         major_ability_id=ability_id,
@@ -443,13 +448,16 @@ async def create_sub_ability(
     db.add(sub_ability)
     await db.commit()
     await db.refresh(sub_ability)
-    
+
     return SubAbilityResponse(
         id=sub_ability.id,
         major_ability_id=sub_ability.major_ability_id,
         name=sub_ability.name,
         description=sub_ability.description,
-        weight=sub_ability.weight
+        weight=sub_ability.weight,
+        full_score=sub_ability.weight,
+        graduation_threshold=None,
+        threshold_inherited_from=None,
     )
 
 
@@ -465,10 +473,10 @@ async def update_sub_ability(
         select(SubAbility).where(SubAbility.id == sub_ability_id)
     )
     sub_ability = result.scalar_one_or_none()
-    
+
     if not sub_ability:
         raise HTTPException(status_code=404, detail="子能力不存在")
-    
+
     if settings.RELEASE_MODE:
         from app.services.catalog import save_item
         await save_item(db,"sub-abilities",data.model_dump(exclude_none=True),admin,sub_ability.id)
@@ -479,16 +487,20 @@ async def update_sub_ability(
         sub_ability.description = data.description
     if data.weight is not None:
         sub_ability.weight = data.weight
-    
+
     await db.commit()
     await db.refresh(sub_ability)
-    
+
+    parent = await db.get(MajorAbility, sub_ability.major_ability_id)
     return SubAbilityResponse(
         id=sub_ability.id,
         major_ability_id=sub_ability.major_ability_id,
         name=sub_ability.name,
         description=sub_ability.description,
-        weight=sub_ability.weight
+        weight=sub_ability.weight,
+        full_score=sub_ability.weight,
+        graduation_threshold=None,
+        threshold_inherited_from=None,
     )
 
 
@@ -516,7 +528,7 @@ async def list_labs(
     """获取所有实训室"""
     result = await db.execute(select(Lab))
     labs = result.scalars().all()
-    
+
     return [
         LabResponse(
             id=lab.id,
@@ -552,7 +564,7 @@ async def create_lab(
     db.add(lab)
     await db.commit()
     await db.refresh(lab)
-    
+
     return LabResponse(
         id=lab.id,
         name=lab.name,
@@ -576,10 +588,10 @@ async def update_lab(
     """更新实训室"""
     result = await db.execute(select(Lab).where(Lab.id == lab_id))
     lab = result.scalar_one_or_none()
-    
+
     if not lab:
         raise HTTPException(status_code=404, detail="实训室不存在")
-    
+
     if settings.RELEASE_MODE:
         from app.services.catalog import save_item
         await save_item(db,"labs",data.model_dump(exclude_none=True),admin,lab.id)
@@ -596,10 +608,10 @@ async def update_lab(
         lab.equipment = data.equipment
     if data.reference_image_url is not None:
         lab.reference_image_url = data.reference_image_url
-    
+
     await db.commit()
     await db.refresh(lab)
-    
+
     return LabResponse(
         id=lab.id,
         name=lab.name,
@@ -683,7 +695,7 @@ async def update_project_configuration(
     if settings.RELEASE_MODE:
         from app.services.catalog import save_item
         try:
-            await save_item(db,"projects",data.model_dump(),admin,project.id)
+            await save_item(db,"projects",data.model_dump(exclude_none=True),admin,project.id)
             await db.commit()
             return {"message":"评分规则与能力映射已保存","project_id":project.id,"max_score":project.max_score,"rule_version":project.scoring_rules["version"]}
         except ValueError as exc:
@@ -703,11 +715,18 @@ async def update_project_configuration(
     if set(data.ability_mapping) - step_ids:
         raise HTTPException(status_code=400, detail="能力映射包含不存在的步骤")
 
+    rules = {**(project.scoring_rules or {}), **(data.scoring_rules or {})}
+    from app.services.mapping_points import validate_mapping_points
+    try:
+        rules['ability_mapping_points'] = validate_mapping_points(data.ability_mapping, rules.get('ability_mapping_points', {}))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
     project.steps = data.steps
     project.ability_mapping = data.ability_mapping
     project.max_score = round(sum(float(item.get("score", 0))*float(item.get("weight",1)) for item in data.steps if item.get("enabled",True)), 2)
     project.scoring_rules = {
-        **(project.scoring_rules or {}),
+        **rules,
         "mode": "passed_or_failed",
         "version": int((project.scoring_rules or {}).get("version", 0)) + 1,
     }
@@ -728,7 +747,10 @@ async def recalculate_project_scores(
     admin: User = Depends(get_current_admin),
 ):
     try:
-        return await RecalculationService(db).recalculate_project(project_id, data.score_id)
+        result=await RecalculationService(db).recalculate_project(project_id, data.score_id)
+        await record_audit(db,actor_id=admin.id,actor_name=admin.name,action='score_calculate',object_type='score',object_id=result['sample']['score_id'],before={'total_score':result['sample']['before_total']},after=result['sample'])
+        await db.commit()
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -741,18 +763,18 @@ async def list_ability_mappings(
     # 获取所有实训项目
     result = await db.execute(select(TrainingProject))
     projects = result.scalars().all()
-    
+
     mappings = []
     for project in projects:
         if not project.ability_mapping:
             continue
-        
+
         mappings.append(AbilityMappingResponse(
             project_id=project.id,
             project_name=project.name,
             step_mappings=project.ability_mapping
         ))
-    
+
     return mappings
 
 
@@ -768,10 +790,10 @@ async def update_ability_mapping(
         select(TrainingProject).where(TrainingProject.id == project_id)
     )
     project = result.scalar_one_or_none()
-    
+
     if not project:
         raise HTTPException(status_code=404, detail="实训项目不存在")
-    
+
     if settings.RELEASE_MODE:
         from app.services.catalog import save_item
         try:
@@ -782,7 +804,7 @@ async def update_ability_mapping(
             raise HTTPException(400,str(exc)) from exc
     project.ability_mapping = mapping
     await db.commit()
-    
+
     return {"message": "更新成功"}
 
 

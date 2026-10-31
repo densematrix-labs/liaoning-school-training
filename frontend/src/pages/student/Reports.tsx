@@ -16,7 +16,7 @@ export default function StudentReports() {
   const reportTask = useReportTask((report) => setSelected(report))
 
   return <div className="space-y-6">
-    <header><p className="eyebrow">诊断报告档案</p><h1 className="page-title">诊断报告</h1><p className="mt-2 text-sm text-text-muted">选择单次实训或汇总阶段成绩，查看生成状态与结构化诊断结论</p></header>
+    <header><h1 className="page-title">诊断报告</h1></header>
     <section className="railway-card grid gap-4 p-5 lg:grid-cols-[1fr_auto_auto] lg:items-end">
       <label className="text-sm text-text-secondary"><span className="mb-2 block">单次实训记录</span><select className="input-field" value={scoreId} onChange={(e) => setScoreId(e.target.value)}><option value="">最近一次实训</option>{scores.data?.scores.map((item: any) => <option key={item.id} value={item.id}>{formatScoreOption(item)}</option>)}</select></label>
       <button className="btn-secondary" disabled={!user?.student_id || reportTask.create.isPending} onClick={() => reportTask.create.mutate({ student_id: user!.student_id!, report_type: 'single', score_id: scoreId || undefined })}>生成单次报告</button>
@@ -24,9 +24,10 @@ export default function StudentReports() {
     </section>
     <div className="flex flex-wrap gap-4"><label className="text-sm">阶段开始日期<input type="date" className="input-field" value={periodFrom} onChange={e=>setPeriodFrom(e.target.value)}/></label><label className="text-sm">阶段结束日期<input type="date" className="input-field" value={periodTo} onChange={e=>setPeriodTo(e.target.value)}/></label></div>
     <ReportTaskStatus task={reportTask.task} />
+    {reports.isLoading&&<p role="status">正在读取报告档案…</p>}
     {reportTask.create.error && <p className="alert-warning rounded p-4">报告任务提交失败</p>}
     <div className="grid gap-5 xl:grid-cols-[340px_1fr]">
-      <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史报告</h2></div><div className="divide-y divide-railway-600/50">{reports.data?.map((item: any) => <button key={item.id} className="w-full p-4 text-left hover:bg-railway-700/40" onClick={() => setSelected(item)}><p className="font-medium text-text-primary">{item.title}</p><p className="mt-1 text-xs text-text-muted">{item.report_type === 'single' && item.score_percentage != null ? `${item.score_percentage} 分 · ` : ''}报告生成于 {new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{!reports.data?.length && <p className="p-5 text-sm text-text-muted">暂无诊断报告</p>}</div></section>
+      <section className="railway-card overflow-hidden"><div className="border-b border-railway-600/50 p-5"><h2 className="section-heading">历史报告</h2></div><div className="divide-y divide-railway-600/50">{reports.data?.map((item: any) => <button key={item.id} className="w-full p-4 text-left hover:bg-railway-700/40" onClick={() => setSelected(item)}><p className="font-medium text-text-primary">{item.title}</p><p className="mt-1 text-xs text-text-muted">{item.report_type === 'single' && item.score_percentage != null ? `${item.score_percentage} 分 · ` : ''}报告生成于 {new Date(item.generated_at).toLocaleString('zh-CN')}</p></button>)}{!reports.isLoading && reports.data && !reports.data.length && null}</div></section>
       <section className="min-w-0"><ReportDocument report={selected} onDownload={selected ? () => downloadReport(selected.id) : undefined} /></section>
     </div>
   </div>

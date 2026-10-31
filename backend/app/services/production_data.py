@@ -28,37 +28,78 @@ def truth(value):
     raise ValueError("步骤状态必须是明确的通过/未通过")
 
 
+class ScoringError(ValueError):
+    def __init__(self, code, reason):
+        super().__init__(reason)
+        self.code = code
+
+
 def score_steps(project, raw):
     if (project.scoring_rules or {}).get("enabled", True) is False:
-        raise ValueError("评分规则已停用")
+        raise ScoringError('missing_rule', "评分规则已停用，不能生成正式成绩")
     if isinstance(raw, str):
-        raw = json.loads(raw)
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ScoringError('incomplete_source', '源步骤数据不是有效 JSON') from exc
     if isinstance(raw, list):
         ids = [str(item.get("step_id") or item.get("id") or "") for item in raw]
         if not all(ids) or len(ids) != len(set(ids)):
-            raise ValueError("步骤标识缺失或重复")
+            raise ScoringError('incomplete_source', "步骤标识缺失或重复")
         raw = dict(zip(ids, raw))
     if not isinstance(raw, dict):
-        raise ValueError("steps 必须为逐步骤 JSON 对象或数组")
+        raise ScoringError('incomplete_source', "源数据不完整：缺少有效的逐步骤结果")
     steps = [step for step in (project.steps or []) if step.get("enabled", True)]
     expected = {str(step.get("id", "")) for step in steps}
     if not steps or "" in expected or len(expected) != len(steps):
-        raise ValueError("评分规则没有有效且唯一的步骤")
+        raise ScoringError('missing_rule', "缺少评分规则：没有有效且唯一的计分步骤")
     known = {str(step.get('id','')) for step in (project.steps or [])}
-    if expected-set(raw) or set(raw)-known:
-        raise ValueError("源步骤与评分规则不一致；缺少或未知步骤不得生成成绩")
+    if set(raw)-known:
+        raise ScoringError('unknown_step', "步骤无法匹配：未知步骤 " + '、'.join(sorted(set(raw)-known)))
+    if expected-set(raw):
+        raise ScoringError('incomplete_source', "源数据不完整：缺少步骤结果 " + '、'.join(sorted(expected-set(raw))))
+    rules = project.scoring_rules or {}
+    mode = rules.get('scoring_mode', 'legacy')
+    if mode not in {'absolute', 'proportional', 'legacy'}:
+        raise ScoringError('missing_rule', '不支持的计分方式')
+    configured_total = None
+    if mode == 'proportional':
+        try:
+            configured_total = float(rules.get('total_score', 0))
+            ratios = [float(s.get('weight', 0)) for s in steps]
+        except (TypeError, ValueError) as exc:
+            raise ScoringError('missing_rule', '项目总分或步骤占比格式错误') from exc
+        if not math.isfinite(configured_total) or configured_total <= 0:
+            raise ScoringError('missing_rule', '按比例计分必须配置大于0的项目总分')
+        if any(not math.isfinite(r) or r <= 0 for r in ratios) or abs(sum(ratios)-100) > 0.000001:
+            raise ScoringError('missing_rule', '启用步骤的占比必须大于0且合计100%')
     details, total, maximum, failed = {}, 0.0, 0.0, set()
     for step in steps:
         sid = str(step["id"])
         source = raw[sid]
         source = source if isinstance(source, dict) else {"passed": source}
-        passed = truth(source.get("passed"))
-        weight = float(step.get("weight", 1))
-        full = float(step.get("score", 0)) * weight
-        fail = float(step.get("failed_score", 0)) * weight
+        try:
+            passed = truth(source.get("passed"))
+        except ValueError as exc:
+            raise ScoringError('incomplete_source', f"源数据不完整：步骤 {sid} 缺少明确的通过/未通过状态") from exc
+        weight = float(step.get('weight', 1)) if mode != 'absolute' else 1.0
+        if mode == 'proportional':
+            full = configured_total * weight / 100
+            fraction = float(step.get('failed_ratio', 0))
+            if not math.isfinite(fraction) or not 0 <= fraction <= 1:
+                raise ScoringError('missing_rule', '未通过得分比例必须在0至1之间')
+            fail = full * fraction
+        else:
+            full = float(step.get('score', 0)) * weight
+            fail = float(step.get('failed_score', 0)) * weight
         if not all(math.isfinite(x) for x in (full, fail, weight)) or full <= 0 or not 0 <= fail <= full:
-            raise ValueError("评分规则分值/权重不合法")
+            raise ScoringError('missing_rule', "评分规则分值/权重不合法")
         related = list((project.ability_mapping or {}).get(sid) or step.get("abilities") or [])
+        from app.services.mapping_points import step_mapping_points
+        try:
+            mapping_points = step_mapping_points(rules, sid, related, full)
+        except ValueError as exc:
+            raise ScoringError('missing_rule', str(exc)) from exc
         value = full if passed else fail
         if not passed:
             failed.update(related)
@@ -66,7 +107,10 @@ def score_steps(project, raw):
             "passed": passed, "source_status": "通过" if passed else "未通过",
             "score": round(value, 6), "max_score": round(full, 6), "deduction": round(full-value, 6),
             "reason": source.get("reason"), "related_abilities": related, "step_name": step.get("name", sid),
+            "ability_mapping_points": mapping_points,
+            "step_description": step.get("description"),
             "applied_rule": {"passed_score": full, "failed_score": fail, "weight": weight,
+                             "scoring_mode": mode, "configured_total": configured_total,
                              "rule_version": (project.scoring_rules or {}).get("version", 1)},
         }
         total += value
@@ -116,8 +160,11 @@ class ProductionIngest:
                 async with self.db.begin_nested():
                     source_id = str(raw.get("source_record_id", "")).strip()
                     if not source_id or not raw.get("completed_at") or not raw.get("student_no") or not raw.get("project_code"):
-                        raise ValueError("缺少源标识、完成时间、学号或项目编码")
-                    timestamp = datetime.fromisoformat(str(raw["completed_at"]).replace("Z", "+00:00"))
+                        raise ScoringError('incomplete_source', "源数据不完整：缺少源标识、完成时间、学号或项目编码")
+                    try:
+                        timestamp = datetime.fromisoformat(str(raw["completed_at"]).replace("Z", "+00:00"))
+                    except ValueError as exc:
+                        raise ScoringError("incomplete_source", "完成时间格式无效，请使用 ISO8601 日期时间") from exc
                     # Naive source timestamps are Asia/Shanghai unless source mapping provides an offset.
                     if timestamp.tzinfo is None:
                         timestamp = timestamp.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
@@ -164,9 +211,16 @@ class ProductionIngest:
                 affected.add(student.id)
             except (ValueError, TypeError, KeyError, IntegrityError) as exc:
                 task.error_count += 1
-                self.db.add(MockSyncException(task_id=task.id, row_number=index, source_record_id=str(raw.get("source_record_id", ""))[:100],
+                exception = MockSyncException(id=str(uuid.uuid4()), task_id=task.id, row_number=index, source_record_id=str(raw.get("source_record_id", ""))[:100],
                                              reason=str(exc)[:400] if not isinstance(exc, IntegrityError) else "唯一性或关联校验失败",
-                                             raw_data=raw))
+                                             raw_data=raw)
+                self.db.add(exception)
+                if isinstance(exc, ScoringError):
+                    await put_setting(self.db, 'scoring_exception:'+exception.id, {
+                        'code':exc.code, 'source':source, 'source_record_id':str(raw.get('source_record_id','')),
+                        'reason':str(exc), 'status':'incomplete' if exc.code=='incomplete_source' else 'exception',
+                        'checked_at':datetime.utcnow().isoformat(),
+                    }, actor_id)
             # Bound SQLite writer lock duration; committed pages remain idempotent
             # if a process is interrupted and the source page is replayed.
             if (index-1) % 100 == 0:

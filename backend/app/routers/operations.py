@@ -563,6 +563,8 @@ async def create_reference_image(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
+    from app.services.reference_limits import reserve_reference_slot
+    await reserve_reference_slot(db, lab_id)
     item = ReferenceImage(id=str(uuid.uuid4()), lab_id=lab_id, image_url=payload.image_url, label=payload.label, created_by=admin.id)
     db.add(item)
     await record_audit(db, actor_id=admin.id, actor_name=admin.name, action="create_reference_image", object_type="lab", object_id=lab_id, after=payload.model_dump())

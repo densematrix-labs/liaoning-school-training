@@ -25,8 +25,8 @@ export default function AdminHome() {
         <Metric label="AI 报告" value={isLoading ? '—' : data?.reports} unit="份" />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="railway-card p-6"><p className="eyebrow">DATA PIPELINE</p><h3 className="section-heading">数据服务</h3><div className="mt-5 space-y-3 text-sm"><Status name="业务数据库" value={data?.database || '连接中'} /><Status name="种子数据" value={`${data?.scores || 0} 条成绩已入库`} /><Status name="同步状态" value={data?.sync_status || '检查中'} /></div></section>
-        <section className="railway-card p-6"><p className="eyebrow">ACCESS CONTROL</p><h3 className="section-heading">权限边界</h3><ul className="mt-5 space-y-3 text-sm text-text-secondary"><li>学生：仅本人数据</li><li>教师：本人负责班级</li><li>管理员：全校数据与系统配置</li></ul></section>
+        <section className="railway-card p-6"><h3 className="section-heading">数据服务</h3><div className="mt-5 space-y-3 text-sm"><Status name="业务数据库" value={data?.database ? '已连接' : '连接中'} /><Status name="成绩归档" value={`${data?.scores || 0} 条成绩已入库`} /><Status name="同步状态" value={data?.sync_status || '检查中'} /></div></section>
+        <section className="railway-card p-6"><h3 className="section-heading">权限边界</h3><ul className="mt-5 space-y-3 text-sm text-text-secondary"><li>学生：仅本人数据</li><li>教师：本人负责班级</li><li>管理员：全校数据与系统配置</li></ul></section>
       </div>
     </div>
   )

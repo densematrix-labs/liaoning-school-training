@@ -1,11 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Release from '../pages/admin/Release'
+
+function renderRelease() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={client}><Release/></QueryClientProvider>)
+}
 
 const requests=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),put:vi.fn()}))
 vi.mock('../lib/api',()=>({api:requests,getErrorMessage:(e:any)=>e?.message||'请求失败'}))
 beforeEach(()=>{
-  requests.get.mockImplementation(async(path:string)=>({data:path.includes('/catalog/')?{fields:['username','name','role'],required:['username'],items:[{id:'u1',username:'teacher',name:'张老师',role:'teacher',enabled:true}]}:path.endsWith('/source')?{config:{table:'records',fields:{source_record_id:'id'},enabled:false,frequency_hours:24}}:path.endsWith('/status')?{database:'connected',worker:{stale:false},ai:'not_configured'}:path.endsWith('/audit')?[{id:'a1',action:'update',result:'success',actor_name:'管理员',created_at:'2026-10-01'}]:{} }))
+  requests.get.mockImplementation(async(path:string)=>({data:path.includes('/catalog/')?{fields:['username','name','role'],required:['username'],items:[{id:'u1',username:'teacher',name:'张老师',role:'teacher',enabled:true}]}:path.endsWith('/source')?{config:{table:'records',fields:{source_record_id:'id'},enabled:false,frequency_hours:24}}:(path.endsWith('/status')||path.endsWith('/operations-evidence'))?{database:'connected',worker:{stale:false},ai:'not_configured'}:path.endsWith('/audit')?[{id:'a1',action:'update',result:'success',actor_name:'管理员',created_at:'2026-10-01'}]:{} }))
   requests.post.mockResolvedValue({data:{success:1}});requests.put.mockResolvedValue({data:{saved:true}})
   URL.createObjectURL=vi.fn(()=> 'blob:download');URL.revokeObjectURL=vi.fn()
   vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{})
@@ -13,7 +19,7 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.clearAllMocks();vi.restoreAllMocks()})
 
 it('edits account, preserves history, uploads validated files and handles failures',async()=>{
-  render(<Release/>);await screen.findByText('张老师')
+  renderRelease();await screen.findByText('张老师')
   fireEvent.click(screen.getByText('张老师'))
   fireEvent.change(screen.getByLabelText('名称'),{target:{value:'李老师'}})
   fireEvent.click(screen.getByRole('button',{name:'保存'}))
@@ -40,18 +46,18 @@ it('edits account, preserves history, uploads validated files and handles failur
 })
 
 it('configures read-only fields, imports real records, queries audit and creates backup',async()=>{
-  render(<Release/>);await screen.findByText('张老师')
+  renderRelease();await screen.findByText('张老师')
   fireEvent.click(screen.getByText('校方数据源'))
   await screen.findByDisplayValue('records')
   fireEvent.change(screen.getByLabelText('表或只读视图名称'),{target:{value:'school_records'}})
   fireEvent.change(screen.getByLabelText(/学生唯一标识/),{target:{value:'student_number'}})
   fireEvent.change(screen.getByLabelText('自动同步间隔（小时）'),{target:{value:'12'}})
   fireEvent.click(screen.getByLabelText('启用定时同步'))
-  fireEvent.click(screen.getByText('保存映射'))
+  fireEvent.click(screen.getByText('保存同步配置'))
   await waitFor(()=>expect(requests.put).toHaveBeenCalledWith('/api/v1/release/source',expect.objectContaining({table:'school_records',frequency_hours:12,enabled:true})))
-  fireEvent.click(screen.getByText('执行一次同步'))
+  fireEvent.click(screen.getByRole('button',{name:'手动同步'}))
   await waitFor(()=>expect(requests.post).toHaveBeenCalledWith('/api/v1/release/source/sync',null,{timeout:300000}))
-  fireEvent.click(screen.getByText('真实实训导入'))
+  fireEvent.click(screen.getByText('实训记录导入'))
   fireEvent.click(screen.getByText('下载模板'))
   fireEvent.change(screen.getByLabelText('实训记录文件'),{target:{files:[new File(['x'],'records.csv')]}})
   await waitFor(()=>expect(screen.getByText('导入并计算')).not.toBeDisabled())
@@ -70,7 +76,7 @@ it('configures read-only fields, imports real records, queries audit and creates
 
 it('supports step enable controls and standard-photo upload from the selected lab',async()=>{
   requests.get.mockImplementation(async(path:string)=>({data:path.includes('/projects')?{fields:['steps','scoring_rules','ability_mapping'],required:[],items:[{id:'p1',name:'接线实训',steps:[{id:'one',name:'检查',score:10,enabled:true}]}]}:{fields:['name'],required:[],items:[{id:'lab1',name:'第四实训室'}]}}))
-  render(<Release/>);await screen.findByText('第四实训室')
+  renderRelease();await screen.findByText('第四实训室')
   fireEvent.change(screen.getByLabelText('数据类型'),{target:{value:'projects'}})
   fireEvent.click(await screen.findByText('接线实训'))
   fireEvent.click(await screen.findByLabelText('启用步骤one'))

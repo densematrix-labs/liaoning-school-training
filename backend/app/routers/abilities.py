@@ -35,13 +35,13 @@ async def get_my_profile(
     """获取当前学生的能力图谱"""
     if current_user.role != "student" or not current_user.student_id:
         raise HTTPException(status_code=403, detail="仅学生可访问")
-    
+
     service = AbilityService(db)
     result = await service.get_student_profile(current_user.student_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="暂无能力数据")
-    
+
     return result
 
 
@@ -53,13 +53,13 @@ async def get_student_profile(
 ):
     """获取指定学生的能力图谱（教师/管理员）"""
     await require_student_access(current_user, student_id, db)
-    
+
     service = AbilityService(db)
     result = await service.get_student_profile(student_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="暂无能力数据")
-    
+
     return result
 
 
@@ -71,7 +71,7 @@ async def get_class_distribution(
 ):
     """获取班级能力分布"""
     await require_class_access(current_user, class_id, db)
-    
+
     service = AbilityService(db)
     return await service.get_class_distribution(class_id)
 
@@ -114,7 +114,7 @@ async def get_ability_trend(
             "abilities": {item.id: round(sum(cumulative[item.id]) / len(cumulative[item.id]) * 100, 1) if cumulative[item.id] else 0 for item in abilities},
         })
     from app.config import settings
-    if settings.RELEASE_MODE:
+    if settings.RELEASE_MODE or any('ability_mapping_points' in detail for score, _ in rows for detail in (score.details or {}).values()):
         from app.services.evaluation import evaluate, select_repeated, active_schema
         from app.services.production_data import setting
         config = await setting(db,"release:evaluation",{"decay":1.0})

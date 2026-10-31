@@ -46,14 +46,14 @@ export default function StudentHome() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="已完成实训" value={scores?.total ?? '—'} unit="次" />
         <Metric label="平均成绩" value={scores?.average_score ?? '—'} unit="分" />
-        <Metric label="综合能力" value={ability?.total_score ?? '—'} unit="分" />
+
         <Metric label="毕业能力" value={ability?.graduation_ready ? '已达标' : '提升中'} tone={ability?.graduation_ready ? 'good' : 'warn'} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
         <section className="railway-card p-6">
           <div className="mb-5 flex items-center justify-between">
-            <div><p className="eyebrow">LATEST RESULT</p><h3 className="section-heading">最近一次实训</h3></div>
+            <div><h3 className="section-heading">最近一次实训</h3></div>
             <Link to="/scores" className="text-sm text-accent-blue">全部成绩 →</Link>
           </div>
           {latest ? (
@@ -61,20 +61,20 @@ export default function StudentHome() {
               <div><p className="text-lg font-semibold text-text-primary">{latest.project_name}</p><p className="mt-2 text-sm text-text-muted">{new Date(latest.calculated_at).toLocaleString('zh-CN')}</p></div>
               <div className="font-display text-5xl font-bold text-accent-cyan">{latest.percentage}<span className="ml-1 text-sm text-text-muted">分</span></div>
             </div>
-          ) : <p className="text-text-muted">暂无成绩数据</p>}
+          ) : null}
         </section>
         <section className="railway-card p-6">
           <div className="mb-5">
-            <p className="eyebrow">ABILITY SIGNAL</p>
+
             <h3 className="section-heading">能力看板</h3>
-            <p className="mt-2 text-xs text-text-muted">查看你的强项、弱项，以及是否达到毕业标准</p>
+
           </div>
           <div className="space-y-3">
             {ability?.weak_abilities?.slice(0, 3).map((item: any) => (
               <div key={item.ability_id} className="flex items-center justify-between border-b border-railway-600/50 pb-3">
                 <span className="text-sm text-text-secondary">{item.name}</span><span className="font-mono text-status-warning">{item.score}</span>
               </div>
-            )) || <p className="text-sm text-text-muted">能力数据加载中</p>}
+            )) || null}
           </div>
           <Link to="/ability" className="mt-5 inline-block text-sm text-accent-blue">查看能力图谱 →</Link>
         </section>

@@ -28,7 +28,7 @@ export default function Layout() {
             <div className="signal-mark" aria-hidden="true"><span /><span /><span /></div>
             <div className="min-w-0">
               <p className="font-mono text-[9px] tracking-[.2em] text-accent-cyan">RAIL TRAINING · AI</p>
-              <p className="truncate text-xs font-medium text-text-secondary">辽宁铁道职业技术学院</p>
+
             </div>
           </div>
 
@@ -59,7 +59,7 @@ export default function Layout() {
           </div>
           <p className="mt-1 text-xs text-text-muted">{role.scope}</p>
         </div>
-        <p className="px-5 pb-2 pt-5 font-mono text-[9px] tracking-[.22em] text-text-muted">FUNCTION MODULES</p>
+
         <nav className="space-y-1 px-3">
           {links.map((link, index) => (
             <motion.div key={link.to} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04 }}>
@@ -69,15 +69,12 @@ export default function Layout() {
         </nav>
         <div className="absolute bottom-5 left-5 right-5 rounded border border-status-success/30 bg-status-success/5 p-3">
           <div className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-status-success shadow-[0_0_8px_#39e58c]" /><p className="text-xs text-status-success">实训业务工作区</p></div>
-          <p className="mt-1 text-[9px] text-text-muted">数据服务 · 智能分析 · 视觉检测</p>
+
         </div>
       </aside>
 
       <main className="px-4 pb-10 pt-36 sm:px-6 lg:ml-64 lg:px-8 lg:pt-28">
         <div className="mx-auto max-w-[1500px]">
-          {demoMode && <div className="mb-5 flex items-start gap-2 rounded border border-status-warning/25 bg-status-warning/5 px-4 py-2 text-xs text-text-secondary">
-            <span className="font-mono text-status-warning">DEMO</span><span>演示环境：实训项目名称、成绩及其计算出的能力结果均为模拟数据，非校方确认数据。</span>
-          </div>}
           <Outlet />
         </div>
       </main>

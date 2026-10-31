@@ -102,3 +102,5 @@ class EnvironmentTaskResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     result: Optional[EnvironmentCheckResponse] = None
+    parent_task_id: Optional[str] = None
+    root_task_id: Optional[str] = None

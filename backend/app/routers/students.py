@@ -29,7 +29,7 @@ async def get_majors(
     """获取所有专业"""
     result = await db.execute(select(Major))
     majors = result.scalars().all()
-    
+
     return [
         MajorResponse(
             id=m.id,
@@ -63,9 +63,9 @@ async def get_classes(
         result = await db.execute(select(Class))
     else:
         raise HTTPException(status_code=403, detail="无权访问")
-    
+
     classes = result.scalars().all()
-    
+
     responses = []
     for cls in classes:
         # Get major name
@@ -73,13 +73,13 @@ async def get_classes(
             select(Major).where(Major.id == cls.major_id)
         )
         major = major_result.scalar_one_or_none()
-        
+
         # Count students
         count_result = await db.execute(
             select(Student).where(Student.class_id == cls.id)
         )
         students = count_result.scalars().all()
-        
+
         responses.append(ClassResponse(
             id=cls.id,
             name=cls.name,
@@ -89,7 +89,7 @@ async def get_classes(
             year=cls.year,
             student_count=len(students),
         ))
-    
+
     return responses
 
 
@@ -101,25 +101,25 @@ async def get_class(
 ):
     """获取班级详情"""
     await require_class_access(current_user, class_id, db)
-    
+
     result = await db.execute(select(Class).where(Class.id == class_id))
     cls = result.scalar_one_or_none()
-    
+
     if not cls:
         raise HTTPException(status_code=404, detail="班级不存在")
-    
+
     # Get major name
     major_result = await db.execute(
         select(Major).where(Major.id == cls.major_id)
     )
     major = major_result.scalar_one_or_none()
-    
+
     # Count students
     count_result = await db.execute(
         select(Student).where(Student.class_id == cls.id)
     )
     students = count_result.scalars().all()
-    
+
     return ClassResponse(
         id=cls.id,
         name=cls.name,
@@ -139,7 +139,7 @@ async def get_class_students(
 ):
     """获取班级学生列表"""
     await require_class_access(current_user, class_id, db)
-    
+
     rows = (await db.execute(
         select(Student, Major.name, Class.name)
         .join(Major, Major.id == Student.major_id)
@@ -226,14 +226,21 @@ async def get_class_overview(
                 passed_count += 1
         if settings.RELEASE_MODE:
             pairs=[(s,project_map[s.project_id]) for s in scores_by_student.get(student.id,[]) if s.project_id in project_map]
-            value=evaluate([p[0] for p in select_repeated(pairs)],abilities,sub_abilities,float(config.get("decay",1.0)))
+            selected_scores = [p[0] for p in select_repeated(pairs)]
+            value=evaluate(selected_scores,abilities,sub_abilities,float(config.get("decay",1.0)))
             major_average=value["major"]
             passed_count=sum(major_average.get(a.id,0)>=a.graduation_threshold for a in abilities)
+            observed_subs = {sub_id for score in selected_scores for detail in (score.details or {}).values()
+                             if float(detail.get('max_score', 0)) > 0 for sub_id in detail.get('related_abilities', [])}
+        else:
+            observed_subs = set(sub_average)
+        observed_majors = {sub.major_ability_id for sub in sub_abilities if sub.id in observed_subs and sub.weight > 0}
         total_count = len(abilities)
         progress = round(passed_count / total_count * 100, 1) if total_count else 0
         profiles.append({
             "student_id": student.id,
             "major_abilities": major_average,
+            "observed_major_ids": observed_majors,
             "graduation_ready": bool(total_count and passed_count == total_count),
             "graduation_ready_count": passed_count,
             "graduation_total_count": total_count,
@@ -241,6 +248,7 @@ async def get_class_overview(
         })
 
     ability_distribution = []
+    ability_score_bands = []
     weak_counter: Counter[str] = Counter()
     for ability in abilities:
         values = [float(profile["major_abilities"].get(ability.id, 0)) * 100 for profile in profiles]
@@ -258,6 +266,14 @@ async def get_class_overview(
             "ready_count": ready_count,
             "not_ready_count": len(students) - ready_count,
         })
+        observed_values = [float(profile['major_abilities'].get(ability.id, 0)) * 100 for profile in profiles
+                           if ability.id in profile['observed_major_ids']]
+        bands = [{'label': f'{low}≤值<{high}' if high < 100 else '80≤值≤100',
+                  'lower': low, 'upper': high, 'include_upper': high == 100,
+                  'count': sum(low <= value < high if high < 100 else low <= value <= high for value in observed_values)}
+                 for low, high in [(0, 20), (20, 40), (40, 60), (60, 80), (80, 100)]]
+        ability_score_bands.append({'id': ability.id, 'name': ability.name, 'student_count': len(students),
+            'observed_count': len(observed_values), 'missing_evidence_count': len(students) - len(observed_values), 'bands': bands})
         for profile in profiles:
             if float(profile["major_abilities"].get(ability.id, 0)) < ability.graduation_threshold:
                 weak_counter[ability.name] += 1
@@ -302,6 +318,8 @@ async def get_class_overview(
         ) if students else 0,
         "score_distribution": score_distribution,
         "ability_distribution": ability_distribution,
+        "ability_score_bands": ability_score_bands,
+        "ability_score_bands_note": "每名学生在每个能力维度仅计入一个区间，100归入最后一段；无本维度步骤证据者单列。原均值及达标人数以全班为口径，无证据者按0参与均值与阈值比较。",
         "common_weak_abilities": [
             {"name": name, "student_count": count}
             for name, count in weak_counter.most_common(3)
@@ -363,24 +381,24 @@ async def get_student(
 ):
     """获取学生详情"""
     await require_student_access(current_user, student_id, db)
-    
+
     result = await db.execute(select(Student).where(Student.id == student_id))
     student = result.scalar_one_or_none()
-    
+
     if not student:
         raise HTTPException(status_code=404, detail="学生不存在")
-    
+
     # Get major and class names
     major_result = await db.execute(
         select(Major).where(Major.id == student.major_id)
     )
     major = major_result.scalar_one_or_none()
-    
+
     class_result = await db.execute(
         select(Class).where(Class.id == student.class_id)
     )
     cls = class_result.scalar_one_or_none()
-    
+
     return StudentResponse(
         id=student.id,
         student_no=student.student_no,
@@ -403,9 +421,27 @@ async def export_overview(class_id:str,date_from:datetime|None=None,date_to:date
         return "'"+value if isinstance(value,str) and value.startswith(('=','+','-','@')) else value
     writer.writerow(['班级',safe(data['class_name']),'学生数',data['student_count'],'实训次数',data['training_count']])
     writer.writerow(['统计开始',date_from or '全部','统计结束',date_to or '全部'])
-    for category in ['score_distribution','ability_distribution','common_weak_abilities','students']:
-        rows=data[category];writer.writerow([category])
-        if rows:
-            fields=list(rows[0]);writer.writerow(fields)
-            writer.writerows([[safe(r.get(k,'')) for k in fields] for r in rows])
+    writer.writerow(['成绩分布（按实训记录）'])
+    writer.writerow(['成绩区间','实训记录数'])
+    writer.writerows([[safe(r['label']),r['count']] for r in data['score_distribution']])
+    writer.writerow(['能力维度均值与达标人数'])
+    writer.writerow(['能力维度','平均得分（100分制）','达标分（100分制）','达标人数','未达标人数'])
+    writer.writerows([[safe(r['name']),r['average'],r['threshold'],r['ready_count'],r['not_ready_count']] for r in data['ability_distribution']])
+    writer.writerow(['能力值分段人数分布（按学生）'])
+    writer.writerow(['能力维度','0≤值<20人数','20≤值<40人数','40≤值<60人数','60≤值<80人数','80≤值≤100人数','无该维度证据人数','合计人数'])
+    for row in data['ability_score_bands']:
+        counts=[band['count'] for band in row['bands']]
+        writer.writerow([safe(row['name']),*counts,row['missing_evidence_count'],sum(counts)+row['missing_evidence_count']])
+    writer.writerow(['毕业达标情况'])
+    writer.writerow(['班级人数','毕业达标人数','未达标人数','毕业达标率（%）'])
+    writer.writerow([data['student_count'],data['graduation_ready_count'],data['graduation_not_ready_count'],data['graduation_ready_rate']])
+    writer.writerow(['共性薄弱能力'])
+    writer.writerow(['能力维度','未达标学生数'])
+    writer.writerows([[safe(r['name']),r['student_count']] for r in data['common_weak_abilities']])
+    writer.writerow(['学生统计'])
+    fields=['id','student_no','name','training_count','average_score','graduation_ready_count','graduation_total_count','graduation_progress','graduation_ready','graduation_risk']
+    writer.writerow(['学生ID','学号','姓名','实训次数','平均成绩','已达标维度数','能力维度总数','毕业达标进度（%）','毕业达标状态','毕业风险状态'])
+    for row in data['students']:
+        values={**row,'graduation_ready':'已达标' if row['graduation_ready'] else '未达标','graduation_risk':'存在风险' if row['graduation_risk'] else '无风险'}
+        writer.writerow([safe(values.get(k,'')) for k in fields])
     return Response('\ufeff'+out.getvalue(),media_type='text/csv',headers={'Content-Disposition':'attachment; filename="class-overview.csv"'})

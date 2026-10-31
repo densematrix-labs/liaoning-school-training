@@ -20,7 +20,7 @@ from app.services.presentation import training_record_reference
 class ScoreService:
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_student_scores(
         self,
         student_id: str,
@@ -31,30 +31,30 @@ class ScoreService:
         date_to: Optional[datetime] = None,
     ) -> ScoreListResponse:
         query = select(Score).where(Score.student_id == student_id)
-        
+
         if project_id:
             query = query.where(Score.project_id == project_id)
         if date_from:
             query = query.where(Score.calculated_at >= utc_boundary(date_from))
         if date_to:
             query = query.where(Score.calculated_at <= utc_boundary(date_to))
-        
+
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
-        
+
         # Fetch related project/record in the same page query, not 2N round trips.
         query = query.add_columns(TrainingProject,TrainingRecord).outerjoin(TrainingProject,TrainingProject.id==Score.project_id).outerjoin(TrainingRecord,TrainingRecord.id==Score.record_id)
-        query = query.order_by(Score.calculated_at.desc())
+        query = query.order_by(Score.calculated_at.desc(), Score.id.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await self.db.execute(query)
         scores = result.all()
-        
+
         # Build response
         score_responses = []
         total_score_sum = 0
-        
+
         for score,project,record in scores:
             failed_names = []
             step_names = {str(item.get("id")): item.get("name", "相关操作步骤") for item in (project.steps or [])} if project else {}
@@ -62,10 +62,10 @@ class ScoreService:
                 if not detail.get("passed", False):
                     failed_names.append(detail.get("step_name") or step_names.get(str(step_id), "相关操作步骤"))
             result_summary = "全部操作步骤通过" if not failed_names else f"待提升：{'、'.join(failed_names[:2])}"
-            
+
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
             total_score_sum += percentage
-            
+
             score_responses.append(ScoreResponse(
                 id=score.id,
                 student_id=score.student_id,
@@ -78,9 +78,9 @@ class ScoreService:
                 training_completed_at=record.completed_at if record else score.calculated_at,
                 result_summary=result_summary,
             ))
-        
+
         avg_score = total_score_sum / len(score_responses) if score_responses else None
-        
+
         return ScoreListResponse(
             scores=score_responses,
             total=total,
@@ -88,7 +88,7 @@ class ScoreService:
             page_size=page_size,
             average_score=round(avg_score, 1) if avg_score is not None else None,
         )
-    
+
     async def get_score_detail(self, score_id: str) -> ScoreDetailResponse:
         result = await self.db.execute(
             select(Score).where(Score.id == score_id)
@@ -96,13 +96,13 @@ class ScoreService:
         score = result.scalar_one_or_none()
         if not score:
             return None
-        
+
         # Get project info
         project_result = await self.db.execute(
             select(TrainingProject).where(TrainingProject.id == score.project_id)
         )
         project = project_result.scalar_one_or_none()
-        
+
         # Get student info
         student_result = await self.db.execute(
             select(Student).where(Student.id == score.student_id)
@@ -122,8 +122,11 @@ class ScoreService:
 
         ability_rows = (await self.db.execute(select(SubAbility))).scalars().all()
         ability_names = {item.id: item.name for item in ability_rows}
-        
+
         # Parse step details
+        from app.services.production_data import setting
+        snapshot = await setting(self.db, f"source:{record.id}", {}) if record else {}
+        snapshot_steps = {str(s['id']): s for s in snapshot.get('steps', [])}
         step_details = []
         if score.details and project and project.steps:
             steps_map = {s["id"]: s for s in project.steps}
@@ -133,6 +136,8 @@ class ScoreService:
                 step_details.append(StepScoreDetail(
                     step_id=step_id,
                     step_name=detail.get("step_name") or step_info.get("name", step_id),
+                    step_description=detail.get('step_description') or snapshot_steps.get(step_id, {}).get('description') or step_info.get('description'),
+                    description_source='计分时规则快照' if detail.get('step_description') or snapshot_steps.get(step_id, {}).get('description') else '当前步骤配置',
                     passed=detail.get("passed", False),
                     score=detail.get("score", 0),
                     max_score=detail.get("max_score", step_info.get("score", 10)),
@@ -149,9 +154,9 @@ class ScoreService:
                         "failed_score": max(0, detail.get("score", 0)) if not detail.get("passed", False) else 0,
                     }),
                 ))
-        
+
         percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
-        
+
         return ScoreDetailResponse(
             id=score.id,
             student_id=score.student_id,
@@ -174,7 +179,7 @@ class ScoreService:
             steps_total=round(sum(item.score for item in step_details), 2),
             reconciliation_ok=abs(sum(item.score for item in step_details) - score.total_score) < 0.01,
         )
-    
+
     async def get_class_scores(
         self,
         class_id: str,
@@ -192,10 +197,10 @@ class ScoreService:
         students = students_result.scalars().all()
         student_ids = [s.id for s in students]
         student_map = {s.id: s for s in students}
-        
+
         if not student_ids:
             return ScoreListResponse(scores=[], total=0, page=page, page_size=page_size)
-        
+
         query = select(Score).where(Score.student_id.in_(student_ids))
         if student_id:
             query = query.where(Score.student_id == student_id)
@@ -205,21 +210,21 @@ class ScoreService:
             query = query.where(Score.calculated_at >= utc_boundary(date_from))
         if date_to:
             query = query.where(Score.calculated_at <= utc_boundary(date_to))
-        
+
         # Count total
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
-        
+
         # Get paginated results
-        query = query.order_by(Score.calculated_at.desc())
+        query = query.order_by(Score.calculated_at.desc(), Score.id.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await self.db.execute(query)
         scores = result.scalars().all()
-        
+
         score_responses = []
         total_score_sum = 0
-        
+
         for score in scores:
             project_result = await self.db.execute(
                 select(TrainingProject).where(TrainingProject.id == score.project_id)
@@ -237,11 +242,11 @@ class ScoreService:
                 if not detail.get("passed", False)
             ]
             result_summary = "全部操作步骤通过" if not failed_names else f"待提升：{'、'.join(failed_names[:2])}"
-            
+
             student = student_map.get(score.student_id)
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
             total_score_sum += percentage
-            
+
             score_responses.append(ScoreResponse(
                 id=score.id,
                 student_id=score.student_id,
@@ -255,9 +260,9 @@ class ScoreService:
                 training_completed_at=record.completed_at if record else score.calculated_at,
                 result_summary=result_summary,
             ))
-        
+
         avg_score = total_score_sum / len(score_responses) if score_responses else None
-        
+
         return ScoreListResponse(
             scores=score_responses,
             total=total,
@@ -265,21 +270,21 @@ class ScoreService:
             page_size=page_size,
             average_score=round(avg_score, 1) if avg_score else None,
         )
-    
+
     async def get_class_summary(self, class_id: str) -> ClassScoreSummary:
         # Get class info
         class_result = await self.db.execute(
             select(Class).where(Class.id == class_id)
         )
         class_obj = class_result.scalar_one_or_none()
-        
+
         # Get students
         students_result = await self.db.execute(
             select(Student).where(Student.class_id == class_id)
         )
         students = students_result.scalars().all()
         student_ids = [s.id for s in students]
-        
+
         if not student_ids:
             return ClassScoreSummary(
                 class_id=class_id,
@@ -289,13 +294,13 @@ class ScoreService:
                 pass_rate=0,
                 training_count=0,
             )
-        
+
         # Get all scores for class
         scores_result = await self.db.execute(
             select(Score).where(Score.student_id.in_(student_ids))
         )
         scores = scores_result.scalars().all()
-        
+
         if not scores:
             return ClassScoreSummary(
                 class_id=class_id,
@@ -305,16 +310,16 @@ class ScoreService:
                 pass_rate=0,
                 training_count=0,
             )
-        
+
         total_percentage = 0
         pass_count = 0
-        
+
         for score in scores:
             percentage = (score.total_score / score.max_score * 100) if score.max_score > 0 else 0
             total_percentage += percentage
             if percentage >= 60:
                 pass_count += 1
-        
+
         return ClassScoreSummary(
             class_id=class_id,
             class_name=class_obj.name if class_obj else "",

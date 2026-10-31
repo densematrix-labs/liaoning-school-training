@@ -89,3 +89,9 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "database": "connected"}
+
+from app.services.error_contract import install_errors
+install_errors(app)
+
+from app.routers.data_exports import router as exports_router
+app.include_router(exports_router)

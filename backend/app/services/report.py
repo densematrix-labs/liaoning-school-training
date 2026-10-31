@@ -107,7 +107,7 @@ def ensure_report_structure(
 class ReportService:
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def generate_report(
         self,
         student_id: str,
@@ -126,11 +126,10 @@ class ReportService:
         student = student_result.scalar_one_or_none()
         if not student:
             raise ValueError("学生不存在")
-        
+
         # Rebuild from score details before every report so the narrative and
         # the displayed graph share one traceable source of truth.
-        profile = await AbilityService(self.db).recalculate_profile(student_id)
-        
+
         # Get major abilities
         abilities_result = await self.db.execute(
             select(MajorAbility).order_by(MajorAbility.display_order)
@@ -139,7 +138,7 @@ class ReportService:
         ability_map = {a.id: a for a in abilities}
         sub_abilities = list((await self.db.execute(select(SubAbility))).scalars().all())
         sub_ability_names = {item.id: item.name for item in sub_abilities}
-        
+
         # Get scores
         if report_type == "single":
             query = select(Score).where(Score.student_id == student_id)
@@ -162,7 +161,7 @@ class ReportService:
 
         if not scores:
             raise ValueError("暂无可用于生成报告的成绩数据")
-        
+
         # Build report data
         scores_data = []
         selected_step_names: dict[str, str] = {}
@@ -183,12 +182,12 @@ class ReportService:
             if selected_project is None:
                 selected_project = project
             project_step_names = {
-                str(item.get("id")): item.get("name", "相关操作步骤")
+                str(item.get("id")): item.get("name")
                 for item in (project.steps or [])
             } if project else {}
             selected_step_names.update(project_step_names)
             score_completed_at = record.completed_at if record and record.completed_at else score.calculated_at
-            
+
             scores_data.append({
                 "project_name": project.name if project else "未知项目",
                 "completed_at": score_completed_at.isoformat() if score_completed_at else None,
@@ -201,16 +200,20 @@ class ReportService:
                 ],
                 "steps": [
                     {
-                        "step_name": detail.get("step_name") or project_step_names.get(str(step_id), "相关操作步骤"),
-                        "passed": detail.get("passed", False),
-                        "score": detail.get("score", 0),
-                        "max_score": detail.get("max_score", 0),
+                        "step_name": detail.get("step_name") or project_step_names.get(str(step_id)),
+                        "passed": detail.get("passed"),
+                        "score": detail.get("score"),
+                        "max_score": detail.get("max_score"),
                         "reason": detail.get("reason"),
                     }
                     for step_id, detail in (score.details or {}).items()
                 ],
             })
 
+        if settings.RELEASE_MODE:
+            from app.services.report_sources import require_complete_report_steps
+            require_complete_report_steps(scores_data)
+        profile = await AbilityService(self.db).recalculate_profile(student_id)
         selected_score_ids = [item.id for item in scores]
         env_rows = list((await self.db.execute(
             select(EnvironmentCheck)
@@ -226,16 +229,17 @@ class ReportService:
             }
             for item in env_rows
         ]
-        
+
         if settings.RELEASE_MODE:
             from app.models.workflow import EnvironmentReview
             environment_data = []
             for item in env_rows:
                 review = (await self.db.execute(select(EnvironmentReview).where(EnvironmentReview.check_id == item.id))).scalar_one_or_none()
                 if review and review.status == "rejected":
-                    environment_data.append({"review_status":"rejected","summary":"教师已驳回，不能作为最终评价"})
+                    environment_data.append({"check_id":item.id,"score_id":item.score_id,"checked_at":item.checked_at.isoformat() if item.checked_at else None,"review_status":"rejected","summary":"教师已驳回，不能作为最终评价"})
                     continue
                 environment_data.append({
+                    "check_id":item.id,"score_id":item.score_id,"checked_at":item.checked_at.isoformat() if item.checked_at else None,
                     "total_score": sum(v.get("score",0) for v in (review.reviewed_details or {}).values() if isinstance(v,dict) and "score" in v) if review and review.status != "rejected" else item.total_score,
                     "summary": review.reviewed_summary if review and review.status != "rejected" else item.summary,
                     "review_status": review.status if review else "需人工复核",
@@ -254,7 +258,7 @@ class ReportService:
                         "threshold": ability.graduation_threshold * 100,
                         "status": "达标" if score >= ability.graduation_threshold else "待提升",
                     })
-        
+
         if settings.RELEASE_MODE and report_type == "periodic":
             from app.services.evaluation import evaluate,select_repeated,active_schema
             from app.services.production_data import setting
@@ -262,8 +266,8 @@ class ReportService:
             config=await setting(self.db,"release:evaluation",{"decay":1.0})
             projects={p.id:p for p in (await self.db.execute(select(TrainingProject))).scalars()}
             pairs=sorted([(s,projects[s.project_id]) for s in scores],key=lambda p:(p[0].calculated_at,p[0].id))
-            evaluated=evaluate([p[0] for p in select_repeated(pairs)],abilities,sub_abilities,float(config.get("decay",1.0)))
-            baseline=evaluate([pairs[0][0]],abilities,sub_abilities,float(config.get("decay",1.0)))
+            evaluated=evaluate([p[0] for p in select_repeated(pairs)],abilities,sub_abilities,1.0)
+            baseline=evaluate([pairs[0][0]],abilities,sub_abilities,1.0)
             ability_data=[{"name":a.name,"score":round(evaluated["major"].get(a.id,0)*100,1),"threshold":a.graduation_threshold*100,
                 "range_first_score":round(baseline["major"].get(a.id,0)*100,1),"range_change":round((evaluated["major"].get(a.id,0)-baseline["major"].get(a.id,0))*100,1)} for a in abilities]
 
@@ -271,6 +275,7 @@ class ReportService:
         content = await self._generate_report_content(
             # 校外模型只接收任务必需的脱敏标识，真实姓名仅在本地报告元数据中关联。
             student_name="匿名学员",
+            protected_identifiers=[student.name, student.student_no, student.id, student.user_id],
             scores_data=scores_data,
             ability_data=ability_data,
             report_type=report_type,
@@ -283,6 +288,26 @@ class ReportService:
             step_names=selected_step_names,
             ability_names=sub_ability_names,
         )
+        if settings.RELEASE_MODE:
+            # Render factual sections from the same stored business inputs as the source comparison.
+            # AI remains responsible for the individualized recommendations and possible causes.
+            score_facts=[]
+            for item in scores_data:
+                step_facts='；'.join(f"{step['step_name']}：{'通过' if step['passed'] else '未通过'}，{step['score']:g}/{step['max_score']:g}分" for step in item['steps'])
+                score_facts.append(f"{item['project_name']}：{item['total_score']:g}/{item['max_score']:g}分。{step_facts}。")
+            weak=[a for a in ability_data if a['score']<a['threshold']]
+            weak_facts='；'.join(f"{a['name']} {a['score']:g}分，达标分 {a['threshold']:g}分" for a in weak) or '本次评价范围内各大类能力均达到已配置达标分。'
+            env_facts=[]
+            for row in environment_data:
+                if row.get('review_status')=='rejected':env_facts.append('环境检查已驳回，无法据此判断环境达标。')
+                elif row.get('review_status') in {'confirmed','modified'}:env_facts.append(f"环境检查人工复核结果：{row['total_score']:g}分。")
+                else:env_facts.append(f"环境检查AI原始结果：{row['total_score']:g}分，待教师复核。")
+            env_text='\n'.join(env_facts) or '未采集到关联环境检查记录，无法判断环境是否达标。'
+            facts_sections={'诊断结论':f"本报告包含{len(scores_data)}次实训。"+('未达标能力：'+'、'.join(a['name'] for a in weak)+'。' if weak else '各大类能力均已达标。')+env_text,
+                '成绩与步骤分析':'\n\n'.join(score_facts),'薄弱能力':weak_facts,'环境规范情况':env_text}
+            for heading,body in facts_sections.items():
+                pattern=r'(?ms)^## '+re.escape(heading)+r'\n.*?(?=^## |\Z)'
+                content=re.sub(pattern,lambda _m:'## '+heading+'\n'+body+'\n\n',content)
         class_obj = (await self.db.execute(
             select(Class).where(Class.id == student.class_id)
         )).scalar_one_or_none()
@@ -325,9 +350,9 @@ class ReportService:
                     '| 能力维度 | 范围首条记录能力值 | 范围累计能力值 | 变化（百分点） | 达标线 |','| --- | --- | --- | --- | --- |']
                 for row in ability_data:
                     trend_lines.append(f"| {row['name']} | {row['range_first_score']:g} | {row['score']:g} | {row['range_change']:+g} | {row['threshold']:g} |")
-                trend_lines.append('首值依据范围内首条实训，累计值依据范围内全部记录及当前重复计分策略；不代表单次训练的因果效果。')
+
                 content+='\n\n'+'\n'.join(trend_lines)
-        
+
         # Save report
         if report_type == "single":
             completed_at = selected_record.completed_at if selected_record else scores[0].calculated_at
@@ -335,7 +360,7 @@ class ReportService:
             title = f"{selected_project.name if selected_project else '单次实训'} · {completed_label} · {student.name}诊断报告"
         else:
             title = f"{student.name} · 阶段综合诊断报告"
-        
+
         report = DiagnosticReport(
             id=str(uuid.uuid4()),
             student_id=student_id,
@@ -360,9 +385,9 @@ class ReportService:
                 "training_completed_at":(selected_record.completed_at if selected_record else scores[0].calculated_at).isoformat() if report_type=="single" else None}})
         await self.db.commit()
         await self.db.refresh(report)
-        
+
         return await self._build_report_response(report, student)
-    
+
     async def _generate_report_content(
         self,
         student_name: str,
@@ -371,11 +396,14 @@ class ReportService:
         report_type: str,
         graduation_ready: bool,
         environment_data: List[dict],
+        protected_identifiers=(),
     ) -> str:
         """Generate report content via LLM"""
-        
+
         if settings.RELEASE_MODE:
             from app.services.ai_gateway import completion, validate_report
+            from app.services.report_sources import require_complete_report_steps
+            require_complete_report_steps(scores_data)
             facts = {"record_count":len(scores_data), "ability_count":len(ability_data), "environment_count":len(environment_data)}
             for i, row in enumerate(scores_data):
                 facts[f"record_{i}.total_score"] = row["total_score"]
@@ -408,8 +436,10 @@ class ReportService:
             instruction += " 为避免重复计算或错引数字，overview、score_analysis、weaknesses、environment 四章正文完全不写阿拉伯数字，使用给定业务名称作定性描述；具体分数、阈值与逐步骤核对表由系统自动附加，不需要你重写。没有环境数据必须明确写无数据，不可推定环境合格。"
             instruction += ' 另必须返回 possible_causes 非空中文字符串：仅描述证据支持的可能原因，明确标为推测，不把推测写成事实；没有依据则写暂无足够数据判断原因。薄弱能力、改进建议和训练建议须分别输出。'
             instruction += ' 只有环境 review_status 为 confirmed 或 modified 才能写教师已确认或人工复核；其他环境记录只能称为未复核的AI初步判断。禁止引入输入中不存在的实训项目或设备名称。'
+            from app.services.ai_privacy import report_payload
+            outbound = report_payload(scores_data,ability_data,environment_data,facts,report_type,protected_identifiers)
             result, self.last_model = await completion([{"role":"system","content":instruction},
-                {"role":"user","content":json.dumps({"scores":scores_data,"abilities":ability_data,"environment":environment_data,"facts":facts,"type":report_type},ensure_ascii=False)}],db=self.db)
+                {"role":"user","content":json.dumps(outbound,ensure_ascii=False)}],db=self.db)
             # No model may turn absent evidence into a positive environment
             # conclusion or substitute the original AI score for a review.
             result["environment"] = "；".join(
@@ -495,7 +525,7 @@ class ReportService:
                 response.raise_for_status()
                 result = response.json()
                 return result["choices"][0]["message"]["content"]
-                
+
         except httpx.HTTPStatusError as exc:
             raise RuntimeError(
                 f"{settings.LLM_PROVIDER} 返回异常状态：{exc.response.status_code}"
@@ -568,7 +598,7 @@ class ReportService:
             completed_at=task.completed_at,
             report=report,
         )
-    
+
     async def get_student_reports(
         self,
         student_id: str,
@@ -585,17 +615,17 @@ class ReportService:
             query.order_by(DiagnosticReport.generated_at.desc())
         )
         reports = result.scalars().all()
-        
+
         student_result = await self.db.execute(
             select(Student).where(Student.id == student_id)
         )
         student = student_result.scalar_one_or_none()
-        
+
         responses = [await self._build_report_response(report, student) for report in reports]
         if score_id:
             responses = [item for item in responses if item.score_id == score_id]
         return responses[:limit]
-    
+
     async def get_report(self, report_id: str) -> Optional[DiagnosticReportResponse]:
         result = await self.db.execute(
             select(DiagnosticReport).where(DiagnosticReport.id == report_id)
@@ -603,7 +633,7 @@ class ReportService:
         report = result.scalar_one_or_none()
         if not report:
             return None
-        
+
         student = (await self.db.execute(
             select(Student).where(Student.id == report.student_id)
         )).scalar_one_or_none()
@@ -722,6 +752,7 @@ class ReportService:
             score_id=score.id if score else report.score_id,
             title=title,
             content=content,
+            structured={key: (re.search(r'(?ms)^## '+re.escape(label)+r'\n(.*?)(?=^## |\Z)', content).group(1).strip() if re.search(r'(?ms)^## '+re.escape(label)+r'\n(.*?)(?=^## |\Z)', content) else None) for key,label in [('diagnosis','诊断结论'),('weak_abilities','薄弱能力'),('possible_causes','可能原因'),('improvement_suggestions','改进建议'),('training_suggestions','训练建议'),('status','处理状态')]},
             generated_at=report.generated_at,
             report_reference=report_reference(report.generated_at, report.id),
             project_name=project.name if project else None,
@@ -799,6 +830,8 @@ async def process_report_task(task_id: str) -> None:
             task.status = TaskStatus.COMPLETED
             task.report_id = report.id
             task.completed_at = datetime.utcnow()
+            from app.services.audit import record_audit
+            await record_audit(db,actor_id=task.created_by,actor_name=None,action='report_generation',object_type='report_task',object_id=task.id,after={'status':'completed','report_id':task.report_id})
             await db.commit()
         except Exception as exc:
             await db.rollback()
@@ -807,4 +840,6 @@ async def process_report_task(task_id: str) -> None:
                 task.status = TaskStatus.FAILED
                 task.error_message = str(exc)[:1000]
                 task.completed_at = datetime.utcnow()
+                from app.services.audit import record_audit
+                await record_audit(db,actor_id=task.created_by,actor_name=None,action='report_generation',object_type='report_task',object_id=task.id,result='failed',reason=task.error_message,after={'status':'failed'})
                 await db.commit()

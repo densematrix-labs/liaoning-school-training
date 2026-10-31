@@ -56,6 +56,12 @@ export default function StudentAbility() {
   })) || []
 
   const barData = abilityMap?.radar_data || []
+  const comparable = barData.filter((item: any) => Number.isFinite(item.score))
+  const extremeNames = (maximum: boolean) => {
+    if (!comparable.length) return '—'
+    const target = (maximum ? Math.max : Math.min)(...comparable.map((item: any) => item.score))
+    return comparable.filter((item: any) => item.score === target).map((item: any) => item.name).join('、')
+  }
   const selectedAbilityData = barData.find((item: any) => item.ability_id === selectedAbility)
   const selectedSubAbilities = abilityMap?.sub_ability_details?.filter(
     (item: any) => item.major_ability_id === selectedAbility,
@@ -68,7 +74,7 @@ export default function StudentAbility() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-text-primary">能力图谱</h1>
-        <p className="text-text-muted mt-1">基于实训表现的能力评估分析</p>
+
       </div>
 
       <section className="railway-card p-6">
@@ -83,37 +89,17 @@ export default function StudentAbility() {
               <YAxis domain={[0, 100]} tick={{ fill: '#bedfff' }} />
               <Tooltip contentStyle={{ backgroundColor: '#063d82', border: '1px solid rgba(100, 236, 255, 0.5)' }} />
               <Legend />
-              {trend?.abilities?.map((ability: any, index: number) => <Line isAnimationActive={false} key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#64ecff', '#39e58c', '#ffc04a', '#b8a8ff', '#ff7e98', '#77baff'][index % 6]} dot={{r:3}} />)}
+              {trend?.abilities?.map((ability: any, index: number) => <Line isAnimationActive={false} key={ability.id} type="monotone" dataKey={ability.id} name={ability.name} stroke={['#ffe066', '#ff9f43', '#ff80c0', '#ffffff', '#b8f28b', '#dcadff'][index % 6]} strokeWidth={3} strokeDasharray={[undefined,'8 3','3 3','10 3 2 3','14 4','2 5'][index % 6]} dot={{r:4}} />)}
             </LineChart>
           </ResponsiveContainer>
         </div>
       </section>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Signal label="优势能力" value={abilityMap?.strongest_ability || '—'} tone="good" />
-        <Signal label="薄弱能力" value={abilityMap?.weakest_ability || '—'} tone="warn" />
+        <Signal label="优势能力" value={extremeNames(true)} tone="good" />
+        <Signal label="薄弱能力" value={extremeNames(false)} tone="warn" />
         <Signal label="毕业达标进度" value={`${graduationReadyCount}/${graduationTotalCount}（${graduationProgress}%）· ${abilityMap?.graduation_ready ? '已达标' : '未达标'}`} tone={abilityMap?.graduation_ready ? 'good' : 'warn'} />
       </div>
-
-      {/* Summary Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="railway-card-glow p-6"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-medium text-text-primary">综合能力评分</h2>
-            <p className="text-text-muted text-sm mt-1">
-              最后更新: {abilityMap?.updated_at ? new Date(abilityMap.updated_at).toLocaleString('zh-CN') : '-'}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="stat-value text-4xl">{abilityMap?.total_score || 0}</p>
-            <p className="text-sm text-text-muted mt-1">满分 100</p>
-          </div>
-        </div>
-      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Radar Chart */}
@@ -238,14 +224,16 @@ export default function StudentAbility() {
                 />
               </div>
               <div className="flex items-center justify-between mt-2 text-xs text-text-muted">
-                <span>权重: {(ability.weight * 100).toFixed(0)}%</span>
+
                 <span>达标线: {ability.threshold}</span>
+                <span className={ability.score >= ability.threshold ? 'text-status-success' : 'text-status-warning'}>{ability.score >= ability.threshold ? '达标' : '未达标'}</span>
               </div>
               <p className="mt-3 text-xs text-accent-blue">查看子能力与成绩依据 →</p>
             </button>
           ))}
         </div>
       </motion.div>
+
 
       {selectedAbility && (
         <div
@@ -256,12 +244,12 @@ export default function StudentAbility() {
           onClick={() => setSelectedAbility('')}
         >
           <section
-            className="glass-panel-bright max-h-[92vh] w-full max-w-4xl overflow-y-auto"
+            className="glass-panel-bright max-h-[92vh] w-full max-w-6xl overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-railway-600/50 bg-railway-800/95 p-5 backdrop-blur">
               <div>
-                <p className="eyebrow">ABILITY EVIDENCE</p>
+
                 <h2 id="ability-evidence-title" className="section-heading">
                   {selectedAbilityData?.name || '能力'}：子能力与成绩依据
                 </h2>
@@ -275,14 +263,15 @@ export default function StudentAbility() {
               <button type="button" className="railway-button" onClick={() => setSelectedAbility('')}>关闭</button>
             </header>
             <div className="space-y-4 p-5">
+              {abilityMap?.history_scope && <p className="rounded border border-accent-cyan/30 p-3 text-sm">学生：{abilityMap.student_name} · 全部历史 {abilityMap.history_scope.available_records} 次 / 本次计入 {abilityMap.history_scope.selected_records} 次 · {abilityMap.history_scope.date_from?.slice(0, 10)} 至 {abilityMap.history_scope.date_to?.slice(0, 10)}</p>}
               {selectedSubAbilities.map((item: any) => (
                 <article key={item.id} className="rounded-lg border border-railway-600/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-text-primary">{item.name}</p>
-                      <p className="mt-1 text-xs text-text-muted">权重 {Math.round(item.weight * 100)}%</p>
+
                     </div>
-                    <span className="font-mono text-2xl text-accent-cyan">{item.score}</span>
+                    <span className="font-mono text-2xl text-accent-cyan">{item.has_evidence?`${item.score} / ${item.full_score}`:"暂无评价"}</span>
                   </div>
                   <div className="mt-4 space-y-2">
                     {item.evidence?.slice(0, 8).map((evidence: any) => (
@@ -290,20 +279,17 @@ export default function StudentAbility() {
                         <div>
                           <p className="text-text-primary">{evidence.project_name}</p>
                           <p className="text-xs text-text-muted">实训记录：{evidence.record_reference || '编号待确认'}</p>
+                          <p className="text-xs text-text-muted">完成时间：{evidence.calculated_at?.slice(0, 10) || '未记录'}</p>
                         </div>
                         <p className="text-text-secondary">{evidence.step_name} · {evidence.passed ? '通过' : '未通过'}</p>
                         <span className={evidence.passed ? 'text-status-success' : 'text-status-warning'}>{evidence.score}/{evidence.max_score}</span>
                       </div>
                     ))}
-                    {!item.evidence?.length && <p className="text-sm text-text-muted">当前没有支撑该子能力的步骤成绩记录</p>}
+                    {!item.evidence?.length && null}
                   </div>
                 </article>
               ))}
-              {!selectedSubAbilities.length && (
-                <p className="rounded border border-railway-600/60 bg-railway-800/50 p-4 text-sm text-text-muted">
-                  当前能力尚未配置子能力或成绩依据。
-                </p>
-              )}
+              {!selectedSubAbilities.length && null}
             </div>
           </section>
         </div>

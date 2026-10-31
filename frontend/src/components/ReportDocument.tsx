@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
+import ReportSources from './ReportSources'
 
 const internalCodePattern = /\b(?:step|sa|ma)-[a-z0-9-]+\b/gi
 const uuidPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi
@@ -54,13 +55,13 @@ export default function ReportDocument({
         <div className="relative z-10">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
-              <p className="eyebrow !text-accent-cyan">诊断分析档案</p>
+
               <h2 className="mt-3 max-w-3xl font-display text-2xl font-semibold leading-tight text-text-primary md:text-3xl">{safeTitle}</h2>
             </div>
             <div className="report-seal"><span>诊断</span><small>分析归档</small></div>
           </div>
           <div className="mt-8 flex flex-wrap gap-2 text-xs">
-            <span className="report-chip">{reportLabel}</span><span className="report-chip">统一 AI 服务 · 无需个人配置</span>
+            <span className="report-chip">{reportLabel}</span>
             <span className="report-chip">生成时间 {generatedAt}</span>
             {scorePath && onOpenScoreEvidence
               ? <button type="button" className="report-chip transition hover:border-accent-cyan hover:text-accent-cyan" onClick={() => onOpenScoreEvidence(report.score_id)}>关联实训 {report.project_name || '查看成绩详情'}{trainingAt ? ` · ${trainingAt}` : ''} →</button>
@@ -69,6 +70,7 @@ export default function ReportDocument({
           {onDownload && <button className="railway-button mt-5" onClick={onDownload}>下载 Word</button>}
         </div>
       </header>
+      <ReportSources key={report.id} reportId={report.id} />
       <div className="report-body">
         <div className="report-document">
           <ReportBody text={safeContent} />

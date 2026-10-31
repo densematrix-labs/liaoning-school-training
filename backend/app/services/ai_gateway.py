@@ -9,8 +9,36 @@ import httpx
 from app.config import settings
 
 
+def bounded_vision_payload(messages):
+    import base64, copy, io
+    from PIL import Image
+    payload=copy.deepcopy(messages)
+    for message in payload:
+        if not isinstance(message.get('content'),list):
+            continue
+        for item in message['content']:
+            if item.get('type')!='image_url':
+                continue
+            source=item.get('image_url',{}).get('url','')
+            if not source.startswith('data:image/') or len(source)<400000:
+                continue
+            data=base64.b64decode(source.split(',',1)[1],validate=True)
+            image=Image.open(io.BytesIO(data));image.load()
+            if image.width*image.height>25000000:
+                raise ValueError('图片尺寸超出支持范围')
+            image=image.convert('RGB');image.thumbnail((1000,1000),Image.Resampling.LANCZOS)
+            output=io.BytesIO()
+            for quality in [86,76,66,56]:
+                output=io.BytesIO();image.save(output,format='JPEG',quality=quality,optimize=True)
+                if len(output.getvalue())<350000:break
+            item['image_url']['url']='data:image/jpeg;base64,'+base64.b64encode(output.getvalue()).decode()
+    return payload
+
+
 async def completion(messages, *, vision=False, db=None):
     from app.services.audit import record_audit
+    if vision:
+        messages=bounded_vision_payload(messages)
     routes=[{"url":settings.LLM_BASE_URL,"key":settings.LLM_API_KEY,
              "model":settings.VLM_MODEL if vision else settings.LLM_MODEL}]
     # Optional operator-only failover configuration. Never exposed via an API.
@@ -54,6 +82,8 @@ async def completion(messages, *, vision=False, db=None):
         await record_audit(db,actor_id=None,actor_name="AI 服务",action="ai_call",object_type="model",result="failed",
             reason=",".join(failures) or "not_configured",after={"payload_sha256":digest,"vision":vision})
         await db.commit()
+    if any('Timeout' in failure for failure in failures):
+        raise RuntimeError('AI 服务超时（' + ','.join(failures) + '）；未生成检查结果，失败任务保留，可重新提交或联系教师人工处理')
     raise RuntimeError("AI 服务未配置、不可达或未返回有效结构化结果；原始业务数据不受影响")
 
 
@@ -84,4 +114,4 @@ def validate_report(data, facts):
         if not isinstance(causes,str) or not causes.strip():
             raise ValueError('可能原因内容为空')
         content += '\n\n## 可能原因\n'+causes
-    return content + '\n\n## 处理状态\n已完成 · 结构化字段与证据引用校验通过。'
+    return content + '\n\n## 处理状态\n已生成。'

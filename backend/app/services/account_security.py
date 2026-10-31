@@ -36,7 +36,7 @@ async def login_attempt(db, username, success, user=None, ip=None):
         if state["failures"] >= 5:
             state["locked_until"] = (now + timedelta(minutes=15)).isoformat()
     await put_setting(db, key, state)
-    await record_audit(db, actor_id=user.id if user else None, actor_name=username[:50], action="login", object_type="session",
+    await record_audit(db, actor_id=user.id if user else None, actor_name=username[:50], action="login", object_type="session", object_id=user.id if user else key,
                        result="success" if success else "failed", reason=None if success else "invalid_credentials",
                        after={"ip":ip})
     await db.commit()
